@@ -1,3 +1,13 @@
+## Instalación desde el celular
+
+Abre [Cloud Shell con Universos IA](https://shell.cloud.google.com/?authuser=1&project=alixon-jhan&cloudshell_git_repo=https%3A%2F%2Fgithub.com%2FAlixonveloz1-ctrl%2FUniversos-IA&cloudshell_git_branch=main&cloudshell_workspace=.&show=terminal) y escribe:
+
+```bash
+./c
+```
+
+Este acceso usa `alixon-jhan` y `us-central1`. Muestra los buckets existentes del proyecto: escribe el número correspondiente a `universos_ia`. Los nombres internos se configuran automáticamente. Todavía necesitas indicar el equipo y proyecto de Vercel para vincular la web, y definir tu contraseña personal. No inicia generaciones.
+
 # Instalar desde el teléfono
 
 ## 1. Crear la web en Vercel

@@ -21,16 +21,36 @@ printf '\nUniversos IA — instalación del ejecutor y ensamblador\n'
 printf 'Elige el proyecto propio de esta aplicación. No se iniciarán generaciones.\n\n'
 ask GCP_PROJECT_ID 'ID del proyecto de Google Cloud'
 ask GCP_REGION 'Región del ejecutor' 'us-central1'
-ask GCS_OUTPUT_BUCKET 'Bucket privado para esta aplicación' "${GCP_PROJECT_ID}-universos-ia"
+if [[ -z "${GCS_OUTPUT_BUCKET:-}" ]]; then
+  bucket_names=$(gcloud storage buckets list --project="$GCP_PROJECT_ID" --format='value(name)')
+  buckets=()
+  while IFS= read -r bucket; do
+    [[ -z "$bucket" ]] || buckets+=("${bucket#gs://}")
+  done <<< "$bucket_names"
+  if (( ${#buckets[@]} == 0 )); then
+    echo "No hay buckets disponibles en $GCP_PROJECT_ID. Crea el bucket de esta aplicación y vuelve a ejecutar ./c." >&2
+    exit 1
+  fi
+  printf '\nBuckets del proyecto %s:\n' "$GCP_PROJECT_ID"
+  for i in "${!buckets[@]}"; do printf '  %s) %s\n' "$((i+1))" "${buckets[$i]}"; done
+  while true; do
+    read -r -p 'Escribe el número del bucket: ' choice
+    if [[ "$choice" =~ ^[1-9][0-9]{0,5}$ ]] && (( choice <= ${#buckets[@]} )); then
+      export GCS_OUTPUT_BUCKET="${buckets[$((choice-1))]%/}"
+      break
+    fi
+    echo 'Selecciona uno de los números de la lista.'
+  done
+fi
 ask VERCEL_TEAM_SLUG 'Nombre del equipo o cuenta en Vercel (slug)'
 ask VERCEL_PROJECT_NAME 'Nombre del proyecto en Vercel' 'universos-ia'
-ask WORKER_ACCOUNT 'Cuenta del ejecutor' 'universos-worker'
-ask WEB_ACCOUNT 'Cuenta de la web' 'universos-web'
-ask BUILD_ACCOUNT 'Cuenta de compilación' 'universos-build'
-ask CLOUD_RUN_JOB_NAME 'Nombre del ejecutor' 'universos-worker'
-ask ARTIFACT_REPOSITORY 'Repositorio de contenedores' 'universos-ia'
-ask WIF_POOL 'Grupo de identidad de Vercel' 'universos-vercel'
-ask WIF_PROVIDER 'Proveedor de identidad de Vercel' 'vercel'
+export WORKER_ACCOUNT="${WORKER_ACCOUNT:-universos-worker}"
+export WEB_ACCOUNT="${WEB_ACCOUNT:-universos-web}"
+export BUILD_ACCOUNT="${BUILD_ACCOUNT:-universos-build}"
+export CLOUD_RUN_JOB_NAME="${CLOUD_RUN_JOB_NAME:-universos-worker}"
+export ARTIFACT_REPOSITORY="${ARTIFACT_REPOSITORY:-universos-ia}"
+export WIF_POOL="${WIF_POOL:-universos-vercel}"
+export WIF_PROVIDER="${WIF_PROVIDER:-vercel}"
 bash scripts/setup-gcp.sh
 printf '\nEjecutor instalado. Para la web, configura las variables indicadas en Vercel.\n'
 if [[ -t 0 ]]; then
