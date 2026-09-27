@@ -6,7 +6,7 @@ Abre [Cloud Shell con Universos IA](https://shell.cloud.google.com/?authuser=1&p
 ./c
 ```
 
-Este acceso usa `alixon-jhan` y `us-central1`. Muestra los buckets existentes del proyecto: escribe el número correspondiente a `universos_ia`. Los nombres internos se configuran automáticamente. Todavía necesitas indicar el equipo y proyecto de Vercel para vincular la web, y definir tu contraseña personal. No inicia generaciones.
+Este acceso usa `alixon-jhan` y `us-central1`. Muestra los buckets existentes del proyecto: escribe el número correspondiente a `universos_ia`. Los nombres internos se configuran automáticamente. El equipo de Vercel queda configurado como `alixonveloz1-3809s-projects`. Para el nombre del proyecto de Vercel puedes aceptar `universos-ia` con Enter o escribir el nombre real si es diferente. También definirás tu contraseña personal. No inicia generaciones.
 
 # Instalar desde el teléfono
 
