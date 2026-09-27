@@ -5,6 +5,8 @@ import {
   createSession,
   validSession,
   verifyPassword,
+  verifyAccessPassword,
+  sessionCookie,
   originCheck,
   requireSession,
 } from "../lib/auth";
@@ -192,4 +194,36 @@ it("REGRESSION a replaced proposal list cannot use a dangling story selection", 
   expect(() => prerequisites(s, { ...action, type: "story" })).toThrow(
     "actuales",
   );
+});
+
+it("uses the chosen Vercel password and invalidates sessions when it changes", () => {
+  vi.stubEnv("SESSION_SECRET", "a".repeat(48));
+  vi.stubEnv("APP_PASSWORD", "mi clave elegida");
+  vi.stubEnv("APP_PASSWORD_HASH", "obsolete-hash");
+  try {
+    expect(verifyAccessPassword("mi clave elegida")).toBe(true);
+    expect(verifyAccessPassword("otra")).toBe(false);
+    const token = createSession(1000);
+    expect(validSession(token, 1000 + 29 * 86400000)).toBe(true);
+    expect(validSession(token, 1000 + 30 * 86400000)).toBe(false);
+    expect(sessionCookie(token)).toContain("Max-Age=2592000");
+    expect(sessionCookie(token)).toContain("HttpOnly; Secure; SameSite=Strict");
+    vi.stubEnv("APP_PASSWORD", "otra clave elegida");
+    expect(validSession(token, 2000)).toBe(false);
+  } finally {
+    vi.unstubAllEnvs();
+  }
+});
+it("keeps existing hash access when no direct password is configured", () => {
+  vi.stubEnv("APP_PASSWORD", "");
+  const salt = "test-salt";
+  vi.stubEnv(
+    "APP_PASSWORD_HASH",
+    "scrypt:" + salt + ":" + scryptSync("legacy", salt, 64).toString("hex"),
+  );
+  try {
+    expect(verifyAccessPassword("legacy")).toBe(true);
+  } finally {
+    vi.unstubAllEnvs();
+  }
 });

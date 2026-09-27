@@ -1,3 +1,14 @@
+## Tu contraseña desde Vercel
+
+En las variables de Production, añade `APP_PASSWORD` con la contraseña que tú
+elijas. Guarda y haz Redeploy de la última versión de main. Esta variable tiene
+prioridad sobre `APP_PASSWORD_HASH`, que puede quedarse sin modificar.
+La sesión permanece abierta durante 30 días en el mismo navegador, salvo que
+cierres sesión, borres sus datos o cambies la contraseña. La contraseña no se
+almacena en localStorage: el navegador conserva una cookie privada de sesión.
+El formulario permite al gestor de contraseñas del teléfono ofrecer guardarla;
+la aparición de ese aviso depende del navegador y de sus ajustes.
+
 ## Completar Vercel automáticamente (Google Cloud ya instalado)
 
 Abre el enlace de Cloud Shell de abajo con el código actualizado y ejecuta `./v`.

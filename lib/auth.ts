@@ -1,5 +1,6 @@
 import {
   createHmac,
+  createHash,
   randomBytes,
   scryptSync,
   timingSafeEqual,
@@ -7,6 +8,7 @@ import {
 import { required } from "./config";
 import { AppError } from "./errors";
 import { db } from "./persistence/google";
+const SESSION_SECONDS = 30 * 24 * 60 * 60;
 const COOKIE = "__Host-universos";
 function secret() {
   const s = required("SESSION_SECRET");
@@ -16,7 +18,10 @@ function secret() {
       "SESSION_SECRET debe tener al menos 32 caracteres",
       503,
     );
-  return s;
+  // Changing the chosen password also invalidates existing sessions.
+  return createHmac("sha256", s)
+    .update(process.env.APP_PASSWORD || process.env.APP_PASSWORD_HASH || "")
+    .digest("hex");
 }
 export function verifyPassword(password: string, encoded: string) {
   const [type, salt, hex] = encoded.split(":");
@@ -25,11 +30,21 @@ export function verifyPassword(password: string, encoded: string) {
   const actual = scryptSync(password, salt, 64);
   return timingSafeEqual(actual, Buffer.from(hex, "hex"));
 }
+export function verifyAccessPassword(password: string) {
+  const configured = process.env.APP_PASSWORD;
+  if (configured) {
+    return timingSafeEqual(
+      createHash("sha256").update(password).digest(),
+      createHash("sha256").update(configured).digest(),
+    );
+  }
+  return verifyPassword(password, required("APP_PASSWORD_HASH"));
+}
 export function createSession(now = Date.now()) {
   const payload = Buffer.from(
     JSON.stringify({
       sub: "personal",
-      exp: now + 12 * 3600000,
+      exp: now + SESSION_SECONDS * 1000,
       nonce: randomBytes(24).toString("hex"),
     }),
   ).toString("base64url");
@@ -75,7 +90,7 @@ export function originCheck(req: Request) {
   if (site && site !== "same-origin" && site !== "none")
     throw new AppError("CSRF", "Solicitud no autorizada.", 403);
 }
-export function sessionCookie(token: string, maxAge = 43200) {
+export function sessionCookie(token: string, maxAge = SESSION_SECONDS) {
   return `${COOKIE}=${token}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${maxAge}`;
 }
 export async function login(password: string) {
@@ -94,7 +109,7 @@ export async function login(password: string) {
       until: s && s.until > now ? s.until : now + 15 * 60000,
     });
   });
-  if (!verifyPassword(password, required("APP_PASSWORD_HASH")))
+  if (!verifyAccessPassword(password))
     throw new AppError("AUTH", "Clave incorrecta.", 401);
   return createSession();
 }

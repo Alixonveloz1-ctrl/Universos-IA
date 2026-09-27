@@ -497,7 +497,9 @@ export default function Studio() {
     await refresh(pid);
   };
   const active =
-    !!data?.job && (data.job.blocksNewJob ?? !["completed", "failed", "stopped"].includes(data.job.state));
+    !!data?.job &&
+    (data.job.blocksNewJob ??
+      !["completed", "failed", "stopped"].includes(data.job.state));
   const field = (
     label: string,
     value: string,
@@ -542,6 +544,7 @@ export default function Studio() {
           <label>
             Clave de acceso
             <input
+              name="password"
               autoComplete="current-password"
               type="password"
               value={password}
@@ -549,6 +552,9 @@ export default function Studio() {
               required
             />
           </label>
+          <p className="muted">
+            La sesión permanece abierta durante 30 días en este navegador.
+          </p>
           <button className="primary wide" disabled={busy}>
             Entrar
           </button>
@@ -1188,11 +1194,7 @@ export default function Studio() {
               <p>Unión de los ocho clips aprobados, con su audio original.</p>
               <button
                 className="primary"
-                disabled={
-                  busy ||
-                  active ||
-                  !!generationBlock(data, "finalize")
-                }
+                disabled={busy || active || !!generationBlock(data, "finalize")}
                 onClick={() => void perform(() => generate("finalize"))}
               >
                 Unir los ocho clips
