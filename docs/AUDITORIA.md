@@ -1,5 +1,23 @@
 # Auditoría de implementación en desarrollo
 
+## Publicación y preparación de despliegue — 27 de septiembre de 2026
+
+Esta sección sustituye los bloqueos históricos de publicación que figuran más abajo. **El código ya está publicado en main; Vercel y Google Cloud siguen pendientes de instalación y prueba real.**
+
+| Área | Clasificación | Evidencia y alcance |
+|---|---|---|
+| Código completo en GitHub | IMPLEMENTADO Y VERIFICADO | Commit `2b918a320d5c5a7e09d5c7b7855ce66f61498da0`, árbol `a0832ff35d371bd619ca267081b1d1a9beff7681`, idéntico al checkout verificado. Conserva el commit inicial remoto, sin force. Código recuperado desde e13832a; el historial local anterior permanece en el respaldo recuperado. |
+| Portada original | IMPLEMENTADO Y VERIFICADO | Transferida por partes en una rama auxiliar y reconstruida sin cambios; SHA-256 `854a799df45bb91a32131e3afe27463f4959cf66d956ebc44e4482127669d5d8`. main contiene el PNG original, sin fragmentos ni workflow auxiliar. |
+| Instalador de un comando | IMPLEMENTADO, PENDIENTE DE PRUEBA REAL | `bash install.sh`, configuración privada en terminal, mismo worker con ensamblador/FFmpeg, identidad de compilación separada, comprobaciones de bucket/Firestore/Docker/WIF. Seis regresiones con gcloud SIMULADO pasan. No se ejecutó contra una cuenta Google. |
+| 57 pruebas y compilación | IMPLEMENTADO Y VERIFICADO | Lint, TypeScript, sintaxis shell, 57 pruebas y build pasan localmente y en el primer CI remoto. Tres pruebas son FFmpeg REAL sobre archivos SINTÉTICOS; Google y persistencia siguen SIMULADOS. |
+| Recorrido completo en navegador | IMPLEMENTADO Y VERIFICADO | Chromium en GitHub completó historia, biblia, referencias, ocho clips secuenciales, exportación y recarga con API SIMULADA. También pasaron el rechazo real del backend sin sesión y el escenario de error del proveedor. No equivale a una prueba Google ni a un iPhone físico. |
+| Selector del escenario de creación móvil | IMPLEMENTADO, PENDIENTE DE PRUEBA REAL | El primer CI detectó que la búsqueda exacta del label incluía texto de sus opciones. Se corrige el selector y se conserva la comprobación de creación, tres propuestas, selección, recarga y ancho móvil. El resultado de la ejecución de CI del commit actual es la evidencia autoritativa. |
+| Vercel y Google Cloud | BLOQUEADO | El propietario debe ejecutar el instalador con sus recursos y configurar/desplegar la web. Sin generaciones pagadas ni prueba real de IAM, OIDC, persistencia o continuidad audiovisual. |
+
+Primer CI: https://github.com/Alixonveloz1-ctrl/Universos-IA/actions/runs/36347551327 . Terminó con tres de cuatro escenarios E2E correctos; su fallo se conserva como evidencia, no se presenta como un CI verde. Consultar la ejecución más reciente en https://github.com/Alixonveloz1-ctrl/Universos-IA/actions . Instrucciones: [INSTALACION.md](INSTALACION.md).
+
+## Evidencia histórica
+
 Estado al 27 de septiembre de 2026. **No terminado, sin despliegue verificado en Vercel ni Google Cloud.** Los valores privados los configurará el propietario; no se requieren en el chat. Esta es una revisión del avance, no certificación de producción.
 
 Las clasificaciones se limitan a las solicitadas. «IMPLEMENTADO Y VERIFICADO» solo cubre la evidencia indicada; pruebas simuladas nunca equivalen a verificación de servicios reales.

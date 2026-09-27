@@ -1,5 +1,7 @@
 # Universos-IA
 
+[![CI](https://github.com/Alixonveloz1-ctrl/Universos-IA/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Alixonveloz1-ctrl/Universos-IA/actions/workflows/ci.yml)
+
 Implementación en desarrollo de la especificación Universos IA V2. No es una entrega terminada ni está desplegada. El código usa servicios reales; solo las pruebas contienen simuladores. Consultar `docs/AUDITORIA.md` antes de instalar.
 
 ## Arquitectura

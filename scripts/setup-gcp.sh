@@ -56,7 +56,7 @@ fi
 gcloud storage buckets add-iam-policy-binding "gs://$GCS_OUTPUT_BUCKET" --member="serviceAccount:$worker_email" --role="projects/$GCP_PROJECT_ID/roles/$list_role_id" >/dev/null
 # Signing short-lived private media URLs; no service-account private key is created.
 gcloud iam service-accounts add-iam-policy-binding "$web_email" --project="$GCP_PROJECT_ID" --member="serviceAccount:$web_email" --role=roles/iam.serviceAccountTokenCreator >/dev/null
-if ! gcloud artifacts repositories list --project="$GCP_PROJECT_ID" --location="$GCP_REGION" --format='value(name)' | grep -Fq "/repositories/$ARTIFACT_REPOSITORY"; then
+if ! gcloud artifacts repositories list --project="$GCP_PROJECT_ID" --location="$GCP_REGION" --format='value(name)' | grep -Fxq "projects/$GCP_PROJECT_ID/locations/$GCP_REGION/repositories/$ARTIFACT_REPOSITORY"; then
  gcloud artifacts repositories create "$ARTIFACT_REPOSITORY" --project="$GCP_PROJECT_ID" --location="$GCP_REGION" --repository-format=docker
 fi
 [[ "$(gcloud artifacts repositories describe "$ARTIFACT_REPOSITORY" --project="$GCP_PROJECT_ID" --location="$GCP_REGION" --format='value(format)')" == DOCKER ]] || { echo 'El repositorio de contenedores debe ser Docker.' >&2; exit 1; }
@@ -89,10 +89,10 @@ if ! gcloud iam roles list --project="$GCP_PROJECT_ID" --format='value(name)' | 
  gcloud iam roles create "$role_id" --project="$GCP_PROJECT_ID" --title='Universos job execution' --permissions=run.jobs.run,run.jobs.runWithOverrides,run.jobs.get
 fi
 gcloud run jobs add-iam-policy-binding "$CLOUD_RUN_JOB_NAME" --project="$GCP_PROJECT_ID" --region="$GCP_REGION" --member="serviceAccount:$web_email" --role="projects/$GCP_PROJECT_ID/roles/$role_id" >/dev/null
-if ! gcloud iam workload-identity-pools list --project="$GCP_PROJECT_ID" --location=global --format='value(name)' | grep -Fq "/$WIF_POOL"; then
+if ! gcloud iam workload-identity-pools list --project="$GCP_PROJECT_ID" --location=global --format='value(name)' | grep -Fxq "projects/$number/locations/global/workloadIdentityPools/$WIF_POOL"; then
  gcloud iam workload-identity-pools create "$WIF_POOL" --project="$GCP_PROJECT_ID" --location=global
 fi
-if ! gcloud iam workload-identity-pools providers list --project="$GCP_PROJECT_ID" --location=global --workload-identity-pool="$WIF_POOL" --format='value(name)' | grep -Fq "/$WIF_PROVIDER"; then
+if ! gcloud iam workload-identity-pools providers list --project="$GCP_PROJECT_ID" --location=global --workload-identity-pool="$WIF_POOL" --format='value(name)' | grep -Fxq "projects/$number/locations/global/workloadIdentityPools/$WIF_POOL/providers/$WIF_PROVIDER"; then
  gcloud iam workload-identity-pools providers create-oidc "$WIF_PROVIDER" --project="$GCP_PROJECT_ID" --location=global --workload-identity-pool="$WIF_POOL" --issuer-uri="https://oidc.vercel.com/$VERCEL_TEAM_SLUG" --allowed-audiences="https://vercel.com/$VERCEL_TEAM_SLUG" --attribute-mapping='google.subject=assertion.sub' --attribute-condition="assertion.sub=='owner:$VERCEL_TEAM_SLUG:project:$VERCEL_PROJECT_NAME:environment:production'"
 fi
 subject="owner:$VERCEL_TEAM_SLUG:project:$VERCEL_PROJECT_NAME:environment:production"
