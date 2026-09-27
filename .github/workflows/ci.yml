@@ -20,3 +20,6 @@ jobs:
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+      - name: Browser failure details (simulated test data only)
+        if: failure()
+        run: python3 -c 'from pathlib import Path; [print(p.read_text()) for p in Path("test-results").rglob("error-context.md")]'

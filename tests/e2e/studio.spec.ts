@@ -57,7 +57,7 @@ test("SIMULATED API: mobile creation, exact three proposals, selection and reloa
   await expect(page.getByRole("heading", { name: "Forjar una nueva historia" })).toBeVisible();
   // This wrapping label also contains the select's option text. Match its
   // visible prefix without requiring the entire descendant text to equal it.
-  await page.getByLabel(/^Universo\b/).selectOption("universe");
+  await page.getByLabel(/^Universo/).selectOption("universe");
   await page.getByRole("button", { name: "Generar 3 historias" }).click();
   await expect(
     page.getByRole("button", { name: "Regenerar esta opción" }),
