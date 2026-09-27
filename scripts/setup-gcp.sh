@@ -74,9 +74,9 @@ list_role_id=universosObjectLister
 if ! gcloud iam roles list --project="$GCP_PROJECT_ID" --format='value(name)' | grep -Fxq "projects/$GCP_PROJECT_ID/roles/$list_role_id"; then
  gcloud iam roles create "$list_role_id" --project="$GCP_PROJECT_ID" --title='Universos result reconciliation' --permissions=storage.objects.list
 fi
-iam_binding storage buckets add-iam-policy-binding "gs://$GCS_OUTPUT_BUCKET" --member="serviceAccount:$worker_email" --role="projects/$GCP_PROJECT_ID/roles/$list_role_id" >/dev/null
+iam_binding storage buckets add-iam-policy-binding "gs://$GCS_OUTPUT_BUCKET" --member="serviceAccount:$worker_email" --role="projects/$GCP_PROJECT_ID/roles/$list_role_id" --condition=None --quiet >/dev/null
 # Signing short-lived private media URLs; no service-account private key is created.
-iam_binding iam service-accounts add-iam-policy-binding "$web_email" --project="$GCP_PROJECT_ID" --member="serviceAccount:$web_email" --role=roles/iam.serviceAccountTokenCreator >/dev/null
+iam_binding iam service-accounts add-iam-policy-binding "$web_email" --project="$GCP_PROJECT_ID" --member="serviceAccount:$web_email" --role=roles/iam.serviceAccountTokenCreator --condition=None --quiet >/dev/null
 if ! gcloud artifacts repositories list --project="$GCP_PROJECT_ID" --location="$GCP_REGION" --format='value(name)' | grep -Fxq "projects/$GCP_PROJECT_ID/locations/$GCP_REGION/repositories/$ARTIFACT_REPOSITORY"; then
  gcloud artifacts repositories create "$ARTIFACT_REPOSITORY" --project="$GCP_PROJECT_ID" --location="$GCP_REGION" --repository-format=docker
 fi
@@ -86,7 +86,7 @@ if ! gcloud iam service-accounts list --project="$GCP_PROJECT_ID" --format='valu
  gcloud iam service-accounts create "$BUILD_ACCOUNT" --project="$GCP_PROJECT_ID"
 fi
 iam_binding projects add-iam-policy-binding "$GCP_PROJECT_ID" --member="serviceAccount:$build_email" --role=roles/logging.logWriter --condition=None --quiet >/dev/null
-iam_binding artifacts repositories add-iam-policy-binding "$ARTIFACT_REPOSITORY" --project="$GCP_PROJECT_ID" --location="$GCP_REGION" --member="serviceAccount:$build_email" --role=roles/artifactregistry.writer >/dev/null
+iam_binding artifacts repositories add-iam-policy-binding "$ARTIFACT_REPOSITORY" --project="$GCP_PROJECT_ID" --location="$GCP_REGION" --member="serviceAccount:$build_email" --role=roles/artifactregistry.writer --condition=None --quiet >/dev/null
 iam_binding storage buckets add-iam-policy-binding "gs://$GCS_OUTPUT_BUCKET" --member="serviceAccount:$build_email" --role=roles/storage.objectViewer --condition="expression=resource.name.startsWith('projects/_/buckets/$GCS_OUTPUT_BUCKET/objects/$GCS_PREFIX/build/'),title=universos-build-source" >/dev/null
 image="$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/$ARTIFACT_REPOSITORY/worker:$(git rev-parse --short HEAD)"
 # Cloud Build needs Dockerfile at context root; use an isolated copy, preserving source.
@@ -109,7 +109,7 @@ role_id=universosJobExecutor
 if ! gcloud iam roles list --project="$GCP_PROJECT_ID" --format='value(name)' | grep -Fxq "projects/$GCP_PROJECT_ID/roles/$role_id"; then
  gcloud iam roles create "$role_id" --project="$GCP_PROJECT_ID" --title='Universos job execution' --permissions=run.jobs.run,run.jobs.runWithOverrides,run.jobs.get
 fi
-iam_binding run jobs add-iam-policy-binding "$CLOUD_RUN_JOB_NAME" --project="$GCP_PROJECT_ID" --region="$GCP_REGION" --member="serviceAccount:$web_email" --role="projects/$GCP_PROJECT_ID/roles/$role_id" >/dev/null
+iam_binding run jobs add-iam-policy-binding "$CLOUD_RUN_JOB_NAME" --project="$GCP_PROJECT_ID" --region="$GCP_REGION" --member="serviceAccount:$web_email" --role="projects/$GCP_PROJECT_ID/roles/$role_id" --condition=None --quiet >/dev/null
 if ! gcloud iam workload-identity-pools list --project="$GCP_PROJECT_ID" --location=global --format='value(name)' | grep -Fxq "projects/$number/locations/global/workloadIdentityPools/$WIF_POOL"; then
  gcloud iam workload-identity-pools create "$WIF_POOL" --project="$GCP_PROJECT_ID" --location=global
 fi
@@ -119,7 +119,7 @@ fi
 subject="owner:$VERCEL_TEAM_SLUG:project:$VERCEL_PROJECT_NAME:environment:production"
 gcloud iam workload-identity-pools providers describe "$WIF_PROVIDER" --project="$GCP_PROJECT_ID" --location=global --workload-identity-pool="$WIF_POOL" --format=json > "$build_dir/provider.json"
 node -e 'const p=JSON.parse(require("fs").readFileSync(process.argv[1]));const team=process.argv[2],sub=process.argv[3];if(p.state!=="ACTIVE"||p.disabled||p.oidc?.issuerUri!=="https://oidc.vercel.com/"+team||p.oidc?.allowedAudiences?.length!==1||p.oidc.allowedAudiences[0]!=="https://vercel.com/"+team||p.attributeMapping?.["google.subject"]!=="assertion.sub"||p.attributeCondition!=="assertion.sub=="+String.fromCharCode(39)+sub+String.fromCharCode(39))throw Error("El proveedor WIF existente no coincide con esta aplicación. Revisa los nombres elegidos; no se modificó su configuración.")' "$build_dir/provider.json" "$VERCEL_TEAM_SLUG" "$subject"
-iam_binding iam service-accounts add-iam-policy-binding "$web_email" --project="$GCP_PROJECT_ID" --role=roles/iam.workloadIdentityUser --member="principal://iam.googleapis.com/projects/$number/locations/global/workloadIdentityPools/$WIF_POOL/subject/$subject" >/dev/null
+iam_binding iam service-accounts add-iam-policy-binding "$web_email" --project="$GCP_PROJECT_ID" --role=roles/iam.workloadIdentityUser --member="principal://iam.googleapis.com/projects/$number/locations/global/workloadIdentityPools/$WIF_POOL/subject/$subject" --condition=None --quiet >/dev/null
 printf '\nConfiguración de servidor para Vercel (sin secretos):\n'
 printf 'GCP_PROJECT_ID=%s\nGCS_OUTPUT_BUCKET=%s\nGCS_PREFIX=%s\nFIRESTORE_DATABASE_ID=%s\nMAX_ACTIVE_JOBS=1\n' "$GCP_PROJECT_ID" "$GCS_OUTPUT_BUCKET" "$GCS_PREFIX" "$FIRESTORE_DATABASE_ID"
 printf 'GCP_SERVICE_ACCOUNT_EMAIL=%s\nGCP_WIF_AUDIENCE=//iam.googleapis.com/projects/%s/locations/global/workloadIdentityPools/%s/providers/%s\nCLOUD_RUN_JOB_RESOURCE=projects/%s/locations/%s/jobs/%s\n' "$web_email" "$number" "$WIF_POOL" "$WIF_PROVIDER" "$GCP_PROJECT_ID" "$GCP_REGION" "$CLOUD_RUN_JOB_NAME"
