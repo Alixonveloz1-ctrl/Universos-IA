@@ -1,3 +1,18 @@
+## Completar Vercel automáticamente (Google Cloud ya instalado)
+
+Abre el enlace de Cloud Shell de abajo con el código actualizado y ejecuta `./v`.
+Si ya tienes la terminal abierta, ejecuta primero `git pull --ff-only` y luego `./v`.
+Autoriza Vercel en el enlace de inicio de sesión que aparezca. El script verifica
+el proyecto `universos-ia`, su repositorio y dominio; configura las 14 variables
+Production, activa OIDC con emisor de equipo y hace el redeploy de producción.
+No reconstruye el ejecutor de Google Cloud ni inicia generaciones de video.
+Genera una contraseña segura nueva y la muestra al terminar el redeploy para
+que la guardes. Los valores internos se envían por stdin y no se imprimen.
+Las credenciales se conservan con permisos privados fuera del repositorio en
+Cloud Shell para reutilizarlas si debes reintentar. Finalmente prueba el acceso
+real y la conexión con Firestore. Un redeploy exitoso no garantiza por sí solo
+que esta última comprobación haya pasado.
+
 ## Instalación desde el celular
 
 Abre [Cloud Shell con Universos IA](https://shell.cloud.google.com/?authuser=1&project=alixon-jhan&cloudshell_git_repo=https%3A%2F%2Fgithub.com%2FAlixonveloz1-ctrl%2FUniversos-IA&cloudshell_git_branch=main&cloudshell_workspace=.&show=terminal) y escribe:
