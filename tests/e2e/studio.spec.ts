@@ -58,6 +58,20 @@ test("SIMULATED API: mobile creation, exact three proposals, selection and reloa
   // This wrapping label also contains the select's option text. Match its
   // visible prefix without requiring the entire descendant text to equal it.
   await page.getByLabel(/^Universo/).selectOption("universe");
+  const subgenre = page.getByLabel(/^Subgénero/);
+  await expect(subgenre.locator("option")).toHaveCount(10);
+  await subgenre.selectOption("Histórico");
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    const layout = await page.evaluate(() => ({
+      width: document.documentElement.clientWidth,
+      content: document.documentElement.scrollWidth,
+      sizes: [...document.querySelectorAll("input,select,textarea")].map(el => parseFloat(getComputedStyle(el).fontSize)),
+    }));
+    expect(layout.content).toBeLessThanOrEqual(layout.width);
+    expect(layout.sizes.every(size => size >= 16)).toBe(true);
+  }
+
   await page.getByRole("button", { name: "Generar 3 historias" }).click();
   await expect(
     page.getByRole("button", { name: "Regenerar esta opción" }),

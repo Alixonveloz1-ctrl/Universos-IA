@@ -402,3 +402,42 @@ summary:focus-visible {
     padding-left: 9px;
   }
 }
+
+/* Keep form controls at a readable size; iOS zooms smaller focused fields. */
+input,
+select,
+textarea {
+  font-size: 16px;
+  min-width: 0;
+  max-width: 100%;
+}
+.grid > *,
+.fields > *,
+header > *,
+.topline > * {
+  min-width: 0;
+}
+.panel,
+.card,
+.error,
+.notice {
+  overflow-wrap: anywhere;
+}
+button,
+summary {
+  touch-action: manipulation;
+}
+@media (max-width: 640px) {
+  header,
+  .topline {
+    flex-wrap: wrap;
+  }
+  .hero-features {
+    flex-wrap: wrap;
+  }
+}
+@media (max-width: 420px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
