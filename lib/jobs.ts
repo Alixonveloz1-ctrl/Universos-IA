@@ -1,6 +1,7 @@
-import { db, googlePost } from "./persistence/google";
+import { db, googlePost, googleAuth } from "./persistence/google";
 import { required } from "./config";
 import { AppError, assert } from "./errors";
+import { DATA_SCOPE } from "./persistence/scope";
 import type { Job } from "./types";
 export async function dispatch(job: Job) {
   const resource = required("CLOUD_RUN_JOB_RESOURCE");
@@ -10,6 +11,14 @@ export async function dispatch(job: Job) {
     ),
     "Recurso de Cloud Run inválido",
   );
+  // Refuse to launch a legacy worker that still reads shared collections.
+  const token = await googleAuth().getAccessToken();
+  const current = await fetch(`https://run.googleapis.com/v2/${resource}`, {
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!current.ok || (await current.json()).labels?.["firestore-scope"] !== DATA_SCOPE)
+    throw new AppError("WORKER_UPDATE", "Actualiza el ejecutor con ./s en Cloud Shell antes de generar.", 503);
   try {
     const r = await googlePost(
       `https://run.googleapis.com/v2/${resource}:run`,

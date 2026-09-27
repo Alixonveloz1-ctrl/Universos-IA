@@ -4,6 +4,7 @@ import { Firestore } from "@google-cloud/firestore";
 import { Storage } from "@google-cloud/storage";
 import { config, required } from "../config";
 import { AppError } from "../errors";
+import { scopedDatabase } from "./scope";
 let auth: GoogleAuth | undefined;
 export function googleAuth() {
   if (auth) return auth;
@@ -44,7 +45,7 @@ export function db() {
       ignoreUndefinedProperties: true,
     });
   }
-  return database;
+  return scopedDatabase(database);
 }
 export function bucket() {
   storage ??= new Storage({
