@@ -70,7 +70,10 @@ async function saveVerifiedObject(key: string, data: Buffer | string, options: S
   if (!sdkRead.equals(bytes))
     throw new AppError("STORAGE_READ", `Google devolvió ${actual.length} bytes correctos, pero la biblioteca leyó ${sdkRead.length}.`, 502);
 }
-export async function execute(jobId: string) {
+class DirectYield extends Error {
+  constructor(public destination: "continue" | "cloud") { super(destination); }
+}
+export async function execute(jobId: string, direct = false): Promise<"continue" | "cloud" | undefined> {
   assert(/^[a-f0-9]{64}$/.test(jobId), "JOB_ID inválido");
   const ref = db().doc(`jobs/${jobId}`),
     owner = randomUUID();
@@ -120,6 +123,7 @@ export async function execute(jobId: string) {
   let persistedCheckpoint = { ...job.checkpoint };
   const dir = await mkdtemp(path.join(tmpdir(), "universos-"));
   let lost = false;
+  let paidCalls = 0;
   async function guarded(
     patch: Record<string, unknown> = {},
     allowStop = false,
@@ -189,6 +193,10 @@ export async function execute(jobId: string) {
   async function beforeCall(key: string) {
     await guarded();
     assertNoPendingCall(job.checkpoint.pendingCall);
+    // A Vercel slice performs at most one paid request. Its result is persisted
+    // before another invocation continues, within the 300-second lifetime.
+    if (direct && paidCalls > 0) throw new DirectYield("continue");
+    paidCalls++;
     const cp = { ...persistedCheckpoint, pendingCall: key, submitted: true };
     await guarded({ checkpoint: cp });
     persistedCheckpoint = cp;
@@ -344,6 +352,9 @@ export async function execute(jobId: string) {
         await guarded({ state: "waiting" }, true);
       }
       let response;
+      // Veo has already accepted the request. Cloud Run only polls that same
+      // operation and processes the resulting video with ffmpeg.
+      if (direct) throw new DirectYield("cloud");
       for (let i = 0; !recoveredObject && i < 100; i++) {
         await guarded({}, true);
         try {
@@ -564,6 +575,11 @@ export async function execute(jobId: string) {
     }
     await guarded({ state: "completed" }, true);
   } catch (e) {
+    if (e instanceof DirectYield) {
+      persistedCheckpoint = { ...persistedCheckpoint, directStep: Number(persistedCheckpoint.directStep || 0) + 1 };
+      await guarded({ state: "queued", checkpoint: persistedCheckpoint, error: null }, true);
+      return e.destination;
+    }
     const err = safeError(e);
     // A provider's explicit 4xx rejection cannot be a lost paid response.
     // Keep the error, but unblock a later user-requested attempt.
@@ -581,7 +597,7 @@ export async function execute(jobId: string) {
           ? "needsReview"
           : "failed";
     await guarded({ state, error: err, checkpoint: persistedCheckpoint }, true).catch(() => {});
-    process.exitCode = 1;
+    if (!direct) process.exitCode = 1;
   } finally {
     clearInterval(timer);
     await db().runTransaction(async (tx) => {

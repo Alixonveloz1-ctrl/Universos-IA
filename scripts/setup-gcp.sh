@@ -63,6 +63,7 @@ for account in "$WORKER_ACCOUNT" "$WEB_ACCOUNT"; do
 worker_email="$WORKER_ACCOUNT@$GCP_PROJECT_ID.iam.gserviceaccount.com"
 web_email="$WEB_ACCOUNT@$GCP_PROJECT_ID.iam.gserviceaccount.com"
 iam_binding projects add-iam-policy-binding "$GCP_PROJECT_ID" --member="serviceAccount:$worker_email" --role=roles/aiplatform.user --condition=None --quiet >/dev/null
+iam_binding projects add-iam-policy-binding "$GCP_PROJECT_ID" --member="serviceAccount:$web_email" --role=roles/aiplatform.user --condition=None --quiet >/dev/null
 for account in "$worker_email" "$web_email"; do
  role=roles/storage.objectViewer
  [[ "$account" == "$worker_email" ]] && role=roles/storage.objectUser

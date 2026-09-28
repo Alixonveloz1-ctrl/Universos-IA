@@ -12,8 +12,9 @@ import {
 import type { Job, Snapshot, Target } from "../types";
 import { profiles } from "./catalog";
 import { textGenerate } from "../providers/vertex";
-import { validateChapterBible, validateChapterPlan } from "../continuity/chapters";
+import { validateChapterPlan } from "../continuity/chapters";
 import { AppError } from "../errors";
+import { buildBible } from "./bible";
 const schemas = { ideas, story, bible, plan };
 export function narrativePrompt(j: Job, repair?: string) {
   return [
@@ -48,6 +49,7 @@ export async function runDirector(
 ) {
   if (!["ideas", "story", "bible", "plan"].includes(j.type))
     throw new AppError("DIRECTOR", "Etapa narrativa no válida");
+  if (j.type === "bible") return buildBible(j, narrativePrompt(j), beforeCall, checkpoint);
   const generatedIdea = idea.extend({ universe });
   const generatedIdeas = z.object({ ideas: z.array(generatedIdea).length(3) }).strict().refine(
     (v) => new Set(v.ideas.map((i) => i.id)).size === 3, "IDs de propuestas duplicados",
@@ -66,19 +68,20 @@ export async function runDirector(
     }
   }
   let failure = "";
-  for (let attempt = 0; attempt < 2; attempt++) {
+  const maxAttempts = 2 * (Number(j.checkpoint.narrativeRetry || 0) + 1);
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const key = `director_${attempt}`;
     let result = j.checkpoint[key];
     if (!result) {
       await beforeCall(key);
       result = await textGenerate(
         j.snapshot.project.models.text,
-        j.type === "bible" || j.type === "plan"
-          ? `${narrativePrompt(j, failure)}\n\nFormato JSON obligatorio: ${JSON.stringify(z.toJSONSchema(schema))}`
-          : narrativePrompt(j, failure),
+        j.type === "plan"
+          ? `${narrativePrompt(j, failure)}\n\nFormato JSON obligatorio: ${JSON.stringify(z.toJSONSchema(schema))}\n${attempt ? `Borrador a corregir: ${JSON.stringify(j.checkpoint[`director_${attempt - 1}`])}` : ""}`
+          : narrativePrompt(j, failure) + (attempt ? `\nBorrador a corregir: ${JSON.stringify(j.checkpoint[`director_${attempt - 1}`])}` : ""),
         // The full bible and eight-clip plan schemas can exceed Google's
         // structured-output complexity limit (HTTP 400). Validate locally.
-        j.type === "bible" || j.type === "plan" ? undefined : z.toJSONSchema(schema),
+        j.type === "plan" ? undefined : z.toJSONSchema(schema),
       );
       await checkpoint(key, result);
     }
@@ -88,11 +91,10 @@ export async function runDirector(
         const validated = validatePlan(parsed, j.snapshot.bible!, !!j.snapshot.project.previousChapter);
         validateChapterPlan(j.snapshot.project, validated);
       }
-      if (j.type === "bible") validateChapterBible(j.snapshot.project, bible.parse(parsed));
     } catch (e) {
       failure =
         e instanceof Error ? e.message.slice(0, 5000) : "Salida inválida";
-      if (attempt === 1)
+      if (attempt === maxAttempts - 1)
         throw new AppError(
           "DIRECTOR_JSON",
           "El Director no cumplió el esquema después de una reparación.",
@@ -106,7 +108,7 @@ export async function runDirector(
     // Proposals, story and bible are owner-reviewed drafts. The Bible's schema
     // and chapter-canon check above already enforce the objective constraints;
     // a second model's subjective veto can strand a valid paid response.
-    if (j.type === "ideas" || j.type === "story" || j.type === "bible") return parsed;
+    if (j.type === "ideas" || j.type === "story") return parsed;
     const review = await reviewContinuity(
       j,
       parsed,
@@ -116,7 +118,7 @@ export async function runDirector(
     );
     if (!review.errors.length) return parsed;
     failure = JSON.stringify(review);
-    if (attempt === 1)
+    if (attempt === maxAttempts - 1)
       throw new AppError(
         "CONTINUITY",
         "El Director detectó contradicciones después de una reparación: " +

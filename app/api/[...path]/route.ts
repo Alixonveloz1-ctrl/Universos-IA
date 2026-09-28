@@ -17,7 +17,8 @@ import {
 } from "@/lib/persistence/projects";
 import { login, originCheck, requireSession, sessionCookie } from "@/lib/auth";
 import { action, id, projectInput } from "@/lib/schemas";
-import { dispatch, checkWorker, diagnoseQueuedJob } from "@/lib/jobs";
+import { diagnoseQueuedJob } from "@/lib/jobs";
+import { launch } from "@/lib/direct-dispatch";
 import { model, MODELS, defaults } from "@/lib/models";
 import { AppError, safeError, assert } from "@/lib/errors";
 import {
@@ -31,6 +32,7 @@ import {
 import type { Job, Project } from "@/lib/types";
 import { blocksNewJob } from "@/lib/job-state";
 export const runtime = "nodejs";
+export const maxDuration = 300;
 export const dynamic = "force-dynamic";
 async function body(req: Request) {
   if (!req.headers.get("content-type")?.startsWith("application/json"))
@@ -142,7 +144,6 @@ async function handler(
         );
         for (const kind of ["text", "image", "video"] as const)
           model(p.models[kind], kind);
-        await checkWorker({ automaticUniverse: true, models: p.models } as Project);
         return response(await createProject(p), 201);
       }
     }
@@ -174,6 +175,7 @@ async function handler(
                 id: active.id,
                 type: active.type,
                 state: active.state,
+                backend: active.backend,
                 error: active.error || (active.dispatchError ? { code: "DISPATCH", message: active.dispatchError } : null),
                 stopRequested: active.stopRequested,
                 heartbeat: active.heartbeat,
@@ -207,11 +209,10 @@ async function handler(
       }
       if (paths[2] === "actions" && req.method === "POST") {
         const a = action.parse(await body(req));
-        await checkWorker((await readSnapshot(pid)).project);
         const j = await enqueue(pid, a);
         if (j.state === "queued" && !j.executionName)
           try {
-            await dispatch(j);
+            await launch(j);
           } catch (error) {
             return response(
               {
@@ -299,7 +300,7 @@ async function handler(
         ["resume", "stop"].includes(paths[2])
       ) {
         const next = await jobControl(j.id, paths[2] as "resume" | "stop");
-        if (paths[2] === "resume") await dispatch(next);
+        if (paths[2] === "resume") await launch(next);
         return response({ jobId: j.id }, 202);
       }
     }

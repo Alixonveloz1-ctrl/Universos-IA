@@ -108,6 +108,7 @@ export interface Snapshot {
   manifest?: string[];
 }
 export interface Job {
+  backend?: "direct" | "cloud";
   id: string;
   projectId: string;
   type: Action["type"];

@@ -37,10 +37,23 @@ it("repairs invalid story JSON once and presents the valid draft without a subje
 it("presents a valid bible to the owner without a second paid model review", async () => {
   const { j, before, checkpoint } = execution();
   j.type = "bible";
-  generate.mockResolvedValueOnce(j.snapshot.bible);
+  generate.mockResolvedValueOnce(j.snapshot.bible)
+    .mockResolvedValueOnce(j.snapshot.bible!.characters[0])
+    .mockResolvedValueOnce(j.snapshot.bible!.locations[0]);
   expect(await runDirector(j, before, checkpoint)).toEqual(j.snapshot.bible);
-  expect(generate).toHaveBeenCalledTimes(1);
-  expect(generate.mock.calls[0][2]).toBeUndefined();
+  expect(generate).toHaveBeenCalledTimes(3);
+  expect(generate.mock.calls[0][2]).toBeDefined();
+});
+it("resuming a failed Bible retries only its invalid ficha and retains completed parts", async () => {
+  const { j, before, checkpoint } = execution();
+  j.type = "bible";
+  generate.mockResolvedValueOnce(j.snapshot.bible).mockResolvedValueOnce({}).mockResolvedValueOnce({});
+  await expect(runDirector(j, before, checkpoint)).rejects.toMatchObject({ code: "DIRECTOR_JSON" });
+  j.checkpoint.narrativeRetry = 1;
+  generate.mockResolvedValueOnce(j.snapshot.bible!.characters[0]).mockResolvedValueOnce(j.snapshot.bible!.locations[0]);
+  expect(await runDirector(j, before, checkpoint)).toEqual(j.snapshot.bible);
+  expect(generate).toHaveBeenCalledTimes(5);
+  expect(generate.mock.calls[3][1]).toContain("Corrige ESTE resultado");
 });
 it("replays persisted narrative and review after restart without calling the model", async () => {
   const { j, before, checkpoint } = execution();

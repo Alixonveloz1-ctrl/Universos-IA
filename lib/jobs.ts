@@ -66,6 +66,22 @@ export async function dispatch(job: Job) {
 
 // Read-only startup check for old queue entries: no automatic paid retry.
 export async function diagnoseQueuedJob(job: Job) {
+  if (job.backend === "direct") {
+    const stalled = !(job.leaseUntil > Date.now()) &&
+      ((job.state === "queued" && Date.now() - Math.max(job.heartbeat || 0, job.dispatchedAt || job.createdAt) > 90000) ||
+       (["running", "waiting"].includes(job.state) && Date.now() - job.heartbeat > 180000));
+    if (!stalled) return job;
+    await db().runTransaction(async tx => {
+      const ref = db().doc(`jobs/${job.id}`);
+      const current = (await tx.get(ref)).data() as Job | undefined;
+      if (current?.backend === "direct" && current.state === job.state && current.heartbeat === job.heartbeat && !(current.leaseUntil > Date.now()))
+        tx.update(ref, { state: current.checkpoint.pendingCall ? "needsReview" : "failed", error: {
+          code: current.checkpoint.pendingCall ? "AMBIGUOUS" : "DIRECT_CONTINUATION",
+          message: current.checkpoint.pendingCall ? "La llamada terminó sin una respuesta guardada. Comprueba la recuperación antes de repetirla." : "Se interrumpió el proceso. Reanudar continuará desde la última parte guardada.",
+        } });
+    });
+    return (await db().doc(`jobs/${job.id}`).get()).data() as Job;
+  }
   if (job.state !== "queued" || job.attempts > 0 || job.stopRequested ||
       Date.now() - (job.dispatchedAt || job.createdAt) < 45000) return job;
   const operation = job.operationName || (job.executionName?.includes("/operations/") ? job.executionName : undefined);

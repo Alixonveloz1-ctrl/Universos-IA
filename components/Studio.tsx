@@ -835,7 +835,7 @@ export default function Studio() {
               <strong>
                 {
                   {
-                    queued: "En cola",
+                    queued: data.job.hasOperation ? "Video enviado a Google" : data.job.backend === "direct" ? "Preparando generación" : "Iniciando procesamiento",
                     running: "Trabajando",
                     waiting: "Esperando a Google",
                     completed: "Generación terminada",
@@ -846,7 +846,7 @@ export default function Studio() {
                 }
               </strong>
               {data.job.error && <p role="alert">{data.job.error.message}</p>}
-              {data.job.state === "queued" && !data.job.error && <p>Solicitud recibida. Comprobando si Google inició el ejecutor…</p>}
+              {data.job.state === "queued" && !data.job.error && <p>{data.job.hasOperation ? "Google ya recibió el video. Esperando el resultado para procesarlo." : data.job.backend === "direct" ? "Preparando el siguiente paso de la generación." : "Preparando el procesamiento de archivos de video."}</p>}
               <div className="actions">
                 {data.job.type === "ideas" && data.job.error?.code === "CONTINUITY" && data.job.resumable && (
                   <button disabled={busy} onClick={() => void perform(async () => {

@@ -114,7 +114,7 @@ vi.mock("../lib/providers/vertex", () => ({
   pollVideo: vi.fn(),
   startVideo: vi.fn(),
 }));
-import { textGenerate, imageGenerate, startVideo } from "../lib/providers/vertex";
+import { textGenerate, imageGenerate, startVideo, pollVideo } from "../lib/providers/vertex";
 import { execute, startupCheck } from "../worker/main";
 import { jobControl } from "../lib/persistence/projects";
 const jobId = "e".repeat(64);
@@ -182,6 +182,32 @@ it("SIMULATED concurrent Cloud Run dispatches acquire only one lease and paid re
   await Promise.all([execute(jobId), execute(jobId)]);
   expect(imageGenerate).toHaveBeenCalledTimes(1);
   expect((memory.rows.get("jobs/" + jobId) as Job).attempts).toBe(1);
+});
+it("direct slices call the image model once and persist each step before continuing", async () => {
+  expect(await execute(jobId, true)).toBe("continue");
+  expect(textGenerate).toHaveBeenCalledTimes(1);
+  expect(imageGenerate).not.toHaveBeenCalled();
+  expect((memory.rows.get("jobs/" + jobId) as Job).leaseUntil).toBe(0);
+  expect(await execute(jobId, true)).toBeUndefined();
+  expect((memory.rows.get("jobs/" + jobId) as Job).state).toBe("completed");
+  expect(imageGenerate).toHaveBeenCalledTimes(1);
+  expect(textGenerate).toHaveBeenCalledTimes(1);
+});
+it("direct video calls Veo before handing the accepted operation to media processing", async () => {
+  vi.stubEnv("GCP_PROJECT_ID", "test-project");
+  vi.stubEnv("GCS_OUTPUT_BUCKET", "test-bucket");
+  const j = memory.rows.get("jobs/" + jobId) as Job;
+  j.type = "video";
+  j.targetId = j.snapshot.targets.find(t => t.kind === "video")!.id;
+  for (const a of j.snapshot.assets.filter(a => a.kind === "image")) memory.files.set(a.storageObject, Buffer.from("reference"));
+  vi.mocked(startVideo).mockReset().mockResolvedValue("projects/test/operations/accepted");
+  vi.mocked(pollVideo).mockReset();
+  expect(await execute(jobId, true)).toBe("continue");
+  const next = await execute(jobId, true);
+  expect(next, JSON.stringify((memory.rows.get("jobs/" + jobId) as Job).error)).toBe("cloud");
+  expect(startVideo).toHaveBeenCalledTimes(1);
+  expect(pollVideo).not.toHaveBeenCalled();
+  expect((memory.rows.get("jobs/" + jobId) as Job).checkpoint.operation).toBe("projects/test/operations/accepted");
 });
 it("REGRESSION stopped or superseded jobs cannot execute from a late dispatch", async () => {
   const j = memory.rows.get("jobs/" + jobId) as Job;

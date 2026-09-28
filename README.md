@@ -6,7 +6,7 @@ Implementación en desarrollo de la especificación Universos IA V2. No es una e
 
 ## Arquitectura
 
-Next.js y TypeScript para Vercel; Firestore para proyectos y trabajos; un bucket privado; un único Cloud Run Job con Director, imágenes, Veo y FFmpeg. Las voces, música y efectos se generan únicamente dentro de Veo. El ensamblador concatena ocho clips aprobados de ocho segundos.
+Next.js y TypeScript para Vercel; Firestore para proyectos y trabajos; un bucket privado; llamadas a Director, imágenes y envío a Veo desde Vercel; Cloud Run para esperar videos y procesarlos con FFmpeg. Las voces, música y efectos se generan únicamente dentro de Veo. El ensamblador concatena ocho clips aprobados de ocho segundos.
 
 ## Desarrollo y comprobaciones
 
@@ -54,9 +54,9 @@ El instalador está escrito pero no probado en Google Cloud. Revisar nombres, pe
 
 ## Recuperación y límites conocidos
 
-Los trabajos se registran antes de lanzar Cloud Run. Una ejecución adquiere un lease; las consultas a una operación Veo existente no generan otro clip. Si se pierde la respuesta inicial de una generación, se bloquea la repetición automática. La acción «Comprobar recuperación» busca respuestas persistidas y objetos del mismo intento, sin repetir llamadas pendientes. Si no existe resultado recuperable, se puede cerrar el intento con una nota y reconocimiento del posible consumo. El backend exige una comprobación previa; conserva todo el historial y no genera otra versión al cerrar. No borrar ni alterar manualmente el checkpoint.
+Los trabajos se registran antes de llamar al generador. Vercel ejecuta un paso por invocación y continúa mediante solicitudes internas firmadas, sin depender de que el teléfono permanezca abierto. Cloud Run recibe las operaciones de video ya enviadas y realiza el ensamblado final. Una ejecución adquiere un lease; las consultas a una operación Veo existente no generan otro clip. Si se pierde la respuesta inicial de una generación, se bloquea la repetición automática. La acción «Comprobar recuperación» busca respuestas persistidas y objetos del mismo intento, sin repetir llamadas pendientes. Si no existe resultado recuperable, se puede cerrar el intento con una nota y reconocimiento del posible consumo. El backend exige una comprobación previa; conserva todo el historial y no genera otra versión al cerrar. No borrar ni alterar manualmente el checkpoint.
 
-Una ejecución de video ya aceptada puede seguir produciendo y consumir créditos después de pulsar Detener. En lotes de imágenes se detienen nuevas solicitudes entre elementos. Los límites globales pueden dejar un trabajo en cola: reanudar cuando se libere el ejecutor. No hay un scheduler separado.
+Una ejecución de video ya aceptada puede seguir produciendo y consumir créditos después de pulsar Detener. En lotes de imágenes se detienen nuevas solicitudes entre elementos. Los límites globales impiden ejecutar trabajos simultáneos por encima del límite configurado. Si se interrumpe una continuación, la aplicación permite reanudar desde las partes guardadas. La Biblia se genera por fichas pequeñas; reanudar solicita de nuevo solo la ficha que falló.
 
 Los guiones/biblias candidatos se conservan en versiones narrativas. La interfaz permite editar listas, personajes, escenarios, universos y modelos de la historia. Los borradores conservan su revisión base para evitar sobrescribir cambios después de una actualización. La portada estática se inspira en el diseño adjunto; falta comprobar el conjunto en navegador móvil. La revisión semántica del Director y la compilación de prompts usan el proveedor real de texto, con resultados duraderos y como máximo una reparación del borrador narrativo.
 
@@ -76,3 +76,5 @@ Cada storyboard adjunta las referencias aprobadas de los personajes y del escena
 ## Continuación del 27 de septiembre
 
 El ZIP original se verificó por SHA-256 y se continuó sobre su código. En esta sesión pasan 51 pruebas, lint, TypeScript, build y comprobación de sintaxis del instalador. Se corrigieron bloqueos de operación pendiente, invalidación de referencias y escritura de respuestas tardías bajo lease. Consultar la última sección de la auditoría para separar esta evidencia de la entrega previa y para los bloqueos actuales de despliegue. Ninguna prueba local genera contenido pagado.
+
+Para activar llamadas directas en instalaciones existentes, actualiza el repositorio y ejecuta `./d` en Cloud Shell: concede permiso de Vertex AI a la identidad web existente. No reconstruye Cloud Run ni cambia contraseñas. La web se actualiza con el despliegue de Vercel.

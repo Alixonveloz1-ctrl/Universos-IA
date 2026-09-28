@@ -586,13 +586,16 @@ export async function jobControl(id: string, operation: "stop" | "resume") {
     // An explicit HTTP rejection has no in-flight generation to reconcile.
     // Older workers mistakenly retained a pending call after a 400 response.
     const rejected = j.error?.code === "PROVIDER_REJECTED";
-    const checkpoint = rejected ? { ...j.checkpoint, pendingCall: null, submitted: false } : j.checkpoint;
+    const narrativeRetry = j.error?.code === "DIRECTOR_JSON" && !j.checkpoint.pendingCall;
+    const checkpoint = narrativeRetry
+      ? { ...j.checkpoint, narrativeRetry: Number(j.checkpoint.narrativeRetry || 0) + 1 }
+      : rejected ? { ...j.checkpoint, pendingCall: null, submitted: false } : j.checkpoint;
     const snapshot = rejected && j.snapshot.project.selectedIdeaId
       ? { ...j.snapshot, project: { ...j.snapshot.project,
           ideas: j.snapshot.project.ideas.filter(i => i.id === j.snapshot.project.selectedIdeaId) } }
       : j.snapshot;
-    tx.update(ref, { stopRequested: false, state: "queued", error: null, executionName: "", operationName: "", dispatchedAt: Date.now(), ...(rejected ? { checkpoint, snapshot } : {}) });
-    return { ...j, stopRequested: false, state: "queued" as const, executionName: "", operationName: "" };
+    tx.update(ref, { stopRequested: false, state: "queued", error: null, executionName: "", operationName: "", dispatchedAt: Date.now(), ...((rejected || narrativeRetry) ? { checkpoint, snapshot } : {}) });
+    return { ...j, checkpoint, snapshot, stopRequested: false, state: "queued" as const, executionName: "", operationName: "" };
   });
 }
 
