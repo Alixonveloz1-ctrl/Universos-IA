@@ -36,6 +36,7 @@ vi.mock("../lib/persistence/google", () => {
     return { doc: (id: string) => doc(path + "/" + id) };
   }
   return {
+    googleAuth: () => ({ getAccessToken: async () => "test-token" }),
     objectPath: (p: string, v: string, n: string) =>
       `universos-ia/${p}/${v}/${n}`,
     privateObject: (key: string) => ({
@@ -118,6 +119,8 @@ import { execute, startupCheck } from "../worker/main";
 import { jobControl } from "../lib/persistence/projects";
 const jobId = "e".repeat(64);
 beforeEach(async () => {
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
   memory.rows.clear();
   memory.files.clear();
   memory.failAssetCreate = false;
@@ -232,12 +235,34 @@ it("startup check verifies storage and Firestore without calling generators", as
   expect(imageGenerate).not.toHaveBeenCalled();
   expect(startVideo).not.toHaveBeenCalled();
 });
-it("rejects and removes a corrupted upload instead of approving the object", async () => {
+it("recovers a bad SDK upload through Google's API and verifies the actual stored bytes", async () => {
   memory.corruptNextUpload = true;
-  await expect(startupCheck()).rejects.toThrow("no coincide con el original");
+  vi.stubEnv("GCP_PROJECT_ID", "alixon-jhan");
+  vi.stubEnv("GCS_OUTPUT_BUCKET", "universos_ia");
+  const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+    const url = new URL(String(input));
+    if (init?.method === "POST") {
+      memory.files.set(url.searchParams.get("name")!, Buffer.from(init.body as Uint8Array));
+      return new Response("{}", { status: 200 });
+    }
+    const key = decodeURIComponent(url.pathname.split("/o/")[1]);
+    return new Response(new Uint8Array(memory.files.get(key)!), { status: 200 });
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  await startupCheck();
   expect(memory.files.size).toBe(0);
-  expect(memory.rows.get("system/startupCheck")).toEqual(expect.objectContaining({ status: "checking" }));
+  expect(memory.rows.get("system/startupCheck")).toEqual(expect.objectContaining({ status: "ok" }));
+  expect(fetchMock).toHaveBeenCalledTimes(2);
   expect(imageGenerate).not.toHaveBeenCalled();
+});
+it("refuses to approve corrupt bytes even when Google's direct API accepts an upload", async () => {
+  memory.corruptNextUpload = true;
+  vi.stubEnv("GCP_PROJECT_ID", "alixon-jhan");
+  vi.stubEnv("GCS_OUTPUT_BUCKET", "universos_ia");
+  vi.stubGlobal("fetch", vi.fn(async (_: string | URL, init?: RequestInit) =>
+    new Response(init?.method === "POST" ? "{}" : "wrong", { status: 200 })));
+  await expect(startupCheck()).rejects.toThrow("Google guardó");
+  expect(memory.rows.get("system/startupCheck")).toEqual(expect.objectContaining({ status: "checking" }));
 });
 it("records a startup capacity failure rather than leaving the job queued forever", async () => {
   memory.rows.set("system/workerSlots", { slots: { another: Date.now() + 60000 } });

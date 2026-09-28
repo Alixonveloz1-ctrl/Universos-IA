@@ -5,7 +5,7 @@ import path from "node:path";
 import sharp from "sharp";
 import type { Transaction } from "@google-cloud/firestore";
 import type { SaveOptions } from "@google-cloud/storage";
-import { db, privateObject, objectPath } from "../lib/persistence/google";
+import { db, privateObject, objectPath, googleAuth } from "../lib/persistence/google";
 import { imageLimits } from "../lib/models";
 import { imageReferenceIds } from "../lib/continuity/rules";
 import { config } from "../lib/config";
@@ -32,14 +32,43 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 async function saveVerifiedObject(key: string, data: Buffer | string, options: SaveOptions = {}) {
   const file = privateObject(key);
   const bytes = Buffer.isBuffer(data) ? data : Buffer.from(data);
-  // The upload response can report a mismatched checksum even when the object
-  // is intact. Verify the actual stored bytes before accepting any asset.
+  // The SDK upload has returned incorrect bytes in the deployed environment.
+  // Never accept an asset until we have read the original bytes back.
   await file.save(bytes, { ...options, validation: false });
   const [stored] = await file.download({ validation: false });
-  if (!stored.equals(bytes)) {
-    await file.delete();
-    throw new AppError("STORAGE_INTEGRITY", "El archivo guardado no coincide con el original.", 502);
-  }
+  if (stored.equals(bytes)) return;
+  console.error(`La biblioteca de Storage devolvió ${stored.length} bytes; se enviaron ${bytes.length}. Reintentando con la API de Google.`);
+  await file.delete();
+  const token = await googleAuth().getAccessToken();
+  assert(token, "No se pudo autenticar la subida al bucket.", "STORAGE_AUTH");
+  const encoded = encodeURIComponent(key),
+    base = `https://storage.googleapis.com/storage/v1/b/${config().bucket}/o/${encoded}`,
+    upload = new URL(`https://storage.googleapis.com/upload/storage/v1/b/${config().bucket}/o`);
+  upload.searchParams.set("uploadType", "media");
+  upload.searchParams.set("name", key);
+  if (options.preconditionOpts?.ifGenerationMatch === 0)
+    upload.searchParams.set("ifGenerationMatch", "0");
+  const headers = { Authorization: `Bearer ${token}` };
+  const sent = await fetch(upload, {
+    method: "POST",
+    headers: { ...headers, "Content-Type": options.metadata?.contentType || "application/octet-stream" },
+    body: new Uint8Array(bytes),
+    signal: AbortSignal.timeout(600000),
+  });
+  if (!sent.ok)
+    throw new AppError("STORAGE_UPLOAD", `Google rechazó la subida directa (${sent.status}).`, 502);
+  const received = await fetch(`${base}?alt=media`, {
+    headers,
+    signal: AbortSignal.timeout(600000),
+  });
+  if (!received.ok)
+    throw new AppError("STORAGE_READ", `Google rechazó la lectura directa (${received.status}).`, 502);
+  const actual = Buffer.from(await received.arrayBuffer());
+  if (!actual.equals(bytes))
+    throw new AppError("STORAGE_INTEGRITY", `Google guardó ${actual.length} bytes; se enviaron ${bytes.length}.`, 502);
+  const [sdkRead] = await file.download({ validation: false });
+  if (!sdkRead.equals(bytes))
+    throw new AppError("STORAGE_READ", `Google devolvió ${actual.length} bytes correctos, pero la biblioteca leyó ${sdkRead.length}.`, 502);
 }
 export async function execute(jobId: string) {
   assert(/^[a-f0-9]{64}$/.test(jobId), "JOB_ID inválido");
