@@ -505,12 +505,13 @@ export default function Studio() {
     value: string,
     set: (s: string) => void,
     options: string[],
+    labels: Record<string, string> = {},
   ) => (
     <label>
       {label}
       <select value={value} onChange={(e) => set(e.target.value)}>
         {options.map((x) => (
-          <option key={x}>{x}</option>
+          <option key={x} value={x}>{labels[x] || x}</option>
         ))}
       </select>
     </label>
@@ -793,6 +794,11 @@ export default function Studio() {
                 selection.ending,
                 (v) => setSelection({ ...selection, ending: v }),
                 endings,
+                {
+                  Resolución: "Final resuelto",
+                  "Giro final": "Final con sorpresa",
+                  Cliffhanger: "Final en suspenso",
+                },
               )}
             </div>
             <details>
