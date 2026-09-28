@@ -552,13 +552,34 @@ export async function execute(jobId: string) {
 export async function startupCheck() {
   const key = objectPath("system", randomUUID(), "startup.txt");
   const file = privateObject(key);
-  await db().doc("system/startupCheck").set({ at: Date.now(), status: "checking" });
-  await file.save("universos-ia-startup", { resumable: false });
-  const [content] = await file.download();
-  assert(content.toString() === "universos-ia-startup", "No se pudo verificar el almacenamiento.");
-  await file.delete();
-  await db().doc("system/startupCheck").set({ at: Date.now(), status: "ok" });
-  console.log("Arranque, Firestore y almacenamiento verificados. Sin llamadas a generadores.");
+  let step = "escritura en Firestore";
+  try {
+    console.log(`Comprobando ${step}…`);
+    await db().doc("system/startupCheck").set({ at: Date.now(), status: "checking" });
+    step = "escritura en el bucket";
+    console.log(`Comprobando ${step}…`);
+    await file.save("universos-ia-startup", { resumable: false });
+    step = "lectura del bucket";
+    console.log(`Comprobando ${step}…`);
+    const [content] = await file.download();
+    assert(content.toString() === "universos-ia-startup", "No se pudo verificar el almacenamiento.");
+    step = "eliminación del archivo de prueba";
+    console.log(`Comprobando ${step}…`);
+    await file.delete();
+    step = "confirmación en Firestore";
+    console.log(`Comprobando ${step}…`);
+    await db().doc("system/startupCheck").set({ at: Date.now(), status: "ok" });
+    console.log("Arranque, Firestore y almacenamiento verificados. Sin llamadas a generadores.");
+  } catch (e) {
+    // This is only written to the private Cloud Run log; the public API still
+    // returns safeError without revealing details from Google services.
+    const error = e as { code?: unknown; message?: unknown };
+    console.error("Falló la comprobación de " + step, {
+      code: typeof error?.code === "string" || typeof error?.code === "number" ? error.code : "UNKNOWN",
+      message: typeof error?.message === "string" ? error.message.slice(0, 1200) : "Sin detalles",
+    });
+    throw e;
+  }
 }
 if (process.env.WORKER_SELF_TEST === "1")
   startupCheck().catch(e => { console.error(safeError(e)); process.exitCode = 1; });
