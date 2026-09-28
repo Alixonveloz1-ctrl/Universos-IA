@@ -12,4 +12,6 @@ else
   gcloud iam roles create "$role" --project="$project" --title='Universos IA job monitor' --permissions=run.operations.get,run.executions.get --quiet >/dev/null
 fi
 gcloud projects add-iam-policy-binding "$project" --member="serviceAccount:$account" --role="projects/$project/roles/$role" --condition=None --quiet >/dev/null
+gcloud storage buckets add-iam-policy-binding gs://universos_ia --member="serviceAccount:$account" --role="projects/$project/roles/universosObjectLister" --condition=None --quiet >/dev/null
+gcloud storage buckets add-iam-policy-binding gs://universos_ia --member="serviceAccount:$account" --role=roles/storage.objectUser --condition="expression=resource.name.startsWith('projects/_/buckets/universos_ia/objects/universos-ia/'),title=universos-prefix-delete" --quiet >/dev/null
 echo 'Universos IA ya puede comprobar el estado de sus ejecuciones. Actualiza la aplicación en el navegador.'

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { db, signedUrl } from "@/lib/persistence/google";
 import {
   createProject,
-  deleteEmptyUniverse,
+  deleteUniverse,
   recoverReviewedIdeas,
   createNextChapter,
   enqueue,
@@ -126,7 +126,6 @@ async function handler(
             universeName: d.data().universeSnapshot?.name || d.data().title,
             chapterNumber: d.data().chapterNumber || 1,
             stage: d.data().stage,
-            removableDraft: d.data().automaticUniverse && !d.data().story && !d.data().bible && !d.data().plan && !d.data().nextChapterId,
             updatedAt: d.data().updatedAt,
           })),
         );
@@ -149,8 +148,7 @@ async function handler(
     if (paths[0] === "projects" && paths.length >= 2) {
       const pid = paths[1];
       if (paths.length === 2 && req.method === "DELETE") {
-        await deleteEmptyUniverse(pid);
-        return response({ deleted: true });
+        return response(await deleteUniverse(pid));
       }
       if (paths.length === 3 && paths[2] === "next-chapter" && req.method === "POST") {
         const b = z.object({ expectedRevision: z.number().int().nonnegative() }).strict().parse(await body(req));

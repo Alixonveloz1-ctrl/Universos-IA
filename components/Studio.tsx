@@ -383,7 +383,7 @@ export default function Studio() {
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [projects, setProjects] = useState<
-      { id: string; title: string; stage: string; universeId?: string; universeName?: string; chapterNumber?: number; removableDraft?: boolean }[]
+      { id: string; title: string; stage: string; universeId?: string; universeName?: string; chapterNumber?: number }[]
     >([]),
     [data, setData] = useState<Data | null>(null),
     [tab, setTab] = useState("Historia");
@@ -736,15 +736,14 @@ export default function Studio() {
                 {chapters.map(p => <button key={p.id} onClick={() => void perform(async () => { await refresh(p.id); setTab("Historia"); })}>
                   Capítulo {p.chapterNumber || 1} · {p.title}
                 </button>)}
-                {chapters.length === 1 && chapters[0].removableDraft && (
-                  <button disabled={busy} onClick={() => {
-                    if (!window.confirm("¿Borrar este universo y sus intentos fallidos? Esta acción no se puede deshacer.")) return;
-                    void perform(async () => {
-                      await api(`projects/${chapters[0].id}`, "DELETE");
-                      await refresh();
-                    });
-                  }}>Borrar borrador fallido</button>
-                )}
+                <button disabled={busy} onClick={() => {
+                  if (!window.confirm(`¿Borrar por completo «${chapters[0].universeName || chapters[0].title}»? Se eliminarán sus ${chapters.length} capítulo(s), videos, imágenes y trabajos. No se puede deshacer.`)) return;
+                  void perform(async () => {
+                    await api(`projects/${chapters[0].id}`, "DELETE");
+                    setData(null);
+                    await refresh();
+                  });
+                }}>Borrar universo</button>
               </section>;
             })}
           </div>

@@ -75,6 +75,8 @@ if ! gcloud iam roles list --project="$GCP_PROJECT_ID" --format='value(name)' | 
  gcloud iam roles create "$list_role_id" --project="$GCP_PROJECT_ID" --title='Universos result reconciliation' --permissions=storage.objects.list
 fi
 iam_binding storage buckets add-iam-policy-binding "gs://$GCS_OUTPUT_BUCKET" --member="serviceAccount:$worker_email" --role="projects/$GCP_PROJECT_ID/roles/$list_role_id" --condition=None --quiet >/dev/null
+iam_binding storage buckets add-iam-policy-binding "gs://$GCS_OUTPUT_BUCKET" --member="serviceAccount:$web_email" --role="projects/$GCP_PROJECT_ID/roles/$list_role_id" --condition=None --quiet >/dev/null
+iam_binding storage buckets add-iam-policy-binding "gs://$GCS_OUTPUT_BUCKET" --member="serviceAccount:$web_email" --role=roles/storage.objectUser --condition="expression=resource.name.startsWith('projects/_/buckets/$GCS_OUTPUT_BUCKET/objects/$GCS_PREFIX/'),title=universos-prefix-delete" >/dev/null
 # Signing short-lived private media URLs; no service-account private key is created.
 iam_binding iam service-accounts add-iam-policy-binding "$web_email" --project="$GCP_PROJECT_ID" --member="serviceAccount:$web_email" --role=roles/iam.serviceAccountTokenCreator --condition=None --quiet >/dev/null
 if ! gcloud artifacts repositories list --project="$GCP_PROJECT_ID" --location="$GCP_REGION" --format='value(name)' | grep -Fxq "projects/$GCP_PROJECT_ID/locations/$GCP_REGION/repositories/$ARTIFACT_REPOSITORY"; then

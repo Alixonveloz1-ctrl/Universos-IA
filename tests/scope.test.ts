@@ -11,7 +11,7 @@ describe("application data isolation", () => {
       get: async () => records.get(path),
     }));
     const transaction = { set: (ref: { path: string }, value: unknown) => records.set(ref.path, value) };
-    const database = { doc, runTransaction: async (fn: (tx: typeof transaction) => unknown) => fn(transaction) };
+    const database = { doc, runTransaction: async (fn: (tx: typeof transaction) => unknown) => fn(transaction), recursiveDelete: async () => {} };
     const app = scopedDatabase(database as unknown as Firestore);
     for (const name of ["universes", "projects", "jobs", "system"])
       expect(app.collection(name).path).toBe(`${DATA_ROOT}/${name}`);
@@ -22,7 +22,7 @@ describe("application data isolation", () => {
     expect(app.doc("projects/p/assets/a").path).toBe(`${DATA_ROOT}/projects/p/assets/a`);
   });
   it("rejects paths that could escape the namespace", () => {
-    const app = scopedDatabase({ doc: () => ({}), runTransaction: () => {} } as unknown as Firestore & { runTransaction: unknown });
+    const app = scopedDatabase({ doc: () => ({}), runTransaction: () => {}, recursiveDelete: async () => {} } as unknown as Firestore & { runTransaction: unknown });
     for (const path of ["../universes/feri", "/universes/feri", "universes//feri"])
       expect(() => app.doc(path)).toThrow();
   });

@@ -1,7 +1,8 @@
 import { randomUUID, createHash } from "node:crypto";
 import { z } from "zod";
 import type { Transaction } from "@google-cloud/firestore";
-import { db } from "./google";
+import { db, bucket } from "./google";
+import { config } from "../config";
 import { assert } from "../errors";
 import { validateChapterBible, validateChapterPlan } from "../continuity/chapters";
 import { blocksNewJob } from "../job-state";
@@ -31,47 +32,31 @@ export async function getProject(id: string) {
   assert(p?.owner === "personal", "Historia no encontrada.");
   return p;
 }
-export async function deleteEmptyUniverse(id: string) {
-  await db().runTransaction(async tx => {
-    const ref = projectRef(id);
-    const p = (await tx.get(ref)).data() as Project | undefined;
-    assert(p?.owner === "personal", "Universo no encontrado.");
-    assert(p.automaticUniverse && (!p.universeId || p.universeId === `story-${id}`) &&
-      (p.chapterNumber || 1) === 1 && !p.previousChapter && !p.nextChapterId &&
-      !p.story && !p.bible && !p.plan,
-      "Solo puedes borrar un universo sin historia desarrollada ni capítulos.");
-    const [assets, targets, narratives, exports, jobs] = await Promise.all([
-      tx.get(ref.collection("assets")), tx.get(ref.collection("targets")),
-      tx.get(ref.collection("narratives")), tx.get(ref.collection("exports")),
-      tx.get(db().collection("jobs").where("projectId", "==", id)),
-    ]);
-    assert(!assets.docs.length && !targets.docs.length && !narratives.docs.length && !exports.docs.length,
-      "Este universo ya tiene material producido; no se puede borrar como borrador.");
-    assert(jobs.docs.length < 50 && jobs.docs.every(s => {
-      const j = s.data() as Job;
-      return ["failed", "stopped", "completed"].includes(j.state) &&
-        !(j.leaseUntil > Date.now()) && !j.checkpoint?.pendingCall &&
-        !j.checkpoint?.operation && ["ideas", "story"].includes(j.type);
-    }), "Hay una generación activa o pendiente. No se borró nada.");
-    assert(!p.activeJobId || jobs.docs.some(s => s.id === p.activeJobId),
-      "No se pudo comprobar el último trabajo. No se borró nada.");
-    let savedUniverse;
-    if (p.universeId) {
-      savedUniverse = (await tx.get(db().doc(`universes/${p.universeId}`))).data();
-      assert(savedUniverse?.projectId === id, "Este universo tiene otra referencia y no se puede borrar.");
-    }
-    const checkpoints = await Promise.all(jobs.docs.map(s =>
-      tx.get(db().doc(`jobs/${s.id}`).collection("checkpoints"))));
-    assert(checkpoints.reduce((n, q) => n + q.docs.length, 0) < 400,
-      "Demasiados intentos para borrar de una sola vez.");
-    for (let i = 0; i < jobs.docs.length; i++) {
-      for (const c of checkpoints[i].docs)
-        tx.delete(db().doc(`jobs/${jobs.docs[i].id}`).collection("checkpoints").doc(c.id));
-      tx.delete(db().doc(`jobs/${jobs.docs[i].id}`));
-    }
-    if (p.universeId) tx.delete(db().doc(`universes/${p.universeId}`));
-    tx.delete(ref);
+export async function deleteUniverse(id: string) {
+  const first = await getProject(id);
+  const universeId = first.universeId || `story-${first.id}`;
+  const snapshots = (await db().collection("projects").where("owner", "==", "personal").get()).docs;
+  const chapters = snapshots.filter(s => {
+    const p = s.data() as Project;
+    return (p.universeId || `story-${p.id}`) === universeId;
   });
+  assert(chapters.some(s => s.id === id), "Universo no encontrado.");
+  const chapterIds = chapters.map(s => s.id);
+  const jobs = (await db().collection("jobs").get()).docs.filter(s => chapterIds.includes((s.data() as Job).projectId));
+  assert(jobs.every(s => {
+    const j = s.data() as Job;
+    return !["queued", "running", "waiting"].includes(j.state) && !(j.leaseUntil > Date.now());
+  }), "Hay una generación en curso. Detenla y espera a que termine antes de borrar el universo.");
+  // Remove project-owned files only; never use a bucket-wide prefix.
+  for (const chapterId of chapterIds) {
+    await bucket().deleteFiles({ prefix: `${config().prefix}/${chapterId}/`, force: false });
+  }
+  for (const job of jobs) await db().recursiveDelete(db().doc(`jobs/${job.id}`));
+  for (const chapterId of chapterIds) await db().recursiveDelete(projectRef(chapterId));
+  const universeRef = db().doc(`universes/${universeId}`);
+  const saved = await universeRef.get();
+  if (saved.exists && chapterIds.includes(saved.data()?.projectId)) await universeRef.delete();
+  return { deleted: true, chapters: chapterIds.length };
 }
 export async function recoverReviewedIdeas(id: string) {
   return db().runTransaction(async tx => {

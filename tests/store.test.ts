@@ -3,18 +3,22 @@ import { snapshot, observed } from "./fixtures";
 const memory = vi.hoisted(() => ({
   rows: new Map<string, unknown>(),
   tail: Promise.resolve(),
+  deletedPrefixes: [] as string[],
 }));
 vi.mock("../lib/persistence/google", () => {
   function doc(path: string) {
-    return { path, collection: (c: string) => collection(path + "/" + c) };
+    return { path, collection: (c: string) => collection(path + "/" + c), get: async () => ({ exists: memory.rows.has(path), data: () => memory.rows.get(path) }), delete: async () => { memory.rows.delete(path); } };
   }
   function collection(path: string) {
-    return { path, query: true, where: (_field: string, _op: string, value: unknown) => ({ path, query: true, filter: value }), doc: (id: string) => doc(path + "/" + id) };
+    const get = async (filter?: unknown) => ({ docs: [...memory.rows].filter(([p, v]) => p.startsWith(path + "/") && p.split("/").length === path.split("/").length + 1 && (filter === undefined || (v as { owner?: string }).owner === filter)).map(([p, v]) => ({ id: p.split("/").at(-1)!, data: () => structuredClone(v) })) });
+    return { path, query: true, get: () => get(), where: (_field: string, _op: string, value: unknown) => ({ path, query: true, filter: value, get: () => get(value) }), doc: (id: string) => doc(path + "/" + id) };
   }
   return {
+    bucket: () => ({ deleteFiles: async ({ prefix }: { prefix: string }) => { memory.deletedPrefixes.push(prefix); } }),
     db: () => ({
       doc,
       collection,
+      recursiveDelete: async (ref: { path: string }) => { for (const key of memory.rows.keys()) if (key === ref.path || key.startsWith(ref.path + "/")) memory.rows.delete(key); },
       runTransaction: async (fn: (tx: unknown) => Promise<unknown>) => {
         let release!: () => void;
         const before = memory.tail;
@@ -81,12 +85,15 @@ import {
   createNextChapter,
   jobControl,
   closeAmbiguousJob,
-  deleteEmptyUniverse,
+  deleteUniverse,
   recoverReviewedIdeas,
 } from "../lib/persistence/projects";
 import type { Asset, Job, Project, Target } from "../lib/types";
 beforeEach(() => {
+  process.env.GCP_PROJECT_ID = "alixon-jhan";
+  process.env.GCS_OUTPUT_BUCKET = "universos_ia";
   memory.rows.clear();
+  memory.deletedPrefixes.length = 0;
   memory.tail = Promise.resolve();
   const s = snapshot();
   memory.rows.set("projects/test", s.project);
@@ -103,7 +110,7 @@ const a = {
   requestId: "dddddddd-dddd-4ddd-addd-dddddddddddd",
   instructions: "",
 };
-it("deletes only an idle empty draft, its failed jobs and saved checkpoints", async () => {
+it("deletes an entire universe with all chapters, media, jobs and checkpoints", async () => {
   for (const key of [...memory.rows.keys()]) if (key.startsWith("projects/test/")) memory.rows.delete(key);
   const p = memory.rows.get("projects/test") as Project;
   memory.rows.set("projects/test", { ...p, automaticUniverse: true, stage: "story", chapterNumber: 1,
@@ -112,8 +119,12 @@ it("deletes only an idle empty draft, its failed jobs and saved checkpoints", as
   memory.rows.set("universes/story-test", { projectId: "test" });
   memory.rows.set("jobs/old", { id: "old", projectId: "test", type: "ideas", state: "failed", leaseUntil: 0, checkpoint: {} });
   memory.rows.set("jobs/old/checkpoints/director_1", { value: "old draft" });
-  await deleteEmptyUniverse("test");
-  expect([...memory.rows.keys()].filter(k => k === "projects/test" || k === "universes/story-test" || k.startsWith("jobs/old"))).toEqual([]);
+  memory.rows.set("projects/second", { ...p, id: "second", universeId: "story-test", chapterNumber: 2, story: { id: "approved" } });
+  memory.rows.set("projects/second/assets/video", { storageObject: "universos-ia/second/video.mp4" });
+  memory.rows.set("jobs/render", { id: "render", projectId: "second", type: "video", state: "completed", leaseUntil: 0 });
+  await deleteUniverse("test");
+  expect([...memory.rows.keys()].filter(k => k.startsWith("projects/") || k === "universes/story-test" || k.startsWith("jobs/"))).toEqual([]);
+  expect(memory.deletedPrefixes).toEqual(["universos-ia/test/", "universos-ia/second/"]);
 });
 it("restores three valid saved ideas after an overstrict review without invoking a generator", async () => {
   for (const key of [...memory.rows.keys()]) if (key.startsWith("projects/test/")) memory.rows.delete(key);
@@ -133,14 +144,14 @@ it("refuses to delete a draft while an execution might still run", async () => {
   const p = memory.rows.get("projects/test") as Project;
   memory.rows.set("projects/test", { ...p, automaticUniverse: true, universeId: "", story: undefined, bible: undefined, plan: undefined, nextChapterId: undefined, previousChapter: undefined });
   memory.rows.set("jobs/active", { id: "active", projectId: "test", type: "ideas", state: "queued", leaseUntil: 0, checkpoint: {} });
-  await expect(deleteEmptyUniverse("test")).rejects.toThrow("pendiente");
+  await expect(deleteUniverse("test")).rejects.toThrow("en curso");
   expect(memory.rows.has("projects/test")).toBe(true);
 });
-it("refuses to delete a universe with media or an approved story", async () => {
+it("deletes a universe even when it has generated assets and an approved story", async () => {
   const p = memory.rows.get("projects/test") as Project;
-  memory.rows.set("projects/test", { ...p, automaticUniverse: true, universeId: "", story: undefined, bible: undefined, plan: undefined, nextChapterId: undefined, previousChapter: undefined });
-  await expect(deleteEmptyUniverse("test")).rejects.toThrow("material producido");
-  expect(memory.rows.has("projects/test")).toBe(true);
+  memory.rows.set("projects/test", { ...p, automaticUniverse: true, universeId: "story-test", story: { id: "approved" } });
+  await deleteUniverse("test");
+  expect(memory.rows.has("projects/test")).toBe(false);
 });
 it("SIMULATED transactions: concurrent duplicate submissions produce one job", async () => {
   const [x, y] = await Promise.all([enqueue("test", a), enqueue("test", a)]);

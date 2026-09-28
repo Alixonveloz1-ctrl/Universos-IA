@@ -14,5 +14,6 @@ export function scopedDatabase(database: Firestore) {
     collection: (path: string) => root.collection(valid(path)),
     doc: (path: string) => database.doc(`${DATA_ROOT}/${valid(path)}`),
     runTransaction: database.runTransaction.bind(database),
+    recursiveDelete: database.recursiveDelete.bind(database),
   };
 }
