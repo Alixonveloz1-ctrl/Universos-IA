@@ -27,3 +27,15 @@ Las capturas del usuario muestran una tarjeta de Lady Fresa con cuatro escenas y
 Cinemático 3D tiene una dirección de render compartida para todo el reparto. Cuando existe otro personaje aprobado y vigente, su imagen se adjunta como referencia únicamente de acabado visual; la identidad sigue perteneciendo al personaje solicitado. Se utiliza approvedVersionId del target como evidencia de aprobación, coherente con el almacenamiento actual. No se alteran imágenes ya generadas; para sustituir una imagen incorrecta hay que regenerarla. La validación de prompts no garantiza por sí sola el resultado visual del modelo.
 
 La dirección compartida se define para TODAS las opciones: Cinemático 3D, Telenovela 3D expresiva, Animación 3D familiar, Animación 2D, Anime (2D cel), Realista e Ilustración animada (2D pictórica). También se aplica la referencia de acabado a los escenarios canónicos, sin introducir el personaje en ellos. El modelo seleccionado y el tono narrativo no cambian la técnica visual. Las pruebas recorren todo el catálogo y comprueban su presencia en personajes, escenarios, tomas, biblia y video.
+
+## Videos locales aportados después
+
+Se inspeccionaron doce fotogramas distribuidos por cada uno de los cinco archivos de video y una secuencia a dos fotogramas por segundo, entre 20 y 26 segundos, de la heladería. Esto verifica diseño, encuadres y cambios de expresión en esa muestra; no equivale a escuchar ni transcribir íntegramente los cinco videos.
+
+- export_1790607751029.mp4, 95,32 s: tienda de vestidos, mujeres adultas humanoides de figura estilizada, cintura marcada, curvas, cabello trabajado, ropa ajustada, piel de fruta pulida y primeros planos expresivos.
+- export_1790607825692.mp4, 87,75 s: heladería; personajes de distintas complexiones con acabado común, mujer cereza con camiseta y shorts, alternancia de planos de dos personajes y acercamientos. La muestra secuencial muestra gestos de boca, cejas, mirada y manos durante el intercambio.
+- export_1790607882652.mp4, 66,48 s: exterior de mansión e interior lujoso; edades distintas y proporciones diferenciadas. La pauta de silueta femenina adulta no se aplica a menores.
+- export_1790607936811.mp4, 94,18 s: interior doméstico, actuaciones y expresiones marcadas, cabeza de fruta reconocible sobre cuerpo humanoide; algunos personajes no tienen cabello.
+- export_1790607997535.mp4, 71,54 s: mujer manzana con vestido verde y mujer sandía con uniforme; ambas con anatomía humanoide estilizada y el mismo acabado, frente a personaje masculino de complexión robusta.
+
+Se afinó Telenovela 3D expresiva con esas características y una dirección de planos y reacciones para el plan. No se copian marcas, contadores de frente ni argumentos literales. Los guiones siguen las selecciones narrativas del usuario. Pendiente: comprobar una generación real con el perfil afinado; no se han consumido generaciones para esta revisión.
