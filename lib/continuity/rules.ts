@@ -75,6 +75,13 @@ export function prerequisites(s: Snapshot, a: Action) {
       approvedImage(s, "shot", c.shots[0].id),
       "Aprueba la imagen inicial de este clip.",
     );
+    if (c.characterIds.length > 1) {
+      const opening = s.targets.find(x => x.role === "shot" && x.entityId === c.shots[0].id);
+      const image = s.assets.find(x => x.id === opening?.approvedVersionId);
+      const canonical = c.characterIds.map(id => s.targets.find(x => x.role === "character" && x.entityId === id)?.approvedVersionId);
+      assert(canonical.every(id => id && image?.inputRefs.includes(id)),
+        "La imagen inicial no usó las referencias aprobadas de todos los personajes del clip. Regenera y aprueba esa imagen antes de crear el video.");
+    }
     if (n > 1) {
       const prev = s.targets.find(
         (x) => x.role === "clip" && x.clipNumber === n - 1,
@@ -176,23 +183,24 @@ export function imageReferenceIds(s: Snapshot, target: Target) {
           .flatMap((c) => c.shots)
           .find((sh) => sh.id === target.entityId)
       : null;
-  // A two-person exchange needs both identities even in a reaction close-up.
-  // The shot's characterIds can name just the on-camera speaker.
+  // Every character who appears during this clip must have a reference in
+  // the one opening frame; later camera cuts have no separate image input.
   const clip = target.role === "shot" ? s.plan?.clips.find(c => c.number === target.clipNumber) : null;
-  const castIds = clip?.characterIds.length === 2 ? clip.characterIds : shot?.characterIds || [];
+  const castIds = clip?.characterIds || shot?.characterIds || [];
+  const limit = imageLimits(s.project.models.image).maxReferenceImages;
+  assert(castIds.length <= limit,
+    `Este clip tiene ${castIds.length} personajes y el modelo de imagen admite ${limit} referencias. Selecciona un modelo que admita a todos antes de generar la imagen inicial.`,
+    "MODEL_REFERENCES");
   const selected =
     target.role === "shot"
-      ? s.targets.filter(
-          (t) =>
-            (t.role === "character" &&
-              castIds.includes(t.entityId)) ||
-            (t.role === "location" && t.entityId === shot?.locationId),
-        )
+      ? [
+          ...castIds.map(id => s.targets.find(t => t.role === "character" && t.entityId === id)).filter((t): t is Target => !!t),
+          ...(castIds.length < limit ? s.targets.filter(t => t.role === "location" && t.entityId === shot?.locationId) : []),
+        ]
       : s.targets.filter((t) => t.id === target.id);
   const refs = selected.flatMap((t) =>
     t.approvedVersionId ? [t.approvedVersionId] : [],
   );
-  const limit = imageLimits(s.project.models.image).maxReferenceImages;
   const styleRef = characterStyleReference(s, target);
   if (styleRef && refs.length < limit && !refs.includes(styleRef.id)) refs.push(styleRef.id);
   assert(

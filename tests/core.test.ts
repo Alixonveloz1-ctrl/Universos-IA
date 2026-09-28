@@ -170,8 +170,9 @@ it("REGRESSION the default image model cannot silently drop required references"
   const { imageReferenceIds } = await import("../lib/continuity/rules");
   const s = snapshot();
   s.plan = structuredClone(s.plan!);
-  s.plan.clips[0].shots[0].characterIds = ["a", "b", "c"];
-  for (const id of ["b", "c"])
+  s.plan.clips[0].characterIds = ["a", "b", "c", "d"];
+  s.plan.clips[0].shots[0].characterIds = ["a", "b", "c", "d"];
+  for (const id of ["b", "c", "d"])
     s.targets.push({
       id: "character_" + id,
       entityId: id,
@@ -183,7 +184,7 @@ it("REGRESSION the default image model cannot silently drop required references"
     });
   expect(() => imageReferenceIds(s, s.targets[1])).toThrow("admite 3");
   s.project.models.image = "gemini-3.1-flash-image";
-  expect(imageReferenceIds(s, s.targets[1])).toHaveLength(4);
+  expect(imageReferenceIds(s, s.targets[1])).toHaveLength(5);
 });
 
 it("REGRESSION a replaced proposal list cannot use a dangling story selection", () => {

@@ -31,7 +31,7 @@ export function narrativePrompt(j: Job, repair?: string) {
         ? "Desarrolla exclusivamente la propuesta seleccionada en una premisa, conflicto, arco y cierre claros. Respeta las reglas explícitas del universo elegido y la causalidad de las acciones: si separar a dos seres reduce su pigmentación, describe la consecuencia sin afirmar el efecto contrario. Los personajes canónicos existentes se conservan, pero la lista no prohíbe añadir personajes nuevos; preséntalos de forma comprensible. Prepara los giros con un indicio anterior. Mantén la anatomía y el tono escogidos. Esta es una historia para que el usuario la revise y apruebe antes de producirla; no exijas aún detalles de voces, planos ni diálogos literales."
         : j.type === "bible"
           ? "Fichas completas con IDs estables. Anatomía coherente para frutas y materiales; voz descriptiva para Veo."
-      : "Exactamente ocho clips consecutivos, ocho segundos cada uno. Solo UNA imagen inicial por clip: el primer elemento de shots describe el fotograma que inicia el video. Si hay otros encuadres dentro de esos ocho segundos son indicaciones de movimiento y montaje para Veo, no imágenes para generar o aprobar. Tiempos locales 0–8, cobertura sin huecos. Diálogo literal español, con intención y espacio para reaccionar. No traducir. Avisar si el diálogo es excesivo. La música, efectos y voz se producen SOLO como audio nativo de Veo. La continuidad previa se cuenta en el guion; cada clip tiene su propia imagen inicial.",
+      : "Exactamente ocho clips consecutivos, ocho segundos cada uno. Solo UNA imagen inicial por clip: el primer elemento de shots describe el fotograma que inicia el video e incluye visibles a TODOS los personajes que aparecerán en cualquier momento de ese clip; su characterIds debe incluir todos los characterIds del clip, también si uno habla o aparece después. Si hay otros encuadres dentro de esos ocho segundos son indicaciones de movimiento y montaje para Veo, no imágenes para generar o aprobar. Tiempos locales 0–8, cobertura sin huecos. Diálogo literal español, con intención y espacio para reaccionar. No traducir. Avisar si el diálogo es excesivo. La música, efectos y voz se producen SOLO como audio nativo de Veo. La continuidad previa se cuenta en el guion; cada clip tiene su propia imagen inicial.",
     j.type === "plan"
       ? "CONTINUIDAD DEL GUION: conserva literalmente los hechos causales aprobados (quién activa qué, condición, momento y consecuencia). Si un mecanismo es automático, muestra su activación automática: no inventes una pulsación manual. Simplifica cada clip a una acción principal y su reacción. characterIds del clip identifica a los interlocutores presentes; en la primera toma de un enfrentamiento, incluye en shot.characterIds a las DOS personas, encuádralas juntas y establece quién queda a la izquierda y a la derecha. Si una acusa o señala a otra, su destinatario debe ser visible y ocupar el lugar hacia donde apunta; no debe señalar una silla vacía. En el contraplano o primer plano de reacción, el interlocutor puede quedar fuera de cámara, pero la persona retratada lo mira en su posición establecida, nunca mira al espectador salvo que la historia lo exija. Conserva eje, decoración y posiciones de uno a otro plano. Si un objeto cambia de manos o pasa del bolsillo a la mano y es relevante para la acción, muestra brevemente esa transición. No añadas subtramas, objetos ni mecanismos innecesarios. Antes de entregar revisa los ocho clips como una sola secuencia. Incluye en cada clip diálogo literal, hablante, voz, acción, ambiente, efectos y música pertinente para que Veo genere imagen y audio juntos; no planifiques grabaciones ni pistas externas."
       : "",
@@ -151,24 +151,22 @@ export function compileImagePrompt(
   const styleRef = characterStyleReference(s, t);
   const shotClip = t.role === "shot" ? s.plan?.clips.find(c => c.number === t.clipNumber) : null;
   const currentShot = shotClip?.shots.find(sh => sh.id === t.entityId);
-  const cast = shotClip?.characterIds.length === 2
-    ? shotClip.characterIds.map(id => b.characters.find(c => c.id === id)).filter((c): c is typeof b.characters[number] => !!c)
-    : [];
+  const cast = shotClip?.characterIds.map(id => b.characters.find(c => c.id === id)).filter((c): c is typeof b.characters[number] => !!c) || [];
   const onCamera = cast.filter(c => currentShot?.characterIds.includes(c.id));
-  const openingExchange = !!shotClip && t.role === "shot" && cast.length === 2 && shotClip.shots[0]?.id === t.entityId;
-  const shotBlocking = cast.length === 2 && t.role === "shot"
+  const openingExchange = !!shotClip && t.role === "shot" && shotClip.shots[0]?.id === t.entityId;
+  const shotBlocking = cast.length > 0 && t.role === "shot"
     ? [
-        `SCENE BLOCKING, one continuous shared ${b.locations.find(l => l.id === currentShot?.locationId)?.name || "location"}: ${cast[0].name} is on screen LEFT, ${cast[1].name} on screen RIGHT, facing one another across the same physical space. Keep this axis, furniture, clothing and light consistent across the clip.`,
+        `SCENE BLOCKING, one continuous shared ${b.locations.find(l => l.id === currentShot?.locationId)?.name || "location"}: ${cast.map((c, i) => `${c.name} (${i === 0 ? "screen LEFT" : i === cast.length - 1 ? "screen RIGHT" : "screen CENTER"})`).join(", ")}. Keep these identities, positions, furniture, clothing and light consistent across the clip.`,
         openingExchange
-          ? `OPENING CONFRONTATION: show BOTH ${cast[0].name} and ${cast[1].name} in the same frame. If one points, the gesture must visibly reach the other person. No pointing at an empty chair or at the lens.`
+          ? `OPENING FRAME: show ALL ${cast.length} named characters (${cast.map(c => c.name).join(", ")}) visibly and recognizably in ONE shared scene, even if a later camera cut focuses on just one of them. Match each person to their own approved character reference and wardrobe. If one points, the gesture must visibly reach the correct person. No pointing at an empty chair or at the lens.`
           : onCamera.length === 1
-            ? `REACTION FRAME: ${onCamera[0].name} looks toward ${cast.find(c => c.id !== onCamera[0].id)!.name} at the established opposite screen position, just outside the close-up. Frame from the interlocutor's eyeline or over their shoulder if useful; no direct eye contact with the viewer.`
+            ? `REACTION FRAME: ${onCamera[0].name} looks toward the relevant interlocutor at the established opposite screen position, just outside the close-up. Frame from the interlocutor's eyeline or over their shoulder if useful; no direct eye contact with the viewer.`
             : `Maintain both people's physical relationship and direct their gaze at each other, not at the viewer.`,
         `REFERENCE ORDER: ${imageReferenceIds(s, t).map((id, i) => {
           const ref = s.targets.find(x => x.approvedVersionId === id);
           const name = ref?.role === "character" ? b.characters.find(c => c.id === ref.entityId)?.name : ref?.role === "location" ? b.locations.find(l => l.id === ref.entityId)?.name : "visual style anchor";
           return `image ${i + 1} = ${ref?.role || "style"}: ${name || "approved reference"}`;
-        }).join("; ")}. These references supply identities and the shared room, not separate images or panels.`,
+        }).join("; ")}. Character identities take priority over the room if the model limits references. The location specification supplies the room if no location image is attached. These references supply identities and the shared room, not separate images or panels.`,
       ].join("\n")
     : "";
   const outputRule = singleCharacter
@@ -237,7 +235,7 @@ export function compileVideoPrompt(s: Snapshot, c: Clip, instructions: string) {
   );
   return [
     "Generate one complete 8-second vertical audiovisual clip, with native audio. Multiple camera shots follow the local timing below.",
-    "The ONE approved storyboard image for this clip is its initial frame. Generate all later camera moves, reactions and cuts inside this video from the timing below; they do not have separate storyboard images. Preserve the approved characters and their positions across the entire clip.",
+    `The ONE approved image for this clip is its initial frame. All ${c.characterIds.length} participating characters (${c.characterIds.map(id => s.bible!.characters.find(x => x.id === id)?.name || id).join(", ")}) must already be visible and recognizable in that opening image. Preserve their exact appearance, wardrobe and positions when the camera moves or cuts; do not invent, replace or duplicate a character. Generate all later camera moves, reactions and cuts inside this video from the timing below; they do not have separate images.`,
     visualTreatment(s.project.universeSnapshot.visualStyle),
     "Preserve exact recurring identities and voice descriptions. Speak the approved dialogue literally; do not translate. No unrequested voices. Music, if requested, must not mask dialogue. Do not add an intro or outro to every clip.",
     c.characterIds.length === 2
