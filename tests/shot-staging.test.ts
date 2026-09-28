@@ -1,0 +1,31 @@
+import { expect, it } from "vitest";
+import { snapshot } from "./fixtures";
+import { imageReferenceIds } from "../lib/continuity/rules";
+import { compileImagePrompt, compileVideoPrompt, narrativePrompt } from "../lib/director";
+import type { Job, Target } from "../lib/types";
+
+it("anchors an accusation and reaction to two characters in one room", () => {
+  const s = structuredClone(snapshot());
+  s.bible!.characters[0].name = "Acusador";
+  s.bible!.characters.push({ ...s.bible!.characters[0], id: "mateo", name: "Mateo" });
+  const clip = s.plan!.clips[0];
+  clip.characterIds = ["a", "mateo"];
+  clip.shots[0].action = "Acusador señala a Mateo y lo acusa";
+  clip.shots[0].characterIds = ["a"];
+  clip.shots.push({ ...clip.shots[0], id: "s0reaction", action: "Mateo reacciona", characterIds: ["mateo"] });
+  const target = s.targets.find(t => t.role === "shot" && t.clipNumber === 1)!;
+  s.targets.push({ ...s.targets.find(t => t.role === "character")!, id: "character_mateo", entityId: "mateo", approvedVersionId: "canonical_mateo" });
+  const refs = imageReferenceIds(s, target);
+  expect(refs).toContain("canonical_a");
+  expect(refs).toContain("canonical_mateo");
+  expect(refs).toContain("canonical_hall");
+  const opening = compileImagePrompt(s, target, "");
+  expect(opening).toContain("show BOTH Acusador and Mateo in the same frame");
+  expect(opening).toContain("image 3 = character: Mateo");
+  const reactionTarget: Target = { ...target, id: "shot_s0reaction", entityId: "s0reaction" };
+  const reaction = compileImagePrompt(s, reactionTarget, "");
+  expect(reaction).toContain("Mateo looks toward Acusador");
+  expect(reaction).toContain("no direct eye contact with the viewer");
+  expect(compileVideoPrompt(s, clip, "")).toContain("listener looks toward the speaker off-camera");
+  expect(narrativePrompt({type:"plan",snapshot:s,instructions:""} as Job)).toContain("destinatario debe ser visible");
+});

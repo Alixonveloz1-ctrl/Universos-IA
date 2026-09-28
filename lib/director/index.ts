@@ -18,7 +18,7 @@ import { validateChapterPlan } from "../continuity/chapters";
 import { AppError } from "../errors";
 import { buildBible } from "./bible";
 import { narrativeTreatment, visualTreatment, specificTreatment } from "./styles";
-import { characterStyleReference } from "../continuity/rules";
+import { characterStyleReference, imageReferenceIds } from "../continuity/rules";
 const schemas = { ideas, story, bible, plan };
 export function narrativePrompt(j: Job, repair?: string) {
   return [
@@ -33,7 +33,7 @@ export function narrativePrompt(j: Job, repair?: string) {
           ? "Fichas completas con IDs estables. Anatomía coherente para frutas y materiales; voz descriptiva para Veo."
           : "Exactamente ocho clips consecutivos, ocho segundos cada uno. Varias tomas por clip cuando sirvan a la acción. Tiempos locales 0–8, cobertura sin huecos. Diálogo literal español, con intención y espacio para reaccionar. No traducir. Avisar si el diálogo es excesivo. La música, efectos y voz se producen SOLO como audio nativo de Veo. previousFrame solo si acción y encuadre continúan.",
     j.type === "plan"
-      ? "CONTINUIDAD DEL GUION: conserva literalmente los hechos causales aprobados (quién activa qué, condición, momento y consecuencia). Si un mecanismo es automático, muestra su activación automática: no inventes una pulsación manual. Simplifica cada clip a una acción principal y su reacción. characterIds identifica a quienes aparecen o hablan en ESE clip, no a todos los presentes en el edificio; alguien puede quedar fuera de cámara sin abandonar el lugar. Si un objeto cambia de manos o pasa del bolsillo a la mano y es relevante para la acción, muestra brevemente esa transición. No añadas subtramas, objetos ni mecanismos innecesarios. Antes de entregar revisa los ocho clips como una sola secuencia. Incluye en cada clip diálogo literal, hablante, voz, acción, ambiente, efectos y música pertinente para que Veo genere imagen y audio juntos; no planifiques grabaciones ni pistas externas."
+      ? "CONTINUIDAD DEL GUION: conserva literalmente los hechos causales aprobados (quién activa qué, condición, momento y consecuencia). Si un mecanismo es automático, muestra su activación automática: no inventes una pulsación manual. Simplifica cada clip a una acción principal y su reacción. characterIds del clip identifica a los interlocutores presentes; en la primera toma de un enfrentamiento, incluye en shot.characterIds a las DOS personas, encuádralas juntas y establece quién queda a la izquierda y a la derecha. Si una acusa o señala a otra, su destinatario debe ser visible y ocupar el lugar hacia donde apunta; no debe señalar una silla vacía. En el contraplano o primer plano de reacción, el interlocutor puede quedar fuera de cámara, pero la persona retratada lo mira en su posición establecida, nunca mira al espectador salvo que la historia lo exija. Conserva eje, decoración y posiciones de uno a otro plano. Si un objeto cambia de manos o pasa del bolsillo a la mano y es relevante para la acción, muestra brevemente esa transición. No añadas subtramas, objetos ni mecanismos innecesarios. Antes de entregar revisa los ocho clips como una sola secuencia. Incluye en cada clip diálogo literal, hablante, voz, acción, ambiente, efectos y música pertinente para que Veo genere imagen y audio juntos; no planifiques grabaciones ni pistas externas."
       : "",
     j.type === "ideas" && j.snapshot.project.automaticUniverse
       ? "Para cada propuesta incluye universe: nombre original, entorno, reglas del mundo y personajes canónicos derivados de ESA historia. Respeta exactamente beings y visualStyle elegidos. Son borradores: solo se guardará como universo la propuesta que el usuario elija."
@@ -149,6 +149,28 @@ export function compileImagePrompt(
     ["id", "name", "gender", "age", "role", "relationships", "material", "face", "silhouette", "color", "texture", "hair", "eyes", "wardrobe", "accessories", "lockedTraits"].map(key => [key, characterData[key as keyof typeof characterData]]),
   ) : null;
   const styleRef = characterStyleReference(s, t);
+  const shotClip = t.role === "shot" ? s.plan?.clips.find(c => c.number === t.clipNumber) : null;
+  const currentShot = shotClip?.shots.find(sh => sh.id === t.entityId);
+  const cast = shotClip?.characterIds.length === 2
+    ? shotClip.characterIds.map(id => b.characters.find(c => c.id === id)).filter((c): c is typeof b.characters[number] => !!c)
+    : [];
+  const onCamera = cast.filter(c => currentShot?.characterIds.includes(c.id));
+  const openingExchange = !!shotClip && t.role === "shot" && cast.length === 2 && shotClip.shots[0]?.id === t.entityId;
+  const shotBlocking = cast.length === 2 && t.role === "shot"
+    ? [
+        `SCENE BLOCKING, one continuous shared ${b.locations.find(l => l.id === currentShot?.locationId)?.name || "location"}: ${cast[0].name} is on screen LEFT, ${cast[1].name} on screen RIGHT, facing one another across the same physical space. Keep this axis, furniture, clothing and light consistent across the clip.`,
+        openingExchange
+          ? `OPENING CONFRONTATION: show BOTH ${cast[0].name} and ${cast[1].name} in the same frame. If one points, the gesture must visibly reach the other person. No pointing at an empty chair or at the lens.`
+          : onCamera.length === 1
+            ? `REACTION FRAME: ${onCamera[0].name} looks toward ${cast.find(c => c.id !== onCamera[0].id)!.name} at the established opposite screen position, just outside the close-up. Frame from the interlocutor's eyeline or over their shoulder if useful; no direct eye contact with the viewer.`
+            : `Maintain both people's physical relationship and direct their gaze at each other, not at the viewer.`,
+        `REFERENCE ORDER: ${imageReferenceIds(s, t).map((id, i) => {
+          const ref = s.targets.find(x => x.approvedVersionId === id);
+          const name = ref?.role === "character" ? b.characters.find(c => c.id === ref.entityId)?.name : ref?.role === "location" ? b.locations.find(l => l.id === ref.entityId)?.name : "visual style anchor";
+          return `image ${i + 1} = ${ref?.role || "style"}: ${name || "approved reference"}`;
+        }).join("; ")}. These references supply identities and the shared room, not separate images or panels.`,
+      ].join("\n")
+    : "";
   const outputRule = singleCharacter
     ? "OUTPUT CONTRACT: exactly ONE character, ONE full-body view, centered with head, hands and feet visible, on a plain neutral studio background. One continuous vertical 9:16 image. This is a reusable character reference portrait, NOT a storyboard, contact sheet, turnaround, collage, comic strip, grid, sequence or scene from the story. No other characters, extra views, inset pictures, panels, labels or text."
     : singleLocation
@@ -171,6 +193,7 @@ export function compileImagePrompt(
       ? "CHARACTER DESIGN: preserve the requested identity, age, gender, species, colors and wardrobe. This is a living animated character portrait, not a manufactured figurine. The chosen visual treatment and editorial image govern facial design, organic anatomy and surface finish; descriptive material words in the entity are not instructions to make a plastic toy. Approved own-identity references preserve recognizability. Pose naturally, with relaxed shoulders, an expressive face and believable weight distribution."
       : "Preserve the approved identity, anatomy, materials, wardrobe and locked traits. The shared visual treatment controls rendering; character differences do not introduce different art styles.",
     visualTreatment(s.project.universeSnapshot.visualStyle),
+    shotBlocking,
     singleCharacter ? "IDENTIDAD OBLIGATORIA: representa el gender y age de ESTE personaje. Si es mujer, representa una mujer de esa edad; si es hombre, un hombre de esa edad. No deduzcas género de la fruta, nombre, ropa, profesión o imagen de otro personaje. identityContext solo aclara identidad, parentesco y edad cuando faltan campos antiguos: NO representa escenas, acciones, acompañantes ni diálogos. Una esposa, madre o hermana no se convierte en hombre por vestir traje o ser antagonista. El rol femenino no se sustituye por un aspecto masculino tomado de una referencia de estilo. Las instrucciones específicas de corrección del usuario tienen prioridad sobre rasgos antiguos contradictorios." : "",
     styleRef ? `The LAST attached reference image is an approved character from this universe, used ONLY for render style, lighting, surface detail and design language. Do NOT draw that character or copy its species, costume, face or proportions. ${t.approvedVersionId ? "The FIRST reference is the requested target's own approved reference." : "Use only the requested entity specification below for content."}` : "",
     JSON.stringify(singleCharacter || singleLocation ? {
@@ -190,13 +213,19 @@ export function compileImagePrompt(
               .join(" ").slice(0, 4000)
           : "",
       } } : {}),
+    } : t.role === "shot" ? {
+      style: s.project.universeSnapshot.visualStyle,
+      shot: entity,
+      location: b.locations.find(l => l.id === currentShot?.locationId),
+      participants: (shotClip?.characterIds || []).map(id => b.characters.find(c => c.id === id)).filter(Boolean),
+      clipAction: shotClip?.goal,
+      continuityIn: shotClip?.continuityIn,
+      previousChapter: s.project.previousChapter?.finalState || null,
     } : {
       style: s.project.universeSnapshot.visualStyle,
       world: s.project.universeSnapshot,
       entity,
       bible: b,
-      clip: t.clipNumber ? s.plan?.clips[t.clipNumber - 1] : null,
-      previousChapter: s.project.previousChapter?.finalState || null,
     }),
     instructions,
     outputRule,
@@ -210,6 +239,9 @@ export function compileVideoPrompt(s: Snapshot, c: Clip, instructions: string) {
     "Generate one complete 8-second vertical audiovisual clip, with native audio. Multiple camera shots follow the local timing below.",
     visualTreatment(s.project.universeSnapshot.visualStyle),
     "Preserve exact recurring identities and voice descriptions. Speak the approved dialogue literally; do not translate. No unrequested voices. Music, if requested, must not mask dialogue. Do not add an intro or outro to every clip.",
+    c.characterIds.length === 2
+      ? `Film both people in ONE shared physical scene. Establish ${s.bible!.characters.find(x => x.id === c.characterIds[0])?.name || "the first character"} screen LEFT and ${s.bible!.characters.find(x => x.id === c.characterIds[1])?.name || "the second character"} screen RIGHT. Any pointing or accusation reaches the other visible person in the opening exchange. Reaction close-ups preserve their relative positions and the listener looks toward the speaker off-camera, never directly into the lens. Preserve furniture and lighting across cuts.`
+      : "",
     "Locked universe, premise and arc: " +
       JSON.stringify({
         universe: s.project.universeSnapshot,

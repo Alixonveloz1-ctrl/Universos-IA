@@ -173,12 +173,16 @@ export function imageReferenceIds(s: Snapshot, target: Target) {
           .flatMap((c) => c.shots)
           .find((sh) => sh.id === target.entityId)
       : null;
+  // A two-person exchange needs both identities even in a reaction close-up.
+  // The shot's characterIds can name just the on-camera speaker.
+  const clip = target.role === "shot" ? s.plan?.clips.find(c => c.number === target.clipNumber) : null;
+  const castIds = clip?.characterIds.length === 2 ? clip.characterIds : shot?.characterIds || [];
   const selected =
     target.role === "shot"
       ? s.targets.filter(
           (t) =>
             (t.role === "character" &&
-              shot?.characterIds.includes(t.entityId)) ||
+              castIds.includes(t.entityId)) ||
             (t.role === "location" && t.entityId === shot?.locationId),
         )
       : s.targets.filter((t) => t.id === target.id);
