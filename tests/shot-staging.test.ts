@@ -26,7 +26,7 @@ it("anchors an accusation and reaction to two characters in one room", () => {
   const reaction = compileImagePrompt(s, reactionTarget, "");
   expect(reaction).toContain("Mateo looks toward the relevant interlocutor");
   expect(reaction).toContain("no direct eye contact with the viewer");
-  expect(compileVideoPrompt(s, clip, "")).toContain("listener looks toward the speaker off-camera");
+  expect(compileVideoPrompt(s, clip, "")).toContain("listener looks toward the visible speaker");
   expect(narrativePrompt({type:"plan",snapshot:s,instructions:""} as Job)).toContain("destinatario debe ser visible");
 });
 
@@ -67,8 +67,19 @@ it("maps an eight-second door action and timed dialogue to a continuous four-par
   const prompt = compileVideoPrompt(s, clip, "");
   for (const window of ["0-2s:", "2-4s:", "4-6s:", "6-8s:"]) expect(prompt).toContain(window);
   expect(prompt.indexOf("0-2s:")).toBeLessThan(prompt.indexOf("6-8s:"));
-  expect(prompt).toContain("[0-4s; Plano medio; Alba]: Alba abre la puerta");
-  expect(prompt).toContain("[4-8s; Plano medio; Alba]: Alba lee la carta");
+  expect(prompt).toContain("[0-4s; continuous group framing; Alba]: Alba abre la puerta");
+  expect(prompt).toContain("[4-8s; continuous group framing; Alba]: Alba lee la carta");
   expect(prompt).toContain("Alba (4-6s, Preguntar): «¿Es tuya?»");
   expect(prompt).toContain("Do not invent turns around the character's own axis");
+});
+
+it("converts older cut-based framing into a continuous group take", () => {
+  const s = structuredClone(snapshot());
+  const clip = s.plan!.clips[0];
+  clip.shots[0].framing = "Hard cut to isolated close-up";
+  const prompt = compileVideoPrompt(s, clip, "");
+  expect(prompt).not.toContain("Hard cut to isolated close-up");
+  expect(prompt).toContain("ONE CONTINUOUS TAKE");
+  expect(prompt).toContain("EVERY participating character visible");
+  expect(prompt).toContain("retain the wider group framing");
 });
