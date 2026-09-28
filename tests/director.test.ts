@@ -5,6 +5,7 @@ import type { Job } from "../lib/types";
 vi.mock("../lib/providers/vertex", () => ({ textGenerate: vi.fn() }));
 import { textGenerate } from "../lib/providers/vertex";
 import { runDirector, directPrompt } from "../lib/director";
+import { renderHair } from "../lib/director/hair";
 import { assertNoPendingCall } from "../worker/recovery";
 const generate = vi.mocked(textGenerate);
 beforeEach(() => generate.mockReset());
@@ -25,6 +26,9 @@ function execution() {
   };
   return { j, before, checkpoint };
 }
+function normalizedBible(j: Job) {
+  return { ...j.snapshot.bible!, characters: j.snapshot.bible!.characters.map(c => ({ ...c, hair: renderHair(j.projectId, c) })) };
+}
 it("repairs invalid story JSON once and presents the valid draft without a subjective veto", async () => {
   const { j, before, checkpoint } = execution();
   generate
@@ -40,7 +44,7 @@ it("presents a valid bible to the owner without a second paid model review", asy
   generate.mockResolvedValueOnce(j.snapshot.bible)
     .mockResolvedValueOnce(j.snapshot.bible!.characters[0])
     .mockResolvedValueOnce(j.snapshot.bible!.locations[0]);
-  expect(await runDirector(j, before, checkpoint)).toEqual(j.snapshot.bible);
+  expect(await runDirector(j, before, checkpoint)).toEqual(normalizedBible(j));
   expect(generate).toHaveBeenCalledTimes(3);
   expect(generate.mock.calls[0][2]).toBeDefined();
 });
@@ -51,7 +55,7 @@ it("resuming a failed Bible retries only its invalid ficha and retains completed
   await expect(runDirector(j, before, checkpoint)).rejects.toMatchObject({ code: "DIRECTOR_JSON" });
   j.checkpoint.narrativeRetry = 1;
   generate.mockResolvedValueOnce(j.snapshot.bible!.characters[0]).mockResolvedValueOnce(j.snapshot.bible!.locations[0]);
-  expect(await runDirector(j, before, checkpoint)).toEqual(j.snapshot.bible);
+  expect(await runDirector(j, before, checkpoint)).toEqual(normalizedBible(j));
   expect(generate).toHaveBeenCalledTimes(5);
   expect(generate.mock.calls[3][1]).toContain("Corrige ESTE resultado");
 });
@@ -92,6 +96,18 @@ it("prompt compilation is checkpointed and does not modify approved source mater
   expect(JSON.stringify(j.snapshot)).toBe(original);
 });
 
+it("asks for a timed video performance before a Veo clip is submitted", async () => {
+  const { j, before, checkpoint } = execution();
+  j.type = "video";
+  generate.mockResolvedValueOnce({ prompt: "Opening action and reaction with approved dialogue." });
+  const target = j.snapshot.targets.find(t => t.role === "clip")!;
+  const { compileVideoPrompt } = await import("../lib/director");
+  const prompt = await directPrompt(j, target, compileVideoPrompt(j.snapshot, j.snapshot.plan!.clips[0], ""), before, checkpoint);
+  expect(generate.mock.calls[0][1]).toContain("0–2, 2–4, 4–6 y 6–8 segundos");
+  expect(prompt).toContain("6-8s:");
+  expect(prompt).toContain("No scheduled speech");
+});
+
 it("generates three universe drafts from dropdown preferences in the ideas call", async () => {
   const { j, before, checkpoint } = execution();
   j.type = "ideas";
@@ -127,7 +143,7 @@ it("locks character gender and age to the Bible roster and repairs a mismatched 
     .mockResolvedValueOnce({ ...expected.characters[0], gender: "hombre" })
     .mockResolvedValueOnce(expected.characters[0])
     .mockResolvedValueOnce(expected.locations[0]);
-  expect(await runDirector(j, before, checkpoint)).toEqual(expected);
+  expect(await runDirector(j, before, checkpoint)).toEqual(normalizedBible(j));
   expect(generate).toHaveBeenCalledTimes(4);
   expect(generate.mock.calls[1][2]).toMatchObject({ properties: { gender: { const: "mujer" }, age: { const: "adulta" } } });
 });

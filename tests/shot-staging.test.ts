@@ -56,3 +56,19 @@ it("anchors all three clip characters in the one initial image even if the openi
   initial.inputRefs.push("canonical_c");
   expect(() => prerequisites(s, video)).not.toThrow();
 });
+
+it("maps an eight-second door action and timed dialogue to a continuous four-part video performance", () => {
+  const s = structuredClone(snapshot());
+  const clip = s.plan!.clips[0];
+  clip.shots[0].action = "Alba abre la puerta y ve la carta";
+  clip.shots[0].end = 4;
+  clip.shots.push({ ...clip.shots[0], id: "reaction", start: 4, end: 8, action: "Alba lee la carta y se queda inmóvil" });
+  clip.dialogue[0] = { ...clip.dialogue[0], start: 4, end: 6, text: "¿Es tuya?" };
+  const prompt = compileVideoPrompt(s, clip, "");
+  for (const window of ["0-2s:", "2-4s:", "4-6s:", "6-8s:"]) expect(prompt).toContain(window);
+  expect(prompt.indexOf("0-2s:")).toBeLessThan(prompt.indexOf("6-8s:"));
+  expect(prompt).toContain("[0-4s; Plano medio; Alba]: Alba abre la puerta");
+  expect(prompt).toContain("[4-8s; Plano medio; Alba]: Alba lee la carta");
+  expect(prompt).toContain("Alba (4-6s, Preguntar): «¿Es tuya?»");
+  expect(prompt).toContain("Do not invent turns around the character's own axis");
+});
