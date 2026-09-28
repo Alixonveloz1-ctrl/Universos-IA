@@ -7,6 +7,7 @@ const memory = vi.hoisted(() => ({
   rows: new Map<string, unknown>(),
   files: new Map<string, Buffer>(),
   failAssetCreate: false,
+  corruptNextUpload: false,
   tail: Promise.resolve(),
 }));
 vi.mock("../lib/persistence/google", () => {
@@ -49,7 +50,8 @@ vi.mock("../lib/persistence/google", () => {
           memory.files.has(key)
         )
           throw Error("immutable output exists");
-        memory.files.set(key, Buffer.from(bytes));
+        memory.files.set(key, memory.corruptNextUpload ? Buffer.from("corrupt") : Buffer.from(bytes));
+        memory.corruptNextUpload = false;
       },
       download: async () => {
         const b = memory.files.get(key);
@@ -119,6 +121,7 @@ beforeEach(async () => {
   memory.rows.clear();
   memory.files.clear();
   memory.failAssetCreate = false;
+  memory.corruptNextUpload = false;
   memory.tail = Promise.resolve();
   vi.mocked(textGenerate).mockReset().mockResolvedValue({
     prompt: "An approved canonical image, preserving the full identity.",
@@ -228,6 +231,13 @@ it("startup check verifies storage and Firestore without calling generators", as
   expect(textGenerate).not.toHaveBeenCalled();
   expect(imageGenerate).not.toHaveBeenCalled();
   expect(startVideo).not.toHaveBeenCalled();
+});
+it("rejects and removes a corrupted upload instead of approving the object", async () => {
+  memory.corruptNextUpload = true;
+  await expect(startupCheck()).rejects.toThrow("no coincide con el original");
+  expect(memory.files.size).toBe(0);
+  expect(memory.rows.get("system/startupCheck")).toEqual(expect.objectContaining({ status: "checking" }));
+  expect(imageGenerate).not.toHaveBeenCalled();
 });
 it("records a startup capacity failure rather than leaving the job queued forever", async () => {
   memory.rows.set("system/workerSlots", { slots: { another: Date.now() + 60000 } });

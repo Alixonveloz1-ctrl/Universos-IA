@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import sharp from "sharp";
 import type { Transaction } from "@google-cloud/firestore";
+import type { SaveOptions } from "@google-cloud/storage";
 import { db, privateObject, objectPath } from "../lib/persistence/google";
 import { imageLimits } from "../lib/models";
 import { imageReferenceIds } from "../lib/continuity/rules";
@@ -28,6 +29,18 @@ import type { Asset, Job, Narrative, Project, Target } from "../lib/types";
 import { recoverImage, recoverVideo, assertNoPendingCall } from "./recovery";
 const LEASE = 180000;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+async function saveVerifiedObject(key: string, data: Buffer | string, options: SaveOptions = {}) {
+  const file = privateObject(key);
+  const bytes = Buffer.isBuffer(data) ? data : Buffer.from(data);
+  // The upload response can report a mismatched checksum even when the object
+  // is intact. Verify the actual stored bytes before accepting any asset.
+  await file.save(bytes, { ...options, validation: false });
+  const [stored] = await file.download({ validation: false });
+  if (!stored.equals(bytes)) {
+    await file.delete();
+    throw new AppError("STORAGE_INTEGRITY", "El archivo guardado no coincide con el original.", 502);
+  }
+}
 export async function execute(jobId: string) {
   assert(/^[a-f0-9]{64}$/.test(jobId), "JOB_ID inválido");
   const ref = db().doc(`jobs/${jobId}`),
@@ -231,7 +244,7 @@ export async function execute(jobId: string) {
       object = objectPath(job.projectId, versionId, "image." + extension);
       await guarded({}, true);
       if (!recovered)
-        await privateObject(object).save(result.bytes, {
+        await saveVerifiedObject(object, result.bytes, {
           resumable: false,
           preconditionOpts: { ifGenerationMatch: 0 },
           metadata: { contentType: mime },
@@ -349,7 +362,7 @@ export async function execute(jobId: string) {
       const frame = path.join(dir, "last.png");
       await lastFrame(file, frame);
       lastFrameObject = objectPath(job.projectId, versionId, "last.png");
-      await privateObject(lastFrameObject).save(await readFile(frame), {
+      await saveVerifiedObject(lastFrameObject, await readFile(frame), {
         resumable: false,
         metadata: { contentType: "image/png" },
       });
@@ -501,11 +514,11 @@ export async function execute(jobId: string) {
       await guarded();
       const object = objectPath(job.projectId, job.id, "final.mp4"),
         reportObject = objectPath(job.projectId, job.id, "report.json");
-      await privateObject(object).save(await readFile(r.output), {
+      await saveVerifiedObject(object, await readFile(r.output), {
         resumable: false,
         metadata: { contentType: "video/mp4" },
       });
-      await privateObject(reportObject).save(JSON.stringify(r.report), {
+      await saveVerifiedObject(reportObject, JSON.stringify(r.report), {
         resumable: false,
         metadata: { contentType: "application/json" },
       });
@@ -551,21 +564,16 @@ export async function execute(jobId: string) {
 }
 export async function startupCheck() {
   const key = objectPath("system", randomUUID(), "startup.txt");
-  const file = privateObject(key);
   let step = "escritura en Firestore";
   try {
     console.log(`Comprobando ${step}…`);
     await db().doc("system/startupCheck").set({ at: Date.now(), status: "checking" });
     step = "escritura en el bucket";
     console.log(`Comprobando ${step}…`);
-    await file.save("universos-ia-startup", { resumable: false });
-    step = "lectura del bucket";
-    console.log(`Comprobando ${step}…`);
-    const [content] = await file.download();
-    assert(content.toString() === "universos-ia-startup", "No se pudo verificar el almacenamiento.");
+    await saveVerifiedObject(key, "universos-ia-startup", { resumable: false });
     step = "eliminación del archivo de prueba";
     console.log(`Comprobando ${step}…`);
-    await file.delete();
+    await privateObject(key).delete();
     step = "confirmación en Firestore";
     console.log(`Comprobando ${step}…`);
     await db().doc("system/startupCheck").set({ at: Date.now(), status: "ok" });
