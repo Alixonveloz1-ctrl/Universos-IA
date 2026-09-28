@@ -58,7 +58,7 @@ it("every selectable style has explicit shared direction in characters, location
       if (role === "character") {
         expect(prompt).toContain(style);
         expect(prompt).toContain("editorial portrait");
-        expect(prompt).toContain("Keep the specified wardrobe exactly");
+        expect(prompt).toContain("Render the exact wardrobe from the character specification");
       } else expect(prompt).toContain(direction);
     }
     expect(compileVideoPrompt(s, s.plan!.clips[0], "")).toContain(direction);
@@ -88,8 +88,8 @@ it("isolates canonical character content from storyboards and other characters",
   s.bible!.relationships = "UNRELATED_STORY_ACTION";
   s.bible!.characters.push({ ...s.bible!.characters[0], id: "other", name: "OTHER_CHARACTER" });
   const prompt = compileImagePrompt(s, s.targets.find(t => t.role === "character")!, "");
-  expect(prompt).toContain("exactly ONE character, ONE full-body view");
-  expect(prompt).toContain("plain neutral studio background");
+  expect(prompt).toContain("exactly ONE full-body woman");
+  expect(prompt).toContain("softly blurred contemporary everyday interior");
   expect(prompt).toContain("DIRECCIÓN VISUAL COMPARTIDA: CINEMÁTICO 3D");
   expect(prompt).not.toContain("BAD_LEGACY_STORYBOARD");
   expect(prompt).not.toContain("UNRELATED_STORY_ACTION");

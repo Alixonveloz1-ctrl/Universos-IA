@@ -5,5 +5,7 @@ it('varies initial design between projects but is stable for retries and preserv
   expect(a).toBe(wardrobeDirection('project-a','camila',['traje azul']));
   expect(a).not.toBe(wardrobeDirection('project-b','camila',['traje azul']));
   expect(a).toContain('traje azul');
+  expect(a).toContain('moda casual reconocible de hoy');
+  expect(a).toContain('Evita blusa formal con falda tubo');
   expect(a).toContain('no cambies ropa entre clips');
 });
