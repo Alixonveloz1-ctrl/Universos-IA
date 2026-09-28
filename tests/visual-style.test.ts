@@ -53,6 +53,9 @@ it("every selectable style has explicit shared direction in characters, location
     }
     expect(compileVideoPrompt(s, s.plan!.clips[0], "")).toContain(direction);
     expect(narrativePrompt({ type: "bible", snapshot: s, instructions: "" } as Job)).toContain(direction);
+    const storyPrompt = narrativePrompt({ type: "story", snapshot: s, instructions: "" } as Job);
+    expect(storyPrompt).toContain(`género ${s.project.genre}; subgénero ${s.project.subgenre}; trama ${s.project.plotType}`);
+    expect(storyPrompt).toContain("nunca sustituye el género o la trama");
   }
 });
 
