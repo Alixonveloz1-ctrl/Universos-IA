@@ -37,7 +37,7 @@ export async function buildBible(j: Job, prompt: string,
       if (!value) {
         await before(key);
         value = await textGenerate(j.snapshot.project.models.text,
-          `${prompt}\n\n${instruction}\nTodos los campos de texto deben ser cadenas; usa 'No aplica' para pelo, ropa u otros rasgos que no existan. IDs solo con letras sin acentos, números, guiones o guiones bajos. Descripciones concretas y breves (máximo 1000 caracteres por rasgo).` +
+          `${prompt}\n\n${instruction}\nTodos los campos de texto deben ser cadenas; usa 'No aplica' para pelo, ropa u otros rasgos que no existan. IDs solo con letras sin acentos, números, guiones o guiones bajos. Descripciones concretas y breves (máximo 1000 caracteres por rasgo). Para personajes nuevos, gender usa mujer, hombre, no binario o no especificado; age expresa la edad en años cuando se conozca o una etapa vital explícita como adulta, adolescente o niña. No omitas estos campos. En frutas y humanos, material y texture describen piel viva flexible, microtextura orgánica y reflejos suaves, nunca resina, plástico, porcelana, lacado ni cuerpo rígido. face describe ojos expresivos, párpados suaves, mejillas y gesto vivo; silhouette describe anatomía natural continua. Evita lenguaje de estatuilla o producto de colección en todos los campos, incluidos lockedTraits. Gemas y robots mantienen su material propio. El vestuario define ropa de tela con caída y pliegues, no un cuerpo moldeado.` +
           (attempt ? `\nCorrige ESTE resultado sin cambiar identidades: ${JSON.stringify(previous)}\nErrores exactos: ${errors}` : ""),
           compactSchema(z.toJSONSchema(schema)));
         await save(key, value);

@@ -9,7 +9,15 @@ it("attaches a real reference after identity and style without replacing the cho
   expect(Buffer.from(result.refs[2].bytesBase64Encoded, "base64").subarray(0,2).toString("hex")).toBe("ffd8");
   expect(result.prompt).toContain("Animación 2D");
   expect(result.prompt).toContain("NO un personaje de esta historia");
+  expect(result.prompt).toContain("lenguaje facial");
+  expect(result.prompt).toContain("no solo la paleta");
   expect(() => withReferenceLook("test", [own, anchor], 2, woman)).toThrow();
+});
+it("recognizes explicit adult life stages while rejecting age ranges including minors", () => {
+  expect(femaleReference({...woman,age:"Mediana edad"})).toBeDefined();
+  expect(femaleReference({...woman,age:"Anciana"})).toBeDefined();
+  expect(femaleReference({...woman,age:"18 a 16 años"})).toBeUndefined();
+  expect(femaleReference({...woman,age:"adolescente"})).toBeUndefined();
 });
 it("excludes men, minors and unspecified identities without altering references or prompt", () => {
   for (const character of [undefined, {...woman,gender:"masculino"}, {...woman,age:"16 años"}, {...woman,age:"niña"}, {...woman,gender:undefined}, {...woman,age:undefined}]) {
