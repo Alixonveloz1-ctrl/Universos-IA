@@ -2,7 +2,6 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { snapshot } from "./fixtures";
 import type { Job } from "../lib/types";
-import { AppError } from "../lib/errors";
 vi.mock("../lib/providers/vertex", () => ({ textGenerate: vi.fn() }));
 import { textGenerate } from "../lib/providers/vertex";
 import { runDirector, directPrompt } from "../lib/director";
@@ -26,19 +25,13 @@ function execution() {
   };
   return { j, before, checkpoint };
 }
-it("uses one combined repair budget for schema and semantic defects", async () => {
+it("repairs invalid story JSON once and presents the valid draft without a subjective veto", async () => {
   const { j, before, checkpoint } = execution();
   generate
     .mockResolvedValueOnce({ invalidJsonText: "{" })
-    .mockResolvedValueOnce(j.snapshot.project.story!.data)
-    .mockResolvedValueOnce({
-      errors: ["Cambio de nombre"],
-      suggestions: ["Conservar Alba"],
-    });
-  await expect(runDirector(j, before, checkpoint)).rejects.toThrow(
-    "contradicciones",
-  );
-  expect(generate).toHaveBeenCalledTimes(3);
+    .mockResolvedValueOnce(j.snapshot.project.story!.data);
+  expect(await runDirector(j, before, checkpoint)).toEqual(j.snapshot.project.story!.data);
+  expect(generate).toHaveBeenCalledTimes(2);
   expect(j.checkpoint.director_1).toBeDefined();
 });
 it("replays persisted narrative and review after restart without calling the model", async () => {
@@ -50,16 +43,12 @@ it("replays persisted narrative and review after restart without calling the mod
   );
   expect(generate).not.toHaveBeenCalled();
 });
-it("a lost review response cannot be mistaken for permission to repair and charge again", async () => {
+it("uses a valid saved story draft after an earlier subjective rejection without another paid call", async () => {
   const { j, before, checkpoint } = execution();
-  generate
-    .mockResolvedValueOnce(j.snapshot.project.story!.data)
-    .mockRejectedValueOnce(new AppError("AMBIGUOUS", "Response lost"));
-  await expect(runDirector(j, before, checkpoint)).rejects.toThrow(
-    "Response lost",
-  );
-  await expect(runDirector(j, before, checkpoint)).rejects.toThrow("créditos");
-  expect(generate).toHaveBeenCalledTimes(2);
+  j.checkpoint.director_1 = j.snapshot.project.story!.data;
+  j.checkpoint.review_1 = { errors: ["Objeción subjetiva"], suggestions: [] };
+  expect(await runDirector(j, before, checkpoint)).toEqual(j.snapshot.project.story!.data);
+  expect(generate).not.toHaveBeenCalled();
 });
 it("prompt compilation is checkpointed and does not modify approved source material", async () => {
   const { j, before, checkpoint } = execution();

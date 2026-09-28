@@ -843,6 +843,12 @@ export default function Studio() {
                     await refresh(pid);
                   })}>Recuperar las 3 propuestas sin generarlas otra vez</button>
                 )}
+                {data.job.type === "story" && data.job.error?.code === "CONTINUITY" && data.job.resumable && (
+                  <button disabled={busy} onClick={() => void perform(async () => {
+                    await api(`jobs/${data.job!.id}/recover-story`, "POST", {});
+                    await refresh(pid);
+                  })}>Recuperar borrador de historia para revisarlo</button>
+                )}
                 {active && (
                   <button
                     disabled={busy}
@@ -860,7 +866,7 @@ export default function Studio() {
                   !data.job.closedAt &&
                   data.job.resumable &&
                   !(data.job.state === "queued" && !!(data.job.operationName || data.job.executionName)) &&
-                  !(data.job.type === "ideas" && data.job.error?.code === "CONTINUITY") && (
+                  !(["ideas", "story"].includes(data.job.type) && data.job.error?.code === "CONTINUITY") && (
                     <button
                       disabled={busy}
                       onClick={() =>

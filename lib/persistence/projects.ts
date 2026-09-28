@@ -86,6 +86,31 @@ export async function recoverReviewedIdeas(id: string) {
     return { recovered: true, projectId: p.id };
   });
 }
+export async function recoverReviewedStory(id: string) {
+  return db().runTransaction(async tx => {
+    const ref = db().doc(`jobs/${id}`);
+    const j = (await tx.get(ref)).data() as Job | undefined;
+    assert(j?.type === "story" && j.state === "failed" && j.error?.code === "CONTINUITY" &&
+      !(j.leaseUntil > Date.now()) && !j.checkpoint?.pendingCall,
+      "Este intento no tiene un borrador recuperable.");
+    const project = projectRef(j.projectId);
+    const p = (await tx.get(project)).data() as Project | undefined;
+    assert(p?.owner === "personal" && p.activeJobId === id &&
+      p.revision === j.snapshot.project.revision && p.selectedIdeaId === j.snapshot.project.selectedIdeaId &&
+      !p.nextChapterId, "La historia cambió; no se recuperó el borrador.");
+    const latest = await tx.get(ref.collection("checkpoints").doc("director_1"));
+    const original = await tx.get(ref.collection("checkpoints").doc("director_0"));
+    const candidate = [latest.data()?.value, original.data()?.value]
+      .map(v => story.safeParse(v)).find(v => v.success);
+    assert(candidate?.success, "No se guardó un borrador completo de esta historia.");
+    const v: Narrative = { id: j.id, kind: "story", data: candidate.data,
+      sourceRevision: p.revision, createdAt: Date.now() };
+    tx.set(project.collection("narratives").doc(v.id), v);
+    tx.update(ref, { state: "completed", error: null,
+      checkpoint: { ...j.checkpoint, recoveredFromReview: true } });
+    return { recovered: true, projectId: p.id };
+  });
+}
 export async function readSnapshot(
   id: string,
   tx?: Transaction,

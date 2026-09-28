@@ -87,6 +87,7 @@ import {
   closeAmbiguousJob,
   deleteUniverse,
   recoverReviewedIdeas,
+  recoverReviewedStory,
 } from "../lib/persistence/projects";
 import type { Asset, Job, Project, Target } from "../lib/types";
 beforeEach(() => {
@@ -138,6 +139,19 @@ it("restores three valid saved ideas after an overstrict review without invoking
   await recoverReviewedIdeas("old");
   expect((memory.rows.get("projects/test") as Project).ideas).toEqual(ideas);
   expect((memory.rows.get("jobs/old") as Job).state).toBe("completed");
+});
+it("restores a valid saved story after a semantic veto as a candidate for owner approval", async () => {
+  const p = memory.rows.get("projects/test") as Project;
+  const draft = p.story!.data;
+  memory.rows.set("projects/test", { ...p, activeJobId: "old-story", selectedIdeaId: "idea-1" });
+  memory.rows.set("jobs/old-story", { id: "old-story", projectId: "test", type: "story", state: "failed",
+    error: { code: "CONTINUITY", message: "Objection" }, leaseUntil: 0, checkpoint: {},
+    snapshot: { project: { revision: p.revision, selectedIdeaId: "idea-1" } } });
+  memory.rows.set("jobs/old-story/checkpoints/director_1", { value: draft });
+  await recoverReviewedStory("old-story");
+  expect(memory.rows.get("projects/test/narratives/old-story")).toMatchObject({ kind: "story", data: draft });
+  expect((memory.rows.get("jobs/old-story") as Job).state).toBe("completed");
+  expect((memory.rows.get("projects/test") as Project).story).toBe(p.story);
 });
 it("refuses to delete a draft while an execution might still run", async () => {
   for (const key of [...memory.rows.keys()]) if (key.startsWith("projects/test/")) memory.rows.delete(key);

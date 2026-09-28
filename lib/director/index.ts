@@ -22,7 +22,7 @@ export function narrativePrompt(j: Job, repair?: string) {
     j.type === "ideas"
       ? "Entrega exactamente tres propuestas completas y distintas en conflicto o desenlace. Cada sinopsis tiene dos o tres frases: presenta protagonista, conflicto, causa de la decisión y consecuencia coherente. Explica las reglas del mundo que sean necesarias para entender la trama; evita afirmar una regla que la propia sinopsis contradiga. Distingue nombres de personajes de apodos o títulos (por ejemplo, 'el hermano mayor' puede ser un apodo). No exijas detalles de voces, expresiones, escenas ni desenlaces todavía: son opciones iniciales, no guiones definitivos. Sin métricas de viralidad."
       : j.type === "story"
-        ? "Desarrolla exclusivamente la propuesta seleccionada."
+        ? "Desarrolla exclusivamente la propuesta seleccionada en una premisa, conflicto, arco y cierre claros. Respeta las reglas explícitas del universo elegido y la causalidad de las acciones: si separar a dos seres reduce su pigmentación, describe la consecuencia sin afirmar el efecto contrario. Los personajes canónicos existentes se conservan, pero la lista no prohíbe añadir personajes nuevos; preséntalos de forma comprensible. Prepara los giros con un indicio anterior. Mantén la anatomía y el tono escogidos. Esta es una historia para que el usuario la revise y apruebe antes de producirla; no exijas aún detalles de voces, planos ni diálogos literales."
         : j.type === "bible"
           ? "Fichas completas con IDs estables. Anatomía coherente para frutas y materiales; voz descriptiva para Veo."
           : "Exactamente ocho clips consecutivos, ocho segundos cada uno. Varias tomas por clip cuando sirvan a la acción. Tiempos locales 0–8, cobertura sin huecos. Diálogo literal español, con intención y espacio para reaccionar. No traducir. Avisar si el diálogo es excesivo. La música, efectos y voz se producen SOLO como audio nativo de Veo. previousFrame solo si acción y encuadre continúan.",
@@ -58,7 +58,7 @@ export async function runDirector(
   // A valid shortlist is already useful. Older attempts may have stored both
   // drafts before an overzealous semantic review rejected the whole set.
   // Recover the most recent valid draft without another paid model request.
-  if (j.type === "ideas") {
+  if (j.type === "ideas" || j.type === "story") {
     for (const key of ["director_1", "director_0"] as const) {
       if (!j.checkpoint[key]) continue;
       const recovered = schema.safeParse(j.checkpoint[key]);
@@ -99,10 +99,10 @@ export async function runDirector(
     // Provider failures are outside the schema-repair catch: an uncertain request
     // must never cause an automatic paid retry.
     const parsed = schema.parse(result);
-    // These are two-sentence pitches. Strictly validate JSON and three
-    // distinct entries, but reserve subjective continuity review for the
-    // chosen story, bible and shot-by-shot plan.
-    if (j.type === "ideas") return parsed;
+    // Pitch and story are editable drafts reviewed by the owner. Rejecting a
+    // complete draft based on a model's subjective critique wastes the paid
+    // response and can even invent conflicts that are not in the canon.
+    if (j.type === "ideas" || j.type === "story") return parsed;
     const review = await reviewContinuity(
       j,
       parsed,

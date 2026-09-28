@@ -4,6 +4,7 @@ import {
   createProject,
   deleteUniverse,
   recoverReviewedIdeas,
+  recoverReviewedStory,
   createNextChapter,
   enqueue,
   readSnapshot,
@@ -273,6 +274,8 @@ async function handler(
       assert(p?.owner === "personal", "Trabajo no autorizado");
       if (req.method === "POST" && paths.length === 3 && paths[2] === "recover-ideas")
         return response(await recoverReviewedIdeas(j.id));
+      if (req.method === "POST" && paths.length === 3 && paths[2] === "recover-story")
+        return response(await recoverReviewedStory(j.id));
       if (req.method === "GET")
         return response({
           id: j.id,
