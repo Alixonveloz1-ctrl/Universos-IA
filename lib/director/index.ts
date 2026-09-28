@@ -15,6 +15,8 @@ import { textGenerate } from "../providers/vertex";
 import { validateChapterPlan } from "../continuity/chapters";
 import { AppError } from "../errors";
 import { buildBible } from "./bible";
+import { narrativeTreatment, visualTreatment } from "./styles";
+import { characterStyleReference } from "../continuity/rules";
 const schemas = { ideas, story, bible, plan };
 export function narrativePrompt(j: Job, repair?: string) {
   return [
@@ -34,6 +36,7 @@ export function narrativePrompt(j: Job, repair?: string) {
       ? "ESTA ES LA CONTINUACIÓN DE UNA HISTORIA ÚNICA, no otra historia en el mismo mundo. Las tres propuestas deben avanzar desde el final anterior, sin reiniciar ni repetir lo sucedido. Usa el historial de TODOS los capítulos. Conserva exactamente las fichas existentes de personajes, sus voces y lugares en la biblia; puedes añadir entidades nuevas. La evolución emocional, heridas, conocimientos y objetos se expresan en los estados de las escenas. En el primer clip copia exactamente previousChapter.finalState en continuityIn. Usa previousFrame si continúa la misma acción y encuadre; el fotograma final anterior está disponible. Cada capítulo tiene ocho clips de ocho segundos."
       : "",
     `Perfiles editoriales: ${JSON.stringify(profiles)}`,
+    narrativeTreatment(j.snapshot.project.universeSnapshot.visualStyle),
     `Contexto aprobado: ${JSON.stringify({ project: j.snapshot.project, bible: j.snapshot.bible, observed: j.snapshot.observed })}`,
     `Instrucciones adicionales: ${j.instructions}`,
     j.optionId
@@ -142,9 +145,30 @@ export function compileImagePrompt(
         : s.plan?.clips
             .flatMap((c) => c.shots)
             .find((x) => x.id === t.entityId);
+  const singleCharacter = t.role === "character";
+  const singleLocation = t.role === "location";
+  if (!entity) throw new AppError("IMAGE_TARGET", "No se encontró la ficha de esta referencia.", 422);
+  // Canonical cards must not receive a whole story/shot list as drawing content.
+  const characterData = singleCharacter ? b.characters.find(x => x.id === t.entityId)! : null;
+  const physical = characterData ? Object.fromEntries(
+    ["id", "name", "material", "face", "silhouette", "color", "texture", "hair", "eyes", "wardrobe", "accessories", "lockedTraits"].map(key => [key, characterData[key as keyof typeof characterData]]),
+  ) : null;
+  const styleRef = characterStyleReference(s, t);
+  const outputRule = singleCharacter
+    ? "OUTPUT CONTRACT: exactly ONE character, ONE full-body view, centered with head, hands and feet visible, on a plain neutral studio background. One continuous vertical 9:16 image. This is a reusable character reference portrait, NOT a storyboard, contact sheet, turnaround, collage, comic strip, grid, sequence or scene from the story. No other characters, extra views, inset pictures, panels, labels or text."
+    : singleLocation
+      ? "OUTPUT CONTRACT: exactly ONE establishing view of this location, empty of characters, in one continuous vertical 9:16 image. No storyboard, collage, panels, alternate angles, labels or text."
+      : "OUTPUT CONTRACT: exactly ONE still frame depicting only the requested shot, in one continuous vertical 9:16 image. No storyboard, collage, sequence, panels or text overlays.";
   return [
-    "Create one vertical storyboard or canonical image. Preserve identity and approved reference anatomy, materials, wardrobe and locked traits. No text overlays.",
-    JSON.stringify({
+    outputRule,
+    "Preserve the approved identity, anatomy, materials, wardrobe and locked traits. The shared visual treatment controls rendering; character differences do not introduce different art styles.",
+    visualTreatment(s.project.universeSnapshot.visualStyle),
+    styleRef ? `The LAST attached reference image is an approved character from this universe, used ONLY for render style, lighting, surface detail and design language. Do NOT draw that character or copy its species, costume, face or proportions. ${t.approvedVersionId ? "The FIRST reference is the requested target's own approved reference." : "Use only the requested entity specification below for content."}` : "",
+    JSON.stringify(singleCharacter || singleLocation ? {
+      style: s.project.universeSnapshot.visualStyle,
+      beings: s.project.universeSnapshot.beings,
+      entity: physical || entity,
+    } : {
       style: s.project.universeSnapshot.visualStyle,
       world: s.project.universeSnapshot,
       entity,
@@ -153,6 +177,7 @@ export function compileImagePrompt(
       previousChapter: s.project.previousChapter?.finalState || null,
     }),
     instructions,
+    outputRule,
   ].join("\n");
 }
 export function compileVideoPrompt(s: Snapshot, c: Clip, instructions: string) {
@@ -161,6 +186,7 @@ export function compileVideoPrompt(s: Snapshot, c: Clip, instructions: string) {
   );
   return [
     "Generate one complete 8-second vertical audiovisual clip, with native audio. Multiple camera shots follow the local timing below.",
+    visualTreatment(s.project.universeSnapshot.visualStyle),
     "Preserve exact recurring identities and voice descriptions. Speak the approved dialogue literally; do not translate. No unrequested voices. Music, if requested, must not mask dialogue. Do not add an intro or outro to every clip.",
     "Locked universe, premise and arc: " +
       JSON.stringify({

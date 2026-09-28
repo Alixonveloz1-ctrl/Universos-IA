@@ -152,6 +152,20 @@ export function affected(
   return result;
 }
 
+// A previously approved character anchors rendering, never another identity.
+// Use approval evidence, not an unreviewed generation that may be a collage.
+export function characterStyleReference(s: Snapshot, target: Target) {
+  if (target.role !== "character" && target.role !== "location") return undefined;
+  return s.targets
+    .filter(t => t.role === "character" && t.id !== target.id && !t.needsReview && t.approvedVersionId)
+    .flatMap(t => {
+      // Approval is stored on the target; immutable assets retain candidate status.
+      const asset = s.assets.find(a => a.id === t.approvedVersionId && a.targetId === t.id && a.kind === "image" && a.status !== "rejected");
+      return asset ? [asset] : [];
+    })
+    .sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id))[0];
+}
+
 export function imageReferenceIds(s: Snapshot, target: Target) {
   const shot =
     target.role === "shot"
@@ -172,6 +186,8 @@ export function imageReferenceIds(s: Snapshot, target: Target) {
     t.approvedVersionId ? [t.approvedVersionId] : [],
   );
   const limit = imageLimits(s.project.models.image).maxReferenceImages;
+  const styleRef = characterStyleReference(s, target);
+  if (styleRef && refs.length < limit && !refs.includes(styleRef.id)) refs.push(styleRef.id);
   assert(
     refs.length <= limit,
     `Esta toma necesita ${refs.length} referencias; el modelo de imagen admite ${limit}. Cambia explícitamente a un modelo compatible antes de generar.`,

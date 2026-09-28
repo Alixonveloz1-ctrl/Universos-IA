@@ -25,6 +25,7 @@ import {
   styles,
 } from "@/lib/director/catalog";
 import { MODELS, DEFAULT_MODELS } from "@/lib/models";
+import { TELENOVELA_STYLE, TELENOVELA_DESCRIPTION } from "@/lib/director/styles";
 type Data = Snapshot & {
   narratives: Narrative[];
   exports: {
@@ -641,6 +642,8 @@ export default function Studio() {
               {field("Tipo de seres", selection.beings, (v) => setSelection({ ...selection, beings: v }), beings)}
               {field("Estilo visual", selection.visualStyle, (v) => setSelection({ ...selection, visualStyle: v }), styles)}
             </div>
+            <p className="muted">El estilo elegido se aplica a todos los personajes, escenarios y videos de esta historia.</p>
+            {selection.visualStyle === TELENOVELA_STYLE && <p className="muted">{TELENOVELA_DESCRIPTION}</p>}
             <div className="grid" style={{ marginTop: 20 }}>
               {field(
                 "Género",

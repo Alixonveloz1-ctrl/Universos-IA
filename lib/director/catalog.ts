@@ -1,3 +1,5 @@
+import { TELENOVELA_STYLE } from "./styles";
+
 export const genres: Record<string, string[]> = {
   "Melodrama / telenovela": ["Familiar", "Romántico", "Social", "Absurdo", "De época", "De intriga", "De venganza", "Juvenil"],
   Romance: ["Contemporáneo", "Fantástico", "Dramático", "Histórico", "Comedia romántica", "Paranormal", "Aventura romántica", "Segundas oportunidades"],
@@ -76,6 +78,9 @@ export const beings = [
 ];
 export const styles = [
   "Cinemático 3D",
+  TELENOVELA_STYLE,
+  "Animación 3D familiar (tipo Pixar)",
+  "Animación 2D",
   "Anime",
   "Realista",
   "Ilustración animada",

@@ -56,7 +56,7 @@ export async function buildBible(j: Job, prompt: string,
   for (const entry of list.characters) {
     const prior = previousBible?.characters.find(c => c.id === entry.id);
     characters.push(prior || await part(`character_${entry.id}`, character.extend({ id: z.literal(entry.id), name: z.literal(entry.name) }),
-      `Completa SOLO la ficha del personaje ${JSON.stringify(entry)}. Contexto del reparto: ${JSON.stringify(list)}. Incluye todos los campos de voz en español con el idioma y acento elegidos.`));
+      `Completa SOLO la ficha del personaje ${JSON.stringify(entry)}. Contexto del reparto: ${JSON.stringify(list)}. Incluye todos los campos de voz en español con el idioma y acento elegidos. visualPrompt describe únicamente UN retrato de cuerpo completo de ESTE personaje, una sola vista sobre fondo neutro, sin otros personajes ni escenas, viñetas o collage. Mantén la dirección visual compartida del universo en todas las fichas; no inventes otra técnica de render para cada personaje.`));
   }
   const locations = [];
   for (const entry of list.locations) {

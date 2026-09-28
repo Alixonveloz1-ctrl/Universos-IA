@@ -1,0 +1,45 @@
+// An original treatment informed by reference transcripts, not a replica of a channel.
+export const TELENOVELA_STYLE = "Telenovela 3D expresiva";
+
+export const TELENOVELA_DESCRIPTION =
+  "Personajes 3D expresivos, colores vivos y diálogos directos. Para frutas, diamantes u otros seres. Respeta el género y el cierre que elijas.";
+
+export function visualTreatment(style: string): string {
+  return [
+    `ESTILO ÚNICO DEL UNIVERSO: ${style}. Es obligatorio en personajes, escenarios, objetos, tomas y videos, también en capítulos siguientes.`,
+    "La misma técnica, grado de estilización, diseño facial y acabado de materiales se mantienen en todo el reparto. No mezclar 2D, 3D, fotografía ni estilos de otros universos. Cambiar de generador no cambia el estilo. El tono de la historia modifica la actuación y la luz de una escena, no la técnica de animación. Los rasgos individuales distinguen personajes sin cambiar la dirección artística. Si una ficha heredada sugiere otra técnica, conserva su identidad física y represéntala con el estilo elegido aquí.",
+    specificTreatment(style),
+  ].join("\n");
+}
+
+function specificTreatment(style: string): string {
+  if (style === "Anime") return "ANIME 2D: dibujo de animación japonesa bidimensional, contornos limpios, sombras cel y colores definidos. Personajes, fondos y objetos comparten acabado dibujado y el mismo lenguaje de línea. Rostros expresivos de anime, anatomía consistente y movimiento animado 2D. Sin modelado volumétrico 3D, render de juguete ni fotografía.";
+  if (style === "Animación 2D") return "ANIMACIÓN 2D: caricatura bidimensional dibujada, siluetas claras, contorno de grosor coherente, paleta consistente y sombras planas sencillas. Todo el reparto y los fondos pertenecen al mismo dibujo animado. Actuación expresiva en 2D, sin render 3D, volumen fotográfico ni texturas fotorrealistas.";
+  if (style === "Realista") return "REALISTA: acabado fotorrealista coherente en personajes, escenarios y objetos; materiales, microtexturas, óptica y luz físicamente plausibles. Los seres fantásticos o frutas antropomorfas conservan la anatomía aprobada, representada de forma realista. Sin ojos de caricatura añadidos, proporciones chibi, contornos dibujados ni sombreado cel. La fantasía del ser no cambia la técnica visual.";
+  if (style === "Ilustración animada") return "ILUSTRACIÓN ANIMADA 2D: ilustración digital pintada de formas planas, pincelada suave y textura pictórica uniforme en personajes y fondos. Contornos discretos, capas bidimensionales y movimientos suaves que conservan el dibujo. Sin convertir la imagen en modelado 3D, fotografía o anime cel. Mantener el mismo trazo, paleta y acabado pictórico en cada referencia y toma.";
+  if (style === "Animación 3D familiar (tipo Pixar)") return "ANIMACIÓN 3D FAMILIAR: formas redondeadas y esculpidas, siluetas atractivas, ojos grandes expresivos, boca articulada, materiales pulidos con detalle selectivo, luz suave y color rico. Personajes, escenarios y objetos comparten el acabado de un largometraje familiar de animación 3D. Actuación emocional clara, movimientos fluidos y peso corporal creíble. Diseños originales, sin copiar personajes existentes. Sin fotografía, acabado de terror hiperrealista, dibujo 2D ni anime cel. El acabado visual no cambia el género ni el público elegido.";
+  if (style === "Cinemático 3D") return [
+    "DIRECCIÓN VISUAL COMPARTIDA: CINEMÁTICO 3D.",
+    "Todos los personajes y escenarios pertenecen a la misma película de animación 3D estilizada. Materiales físicamente creíbles con texturas detalladas, formas escultóricas limpias, rostros expresivos, ojos con volumen y reflejos naturales, iluminación suave y modelada, sombras coherentes y una única calidad de render. Mantén el mismo grado de estilización, detalle y tratamiento de ojos, boca y superficies para todo el reparto. Las diferencias de especie, edad y vestuario no cambian la técnica de render ni convierten a un personaje en dibujo plano, muñeco de otra película o fotografía realista.",
+    "Respeta la anatomía, proporciones individuales, materiales, colores y rasgos aprobados. El género y el papel del personaje afectan su actuación y vestuario, no cambian por sí solos el estilo gráfico. En referencias canónicas usa luz neutra legible para documentar los colores reales; reserva la iluminación dramática del escenario para las tomas narrativas.",
+  ].join("\n");
+  if (style !== TELENOVELA_STYLE) return "";
+  return [
+    "TRATAMIENTO VISUAL: TELENOVELA 3D EXPRESIVA.",
+    "Animación 3D estilizada con volumen, colores vivos, iluminación clara y rostros legibles en pantalla de teléfono. Ojos, cejas y boca expresivos; gestos teatrales comprensibles sin deformar la identidad entre planos. Escenarios cotidianos reconocibles y pocos elementos que distraigan.",
+    "Respeta el tipo de seres elegido y las fichas aprobadas. En frutas conserva la silueta, piel, hojas y textura de su especie con rostro y extremidades integrados; no las conviertas en humanos disfrazados. En diamantes y minerales conserva facetas, reflejos y el material de cada personaje; no les añadas piel de fruta. Los demás tipos de seres conservan su propia anatomía y material. No mezcles especies por aplicar este estilo.",
+    "Planos medios y primeros planos para diálogo y reacción, con planos abiertos solo cuando expliquen una acción. Composición vertical, separación clara entre personajes y fondo. Movimiento corporal expresivo y sincronización de boca con el diálogo aprobado. No introducir movimientos de cámara que oculten la acción. Mantener exactamente vestuario, proporciones, colores y voces aprobados. No añadir rótulos, marcas de canal ni personajes de referencia.",
+  ].join("\n");
+}
+
+export function narrativeTreatment(style: string): string {
+  if (style !== TELENOVELA_STYLE) return visualTreatment(style);
+  return [
+    visualTreatment(style),
+    "RITMO NARRATIVO DE TELENOVELA BREVE: aplica este tratamiento respetando género, subgénero, trama, tono, idioma, acento y cierre seleccionados; no impongas romance, violencia ni humor si no corresponden.",
+    "Abre dentro de un conflicto concreto: una acusación, petición, negativa, descubrimiento o decisión. Protagonista con un deseo claro y otro personaje que lo dificulta. Usa lenguaje cotidiano y diálogo corto de acción y respuesta; cada intervención cambia la situación. Evita prólogos explicativos, metáforas rebuscadas, exposición de reglas y narración que repita lo que ya se ve.",
+    "Construye una sola cadena de causa y consecuencia en 64 segundos: arranque que engancha, obstáculo, decisión, consecuencia y cierre elegido. Pocos personajes y lugares. No comprimas una temporada completa en un capítulo. Un giro nace de una pista anterior; resolución cierra el conflicto del capítulo, giro final lo reinterpreta y final en suspenso deja una pregunta concreta. La continuación conserva la misma historia y el estado final anterior.",
+    "Las frutas y gemas viven conflictos humanos comprensibles. Sus materiales dan identidad visual y, cuando sea útil, una consecuencia narrativa sencilla; no inventes leyes biológicas complicadas como requisito para contar la historia. Crea nombres, escenas y diálogos originales, sin reproducir argumentos de los ejemplos.",
+    "En propuestas entrega tres alternativas breves independientes. Tras la elección desarrolla únicamente la elegida. En el plan reparte el capítulo en ocho clips de ocho segundos, con frases que quepan y tiempo para reacciones; no abras cada clip con una nueva introducción. Estas pautas se incorporan en las llamadas existentes, sin revisiones adicionales de estilo.",
+  ].join("\n");
+}
