@@ -13,6 +13,7 @@ test("SIMULATED API: mobile creation, exact three proposals, selection and reloa
   let created = false;
   const s = snapshot();
   s.project.activeJobId = undefined;
+  s.project.selectedIdeaId = undefined;
   const calls: string[] = [];
   await page.route("**/api/**", async (route) => {
     const req = route.request(),
@@ -49,6 +50,7 @@ test("SIMULATED API: mobile creation, exact three proposals, selection and reloa
       status = 202;
     } else if (p === "projects/test" && method === "PATCH") {
       s.project.selectedIdeaId = req.postDataJSON().selectedIdeaId;
+      s.project.ideas = s.project.ideas.filter(i => i.id === s.project.selectedIdeaId);
       s.project.revision++;
       body = s.project;
     } else if (p === "projects/test")
@@ -87,10 +89,11 @@ test("SIMULATED API: mobile creation, exact three proposals, selection and reloa
     .getByRole("button", { name: "Elegir", exact: true })
     .first()
     .click();
-  await expect(page.getByRole("button", { name: "Elegida" })).toHaveCount(1);
+  await expect(page.getByText("Historia elegida")).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "Regenerar esta opción" })).toHaveCount(0);
   await page.reload();
   await page.getByRole("button", { name: /Prueba simulada/ }).click();
-  await expect(page.getByRole("button", { name: "Elegida" })).toHaveCount(1);
+  await expect(page.getByText("Historia elegida")).toHaveCount(1);
   expect(calls).toEqual(["ideas"]);
   await expect(page.locator("body")).toHaveJSProperty(
     "scrollWidth",
@@ -137,7 +140,7 @@ test("SIMULATED API: provider errors are visible, no automatic generation", asyn
 test("SIMULATED API: a universe groups chapters and opens its continuation without generating automatically", async ({ page }) => {
   const first = snapshot();
   const next = snapshot();
-  next.project = { ...first.project, id: "chapter2", title: "La carta continúa", chapterNumber: 2, ideas: [], previousChapter: { projectId: "test", exportId: "final", finalState: first.observed.clip_8, bible: first.bible!, lastClip: first.assets.find(a => a.id === "v8")! } };
+  next.project = { ...first.project, id: "chapter2", title: "La carta continúa", chapterNumber: 2, selectedIdeaId: undefined, ideas: [], previousChapter: { projectId: "test", exportId: "final", finalState: first.observed.clip_8, bible: first.bible!, lastClip: first.assets.find(a => a.id === "v8")! } };
   let created = false, generations = 0;
   await page.route("**/api/**", async route => {
     const path = new URL(route.request().url()).pathname.slice(5);
