@@ -348,6 +348,11 @@ export async function editProject(
             : validatePlan(data, s.bible!, !!p.previousChapter);
       if (kind === "bible") validateChapterBible(p, bible.parse(data));
       if (kind === "plan") validateChapterPlan(p, plan.parse(data));
+      // Repeated taps on "Aprobar" should not create more approved copies
+      // of an unchanged narrative or invalidate later work.
+      const currentNarrative = p[kind];
+      if (change.approve && !change.selectedIdeaId && currentNarrative?.approvedAt &&
+          JSON.stringify(currentNarrative.data) === JSON.stringify(data)) return p;
       const v: Narrative = {
         id: randomUUID(),
         kind,

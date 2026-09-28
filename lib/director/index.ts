@@ -103,10 +103,10 @@ export async function runDirector(
     // Provider failures are outside the schema-repair catch: an uncertain request
     // must never cause an automatic paid retry.
     const parsed = schema.parse(result);
-    // Pitch and story are editable drafts reviewed by the owner. Rejecting a
-    // complete draft based on a model's subjective critique wastes the paid
-    // response and can even invent conflicts that are not in the canon.
-    if (j.type === "ideas" || j.type === "story") return parsed;
+    // Proposals, story and bible are owner-reviewed drafts. The Bible's schema
+    // and chapter-canon check above already enforce the objective constraints;
+    // a second model's subjective veto can strand a valid paid response.
+    if (j.type === "ideas" || j.type === "story" || j.type === "bible") return parsed;
     const review = await reviewContinuity(
       j,
       parsed,

@@ -34,6 +34,14 @@ it("repairs invalid story JSON once and presents the valid draft without a subje
   expect(generate).toHaveBeenCalledTimes(2);
   expect(j.checkpoint.director_1).toBeDefined();
 });
+it("presents a valid bible to the owner without a second paid model review", async () => {
+  const { j, before, checkpoint } = execution();
+  j.type = "bible";
+  generate.mockResolvedValueOnce(j.snapshot.bible);
+  expect(await runDirector(j, before, checkpoint)).toEqual(j.snapshot.bible);
+  expect(generate).toHaveBeenCalledTimes(1);
+  expect(generate.mock.calls[0][2]).toBeUndefined();
+});
 it("replays persisted narrative and review after restart without calling the model", async () => {
   const { j, before, checkpoint } = execution();
   j.checkpoint.director_0 = j.snapshot.project.story!.data;

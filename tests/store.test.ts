@@ -210,6 +210,15 @@ it("REGRESSION choosing a story discards the other ideas and invalidates downstr
   expect(p.plan?.approvedAt).toBe(0);
   await expect(editProject("test", p.revision, { selectedIdeaId: "idea-1" })).rejects.toThrow("descartaron");
 });
+it("approving the same story twice does not create a fourth copy or invalidate the bible", async () => {
+  const original = memory.rows.get("projects/test") as Project;
+  const result = await editProject("test", original.revision, {
+    kind: "story", data: original.story!.data, approve: true,
+  });
+  expect(result.revision).toBe(original.revision);
+  expect((memory.rows.get("projects/test") as Project).bible?.approvedAt).toBe(original.bible?.approvedAt);
+  expect([...memory.rows.keys()].filter(k => k.startsWith("projects/test/narratives/"))).toHaveLength(0);
+});
 it("REGRESSION removed shots do not receive updates after deletion", async () => {
   const s = snapshot(),
     p = structuredClone(s.plan!);

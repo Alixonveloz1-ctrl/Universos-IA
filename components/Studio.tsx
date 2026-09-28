@@ -1136,7 +1136,7 @@ function NarrativePanel({
     [baseRevision, setBaseRevision] = useState<number | null>(null),
     [validationError, setValidationError] = useState("");
   const current =
-    candidates.find((n) => n.id === selected) ||
+    (kind === "story" ? undefined : candidates.find((n) => n.id === selected)) ||
     candidates[0] ||
     data.project[kind];
   if (!current) return null;
@@ -1182,7 +1182,7 @@ function NarrativePanel({
       </h2>
       {kind === "story" && !data.project.story?.approvedAt &&
         <p>Lee la historia aquí. Si te gusta, pulsa «Aprobar historia». Después sigue a «Biblia». No tienes que escribir nada para avanzar.</p>}
-      <label>
+      {kind !== "story" && <label>
         Versiones narrativas
         <select
           value={selected || current.id}
@@ -1199,7 +1199,7 @@ function NarrativePanel({
             </option>
           ))}
         </select>
-      </label>
+      </label>}
       <details>
         <summary>
           Leer y editar {kind === "plan" ? "el guion" : "el contenido"}
