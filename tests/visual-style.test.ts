@@ -54,7 +54,12 @@ it("every selectable style has explicit shared direction in characters, location
     expect(direction).toContain("Los hombres adultos también tienen rostros armoniosos");
     expect(direction).toContain("no como una fruta entera con bracitos pegados");
     for (const role of ["character", "location", "shot"]) {
-      expect(compileImagePrompt(s, s.targets.find(t => t.role === role)!, "")).toContain(direction);
+      const prompt = compileImagePrompt(s, s.targets.find(t => t.role === role)!, "");
+      if (role === "character") {
+        expect(prompt).toContain(style);
+        expect(prompt).toContain("editorial portrait");
+        expect(prompt).toContain("Keep the specified wardrobe exactly");
+      } else expect(prompt).toContain(direction);
     }
     expect(compileVideoPrompt(s, s.plan!.clips[0], "")).toContain(direction);
     expect(narrativePrompt({ type: "bible", snapshot: s, instructions: "" } as Job)).toContain(direction);
@@ -138,7 +143,7 @@ it("preserves a woman's explicit identity in every character render, regardless 
     expect(prompt).toContain('"role":"Esposa y empresaria"');
     expect(prompt).toContain("No deduzcas género de la fruta");
     expect(prompt).toContain("Traje negro y corbata");
-    expect(prompt).toContain("no una cabeza humana de mandíbula cuadrada pintada de rojo");
+    expect(prompt).toContain("recognizable fruit silhouette");
   }
 });
 

@@ -19,7 +19,7 @@ export function visualTreatment(style: string): string {
   ].join("\n");
 }
 
-function specificTreatment(style: string): string {
+export function specificTreatment(style: string): string {
   if (style === "Anime") return "ANIME 2D: dibujo de animación japonesa bidimensional, contornos limpios, sombras cel y colores definidos. Personajes, fondos y objetos comparten acabado dibujado y el mismo lenguaje de línea. Rostros expresivos de anime, anatomía consistente y movimiento animado 2D. Sin modelado volumétrico 3D, render de juguete ni fotografía.";
   if (style === "Animación 2D") return "ANIMACIÓN 2D: caricatura bidimensional dibujada, siluetas claras, contorno de grosor coherente, paleta consistente y sombras planas sencillas. Todo el reparto y los fondos pertenecen al mismo dibujo animado. Actuación expresiva en 2D, sin render 3D, volumen fotográfico ni texturas fotorrealistas.";
   if (style === "Realista") return "REALISTA: acabado fotorrealista coherente en personajes, escenarios y objetos; materiales, microtexturas, óptica y luz físicamente plausibles. Los seres fantásticos o frutas antropomorfas conservan la anatomía aprobada, representada de forma realista. Sin ojos de caricatura añadidos, proporciones chibi, contornos dibujados ni sombreado cel. La fantasía del ser no cambia la técnica visual.";

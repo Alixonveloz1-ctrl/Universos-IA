@@ -1,3 +1,4 @@
+import { femaleReference } from "./reference-look";
 import { z } from "zod";
 import {
   ideas,
@@ -15,7 +16,7 @@ import { textGenerate } from "../providers/vertex";
 import { validateChapterPlan } from "../continuity/chapters";
 import { AppError } from "../errors";
 import { buildBible } from "./bible";
-import { narrativeTreatment, visualTreatment } from "./styles";
+import { narrativeTreatment, visualTreatment, specificTreatment } from "./styles";
 import { characterStyleReference } from "../continuity/rules";
 const schemas = { ideas, story, bible, plan };
 export function narrativePrompt(j: Job, repair?: string) {
@@ -148,6 +149,17 @@ export function compileImagePrompt(
     : singleLocation
       ? "OUTPUT CONTRACT: exactly ONE establishing view of this location, empty of characters, in one continuous vertical 9:16 image. No storyboard, collage, panels, alternate angles, labels or text."
       : "OUTPUT CONTRACT: exactly ONE still frame depicting only the requested shot, in one continuous vertical 9:16 image. No storyboard, collage, sequence, panels or text overlays.";
+  if (characterData && femaleReference(characterData)) {
+    return [
+      outputRule,
+      "Create a beautiful, expressive living female animation protagonist using the attached editorial portrait as the visual design reference. Match its face appeal, eye design, head-to-body scale, natural curves, organic surface and relaxed expressive pose. Preserve the requested age and identity. No deduzcas género de la fruta, ropa o profesión. Fruit heads retain the recognizable fruit silhouette with integrated facial features; no human head merely painted red. This is a character portrait, not a product photo of a doll. Full body with hands and footwear visible, flattering soft warm light, vivid clear colors. Attractive adult fashion character appeal: flattering natural feminine curves, beautiful expressive face and confident relaxed attitude, with the fitted or short clothing specified in her wardrobe.",
+      `Chosen technique: ${s.project.universeSnapshot.visualStyle}. Type of beings: ${s.project.universeSnapshot.beings}.`,
+      specificTreatment(s.project.universeSnapshot.visualStyle),
+      "The specification below defines identity and clothing. Material identifies the species and skin color; render it organically for fruit and humans. The editorial reference defines appearance quality; do not copy its outfit or species. Human characters retain human heads and skin. Keep the specified wardrobe exactly, including footwear. Never replace it with a generic white dress. Approved own-character images define identity; other cast images establish shared rendering only.",
+      JSON.stringify({name:characterData.name,role:characterData.role,gender:characterData.gender,age:characterData.age, speciesAndMaterial:characterData.material,color:characterData.color,hair:characterData.hair,eyes:characterData.eyes,wardrobe:characterData.wardrobe,accessories:characterData.accessories,lockedIdentityTraits:characterData.lockedTraits}),
+      `User instructions: ${instructions}`,
+    ].join("\n\n");
+  }
   return [
     outputRule,
     singleCharacter
