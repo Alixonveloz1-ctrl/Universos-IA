@@ -131,3 +131,20 @@ it("locks character gender and age to the Bible roster and repairs a mismatched 
   expect(generate).toHaveBeenCalledTimes(4);
   expect(generate.mock.calls[1][2]).toMatchObject({ properties: { gender: { const: "mujer" }, age: { const: "adulta" } } });
 });
+
+it("reassesses an old rejected plan and repairs real causal conflicts without regenerating its saved draft", async () => {
+  const { j, before, checkpoint } = execution();
+  j.type = "plan";
+  const draft = j.snapshot.plan!;
+  j.checkpoint.director_0 = draft;
+  j.checkpoint.review_0 = { errors: ["Un personaje está fuera de cámara"], suggestions: [] };
+  generate.mockResolvedValueOnce({ errors: ["Clip 6: activación automática aprobada contradice pulsación manual; conservar activación automática"], suggestions: [] })
+    .mockResolvedValueOnce(draft)
+    .mockResolvedValueOnce({ errors: [], suggestions: ["Puede aclararse un cambio de plano"] });
+  expect(await runDirector(j, before, checkpoint)).toEqual(draft);
+  expect(generate).toHaveBeenCalledTimes(3);
+  expect(generate.mock.calls[1][1]).toContain("activación automática aprobada");
+  generate.mockClear();
+  expect(await runDirector(j, before, checkpoint)).toEqual(draft);
+  expect(generate).not.toHaveBeenCalled();
+});

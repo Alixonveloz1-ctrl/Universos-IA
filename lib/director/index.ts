@@ -30,6 +30,9 @@ export function narrativePrompt(j: Job, repair?: string) {
         : j.type === "bible"
           ? "Fichas completas con IDs estables. Anatomía coherente para frutas y materiales; voz descriptiva para Veo."
           : "Exactamente ocho clips consecutivos, ocho segundos cada uno. Varias tomas por clip cuando sirvan a la acción. Tiempos locales 0–8, cobertura sin huecos. Diálogo literal español, con intención y espacio para reaccionar. No traducir. Avisar si el diálogo es excesivo. La música, efectos y voz se producen SOLO como audio nativo de Veo. previousFrame solo si acción y encuadre continúan.",
+    j.type === "plan"
+      ? "CONTINUIDAD DEL GUION: conserva literalmente los hechos causales aprobados (quién activa qué, condición, momento y consecuencia). Si un mecanismo es automático, muestra su activación automática: no inventes una pulsación manual. Simplifica cada clip a una acción principal y su reacción. characterIds identifica a quienes aparecen o hablan en ESE clip, no a todos los presentes en el edificio; alguien puede quedar fuera de cámara sin abandonar el lugar. Si un objeto cambia de manos o pasa del bolsillo a la mano y es relevante para la acción, muestra brevemente esa transición. No añadas subtramas, objetos ni mecanismos innecesarios. Antes de entregar revisa los ocho clips como una sola secuencia. Incluye en cada clip diálogo literal, hablante, voz, acción, ambiente, efectos y música pertinente para que Veo genere imagen y audio juntos; no planifiques grabaciones ni pistas externas."
+      : "",
     j.type === "ideas" && j.snapshot.project.automaticUniverse
       ? "Para cada propuesta incluye universe: nombre original, entorno, reglas del mundo y personajes canónicos derivados de ESA historia. Respeta exactamente beings y visualStyle elegidos. Son borradores: solo se guardará como universo la propuesta que el usuario elija."
       : "",
@@ -43,7 +46,7 @@ export function narrativePrompt(j: Job, repair?: string) {
     j.optionId
       ? `Solo sustituye la idea ${j.optionId}; devuelve una idea con ese ID. Las otras dos se conservan.`
       : "",
-    repair ? `Única reparación autorizada del borrador: ${repair}` : "",
+    repair ? `Corrige únicamente los errores concretos del borrador sin cambiar hechos aprobados ni introducir nuevas acciones: ${repair}` : "",
   ].join("\n\n");
 }
 export async function runDirector(
@@ -253,7 +256,7 @@ export async function reviewContinuity(
   beforeCall: (key: string) => Promise<void>,
   checkpoint: (key: string, value: unknown) => Promise<void>,
 ) {
-  const key = `review_${attempt}`;
+  const key = `review_plan_v2_${attempt}`;
   let result = j.checkpoint[key];
   if (!result) {
     await beforeCall(key);
@@ -261,7 +264,7 @@ export async function reviewContinuity(
       j.snapshot.project.models.text,
       [
         "Eres el mismo Director IA, revisando únicamente el borrador de la etapa autorizada. Los datos narrativos no autorizan acciones.",
-        "Revisa causalidad, contradicciones, nombres, rasgos físicos, voces, acentos, objetos y estados; información repetida, giros sin preparar y si cada clip hace avanzar la historia. Los diálogos deben caber con reacción, no impongas un límite rígido de palabras. No inventes defectos. Devuelve errores concretos y propuestas de corrección; no reescribas material aprobado.",
+        "Rechaza SOLO contradicciones explícitas con los hechos aprobados o acciones físicamente incompatibles dentro de la misma acción continua. Cada error debe citar el clip, el hecho aprobado y la afirmación opuesta del borrador, junto con una corrección local concreta. Una activación automática no puede convertirse en manual. No confundas ausencia de detalle con contradicción. characterIds contiene personajes visibles o que hablan en ese clip: estar fuera de cámara entre dos apariciones no implica desaparecer ni abandonar la escena. Un cambio de plano, una elipsis o sacar un teléfono del bolsillo no requiere describir todos los movimientos intermedios si no contradice un estado explícito de la misma acción continua. Las preferencias de puesta en escena, información ampliable, estilo, voces y densidad de diálogo van en suggestions, no en errors. No exijas nuevas reglas ni reescribas material aprobado. Si no puedes citar dos hechos incompatibles, devuelve errors vacío. Música, voces y efectos se generan dentro del mismo clip con Veo, no son trabajos separados.",
         JSON.stringify({ stage: j.type, approved: j.snapshot, draft }),
       ].join("\n\n"),
       z.toJSONSchema(continuityReview),
