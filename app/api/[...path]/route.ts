@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { db, signedUrl } from "@/lib/persistence/google";
+import { db, mediaResponse } from "@/lib/persistence/google";
 import {
   createProject,
   deleteUniverse,
@@ -20,7 +20,7 @@ import { action, id, projectInput } from "@/lib/schemas";
 import { diagnoseQueuedJob } from "@/lib/jobs";
 import { launch } from "@/lib/direct-dispatch";
 import { model, MODELS, defaults } from "@/lib/models";
-import { AppError, safeError, assert } from "@/lib/errors";
+import { AppError, safeError, assert, logFailure } from "@/lib/errors";
 import {
   genres,
   plots,
@@ -263,7 +263,9 @@ async function handler(
           ).data();
         assert(asset?.storageObject, "Archivo no disponible");
         await readSnapshot(pid);
-        return response({ url: await signedUrl(asset.storageObject) });
+        if (new URL(req.url).searchParams.get("raw") === "1")
+          return await mediaResponse(asset.storageObject, req.headers.get("range"));
+        return response({ url: `/api/projects/${pid}/media/${paths[3]}?raw=1` });
       }
     }
     if (paths[0] === "jobs" && paths.length >= 2) {
@@ -306,6 +308,7 @@ async function handler(
     }
     throw new AppError("NOT_FOUND", "Ruta no encontrada.", 404);
   } catch (e) {
+    logFailure("api", e);
     if (e instanceof z.ZodError)
       return response(
         {

@@ -69,16 +69,27 @@ export function privateObject(key: string) {
     throw new AppError("PATH", "Objeto fuera del prefijo");
   return bucket().file(key);
 }
-export async function signedUrl(key: string) {
-  const [url] = await privateObject(key).getSignedUrl({
-    version: "v4",
-    action: "read",
-    expires: Date.now() + 5 * 60000,
+// Serve private media through the authenticated app. WIF has access tokens,
+// not a local signing key or the metadata server expected by getSignedUrl.
+export async function mediaResponse(key: string, range: string | null = null) {
+  privateObject(key); // Validate the isolated namespace before any request.
+  if (range && !/^bytes=\d*-\d*$/.test(range)) throw new AppError("RANGE", "Rango inválido", 416);
+  const token = await googleAuth().getAccessToken();
+  const upstream = await fetch(`https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(config().bucket)}/o/${encodeURIComponent(key)}?alt=media`, {
+    headers: { Authorization: `Bearer ${token}`, ...(range ? { Range: range } : {}) },
+    signal: AbortSignal.timeout(120000),
   });
-  return url;
+  if (!upstream.ok) throw new AppError("MEDIA_READ", `No se pudo leer el archivo guardado (Google ${upstream.status}). No necesitas regenerarlo.`, upstream.status === 404 ? 404 : 502);
+  const headers = new Headers({ "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" });
+  for (const name of ["content-type", "content-length", "content-range", "accept-ranges"])
+    if (upstream.headers.has(name)) headers.set(name, upstream.headers.get(name)!);
+  return new Response(upstream.body, { status: upstream.status, headers });
 }
 export async function googlePost(url: string, body: unknown, paid = false) {
+  const started = Date.now();
+  const label = new URL(url).pathname.split("/").pop();
   const token = await googleAuth().getAccessToken();
+  console.info("google_request", { operation: label, authenticationMs: Date.now() - started });
   let res: Response;
   try {
     res = await fetch(url, {
@@ -99,6 +110,7 @@ export async function googlePost(url: string, body: unknown, paid = false) {
       502,
     );
   }
+  console.info("google_response", { operation: label, status: res.status, elapsedMs: Date.now() - started });
   if (!res.ok) {
     // Google's JSON error message identifies invalid models and parameters.
     // Never include request bodies or authentication headers in job errors.

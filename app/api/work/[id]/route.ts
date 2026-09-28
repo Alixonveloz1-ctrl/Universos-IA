@@ -18,5 +18,5 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (job.backend === "direct" && job.state === "queued" && !job.stopRequested &&
       !(job.leaseUntil > Date.now()) && Number(job.checkpoint.directStep || 0) === step)
     scheduleDirect(job);
-  return new Response(null, { status: 202 });
+  return Response.json({ accepted: true }, { status: 202 });
 }

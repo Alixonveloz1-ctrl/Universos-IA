@@ -9,7 +9,7 @@ import { db, privateObject, objectPath, googleAuth } from "../lib/persistence/go
 import { imageLimits } from "../lib/models";
 import { imageReferenceIds } from "../lib/continuity/rules";
 import { config } from "../lib/config";
-import { AppError, assert, safeError } from "../lib/errors";
+import { AppError, assert, safeError, logFailure } from "../lib/errors";
 import { projectRef } from "../lib/persistence/projects";
 import {
   compileImagePrompt,
@@ -34,11 +34,13 @@ async function saveVerifiedObject(key: string, data: Buffer | string, options: S
   const bytes = Buffer.isBuffer(data) ? data : Buffer.from(data);
   // The SDK upload has returned incorrect bytes in the deployed environment.
   // Never accept an asset until we have read the original bytes back.
-  await file.save(bytes, { ...options, validation: false });
-  const [stored] = await file.download({ validation: false });
-  if (stored.equals(bytes)) return;
-  console.error(`La biblioteca de Storage devolvió ${stored.length} bytes; se enviaron ${bytes.length}. Reintentando con la API de Google.`);
-  await file.delete();
+  if (!process.env.VERCEL) {
+    await file.save(bytes, { ...options, validation: false });
+    const [stored] = await file.download({ validation: false });
+    if (stored.equals(bytes)) return;
+    console.error(`La biblioteca de Storage devolvió ${stored.length} bytes; se enviaron ${bytes.length}. Reintentando con la API de Google.`);
+    await file.delete();
+  }
   const token = await googleAuth().getAccessToken();
   assert(token, "No se pudo autenticar la subida al bucket.", "STORAGE_AUTH");
   const encoded = encodeURIComponent(key),
@@ -53,22 +55,24 @@ async function saveVerifiedObject(key: string, data: Buffer | string, options: S
     method: "POST",
     headers: { ...headers, "Content-Type": options.metadata?.contentType || "application/octet-stream" },
     body: new Uint8Array(bytes),
-    signal: AbortSignal.timeout(600000),
+    signal: AbortSignal.timeout(process.env.VERCEL ? 30000 : 600000),
   });
   if (!sent.ok)
     throw new AppError("STORAGE_UPLOAD", `Google rechazó la subida directa (${sent.status}).`, 502);
   const received = await fetch(`${base}?alt=media`, {
     headers,
-    signal: AbortSignal.timeout(600000),
+    signal: AbortSignal.timeout(process.env.VERCEL ? 30000 : 600000),
   });
   if (!received.ok)
     throw new AppError("STORAGE_READ", `Google rechazó la lectura directa (${received.status}).`, 502);
   const actual = Buffer.from(await received.arrayBuffer());
   if (!actual.equals(bytes))
     throw new AppError("STORAGE_INTEGRITY", `Google guardó ${actual.length} bytes; se enviaron ${bytes.length}.`, 502);
-  const [sdkRead] = await file.download({ validation: false });
-  if (!sdkRead.equals(bytes))
-    throw new AppError("STORAGE_READ", `Google devolvió ${actual.length} bytes correctos, pero la biblioteca leyó ${sdkRead.length}.`, 502);
+  if (!process.env.VERCEL) {
+    const [sdkRead] = await file.download({ validation: false });
+    if (!sdkRead.equals(bytes))
+      throw new AppError("STORAGE_READ", `Google devolvió ${actual.length} bytes correctos, pero la biblioteca leyó ${sdkRead.length}.`, 502);
+  }
 }
 class DirectYield extends Error {
   constructor(public destination: "continue" | "cloud") { super(destination); }
@@ -244,13 +248,10 @@ export async function execute(jobId: string, direct = false): Promise<"continue"
     let checksum: string;
     let settings: Record<string, unknown>;
     if (t.kind === "image") {
-      prompt = await directPrompt(
-        job,
-        t,
-        compileImagePrompt(s, t, job.instructions || t.instructions),
-        beforeCall,
-        checkpoint,
-      );
+      // The approved Bible already contains the visual direction. Avoid a
+      // second text generation just to rephrase it before every image.
+      const savedPrompt = job.checkpoint[`prompt_${t.id}`] as { prompt?: string } | undefined;
+      prompt = savedPrompt?.prompt || compileImagePrompt(s, t, job.instructions || t.instructions);
       const recovered = await recoverImage(job.projectId, versionId);
       if (job.checkpoint.pendingCall === key) await reconciled();
       let result;
@@ -580,6 +581,7 @@ export async function execute(jobId: string, direct = false): Promise<"continue"
       await guarded({ state: "queued", checkpoint: persistedCheckpoint, error: null }, true);
       return e.destination;
     }
+    logFailure(`worker:${job.type}`, e);
     const err = safeError(e);
     // A provider's explicit 4xx rejection cannot be a lost paid response.
     // Keep the error, but unblock a later user-requested attempt.

@@ -78,6 +78,8 @@ export async function textGenerate(
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       generationConfig: {
         responseMimeType: "application/json",
+        thinkingConfig: { thinkingLevel: "LOW" },
+        maxOutputTokens: 32768,
         ...(schema ? { responseJsonSchema: schema } : {}),
         candidateCount: 1,
       },

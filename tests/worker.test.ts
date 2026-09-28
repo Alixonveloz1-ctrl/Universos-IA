@@ -173,7 +173,7 @@ it("REGRESSION restart after upload registers the saved candidate without paying
   await execute(jobId);
   expect((memory.rows.get("jobs/" + jobId) as Job).state).toBe("completed");
   expect(imageGenerate).toHaveBeenCalledTimes(1);
-  expect(textGenerate).toHaveBeenCalledTimes(1);
+  expect(textGenerate).not.toHaveBeenCalled();
   expect(
     [...memory.rows.keys()].filter((k) => k.includes("/assets/")),
   ).toHaveLength(1);
@@ -183,15 +183,12 @@ it("SIMULATED concurrent Cloud Run dispatches acquire only one lease and paid re
   expect(imageGenerate).toHaveBeenCalledTimes(1);
   expect((memory.rows.get("jobs/" + jobId) as Job).attempts).toBe(1);
 });
-it("direct slices call the image model once and persist each step before continuing", async () => {
-  expect(await execute(jobId, true)).toBe("continue");
-  expect(textGenerate).toHaveBeenCalledTimes(1);
-  expect(imageGenerate).not.toHaveBeenCalled();
-  expect((memory.rows.get("jobs/" + jobId) as Job).leaseUntil).toBe(0);
+it("direct image generation calls the image model without an extra text request", async () => {
   expect(await execute(jobId, true)).toBeUndefined();
   expect((memory.rows.get("jobs/" + jobId) as Job).state).toBe("completed");
   expect(imageGenerate).toHaveBeenCalledTimes(1);
-  expect(textGenerate).toHaveBeenCalledTimes(1);
+  expect(textGenerate).not.toHaveBeenCalled();
+  expect((memory.rows.get("jobs/" + jobId) as Job).leaseUntil).toBe(0);
 });
 it("direct video calls Veo before handing the accepted operation to media processing", async () => {
   vi.stubEnv("GCP_PROJECT_ID", "test-project");
@@ -221,6 +218,9 @@ it("REGRESSION stopped or superseded jobs cannot execute from a late dispatch", 
 });
 
 it("REGRESSION a worker that loses its lease cannot write a late text checkpoint", async () => {
+  const job = memory.rows.get("jobs/" + jobId) as Job;
+  job.type = "video";
+  job.targetId = "clip_1";
   vi.mocked(textGenerate).mockImplementationOnce(async () => {
     const j = memory.rows.get("jobs/" + jobId) as Job;
     memory.rows.set("jobs/" + jobId, { ...j, leaseOwner: "replacement-worker" });
@@ -297,4 +297,25 @@ it("records a startup capacity failure rather than leaving the job queued foreve
   expect(job.state).toBe("failed");
   expect(job.error?.code).toBe("CONCURRENCY");
   expect(imageGenerate).not.toHaveBeenCalled();
+});
+
+it("uploads Vercel images directly, verifies bytes and does not use the broken SDK upload", async () => {
+  vi.stubEnv("VERCEL", "1"); vi.stubEnv("GCP_PROJECT_ID", "test-project"); vi.stubEnv("GCS_OUTPUT_BUCKET", "test-bucket");
+  // If the SDK path is used this marker is consumed and writes corrupt data.
+  memory.corruptNextUpload = true;
+  const request = vi.fn().mockImplementation(async (url: string | URL, options: RequestInit = {}) => {
+    const u = new URL(url);
+    if (u.pathname.includes("/upload/")) {
+      memory.files.set(u.searchParams.get("name")!, Buffer.from(options.body as Uint8Array));
+      return Response.json({ size: (options.body as Uint8Array).byteLength });
+    }
+    const key = decodeURIComponent(u.pathname.split("/o/")[1]);
+    return new Response(new Uint8Array(memory.files.get(key)!));
+  });
+  vi.stubGlobal("fetch", request);
+  await execute(jobId, true);
+  expect((memory.rows.get("jobs/" + jobId) as Job).state).toBe("completed");
+  expect(memory.corruptNextUpload).toBe(true);
+  expect(request).toHaveBeenCalledTimes(2);
+  expect(imageGenerate).toHaveBeenCalledTimes(1); expect(textGenerate).not.toHaveBeenCalled();
 });

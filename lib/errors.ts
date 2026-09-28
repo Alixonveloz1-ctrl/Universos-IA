@@ -22,3 +22,14 @@ export function safeError(e: unknown) {
       "La operación falló. Revisa la configuración o el registro del trabajo antes de reintentar.",
   };
 }
+
+// Private operational diagnostics only: never log requests, prompts or tokens.
+export function logFailure(stage: string, error: unknown) {
+  const e = error as { name?: string; code?: string | number; cause?: { code?: string }; message?: string };
+  console.error("operation_failed", {
+    stage, name: e?.name, code: e?.code, cause: e?.cause?.code,
+    message: String(e?.message || "Unknown error").split("\n")[0]
+      .replace(/Bearer\s+\S+/gi, "Bearer [redacted]")
+      .replace(/eyJ[A-Za-z0-9_.-]+/g, "[redacted]").slice(0, 350),
+  });
+}
