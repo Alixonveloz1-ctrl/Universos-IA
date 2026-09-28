@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   ideas,
+  universe,
   idea,
   story,
   bible,
@@ -24,6 +25,9 @@ export function narrativePrompt(j: Job, repair?: string) {
         : j.type === "bible"
           ? "Fichas completas con IDs estables. Anatomía coherente para frutas y materiales; voz descriptiva para Veo."
           : "Exactamente ocho clips consecutivos, ocho segundos cada uno. Varias tomas por clip cuando sirvan a la acción. Tiempos locales 0–8, cobertura sin huecos. Diálogo literal español, con intención y espacio para reaccionar. No traducir. Avisar si el diálogo es excesivo. La música, efectos y voz se producen SOLO como audio nativo de Veo. previousFrame solo si acción y encuadre continúan.",
+    j.type === "ideas" && j.snapshot.project.automaticUniverse
+      ? "Para cada propuesta incluye universe: nombre original, entorno, reglas del mundo y personajes canónicos derivados de ESA historia. Respeta exactamente beings y visualStyle elegidos. Son borradores: solo se guardará como universo la propuesta que el usuario elija."
+      : "",
     `Perfiles editoriales: ${JSON.stringify(profiles)}`,
     `Contexto aprobado: ${JSON.stringify({ project: j.snapshot.project, bible: j.snapshot.bible, observed: j.snapshot.observed })}`,
     `Instrucciones adicionales: ${j.instructions}`,
@@ -40,7 +44,13 @@ export async function runDirector(
 ) {
   if (!["ideas", "story", "bible", "plan"].includes(j.type))
     throw new AppError("DIRECTOR", "Etapa narrativa no válida");
-  const schema = j.optionId ? idea : schemas[j.type as keyof typeof schemas];
+  const generatedIdea = idea.extend({ universe });
+  const generatedIdeas = z.object({ ideas: z.array(generatedIdea).length(3) }).strict().refine(
+    (v) => new Set(v.ideas.map((i) => i.id)).size === 3, "IDs de propuestas duplicados",
+  );
+  const schema = j.type === "ideas" && j.snapshot.project.automaticUniverse
+    ? (j.optionId ? generatedIdea : generatedIdeas)
+    : j.optionId ? idea : schemas[j.type as keyof typeof schemas];
   let failure = "";
   for (let attempt = 0; attempt < 2; attempt++) {
     const key = `director_${attempt}`;

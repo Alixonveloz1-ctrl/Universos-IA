@@ -57,6 +57,7 @@ export interface Project {
   id: string;
   owner: "personal";
   universeId: string;
+  automaticUniverse?: boolean;
   universeSnapshot: Universe & { revision: number };
   title: string;
   revision: number;
@@ -69,7 +70,7 @@ export interface Project {
   language: string;
   accent: string;
   models: { text: string; image: string; video: string };
-  ideas: { id: string; title: string; synopsis: string }[];
+  ideas: { id: string; title: string; synopsis: string; universe?: Universe }[];
   selectedIdeaId?: string;
   story?: Narrative;
   bible?: Narrative;

@@ -37,6 +37,10 @@ test("SIMULATED API: mobile creation, exact three proposals, selection and reloa
         ? [{ id: "test", title: s.project.title, stage: "ideas" }]
         : [];
     else if (p === "projects" && method === "POST") {
+      const input = req.postDataJSON();
+      expect(input.universeId).toBeUndefined();
+      expect(input.beings).toBe("Frutas");
+      expect(input.visualStyle).toBe("Cinemático 3D");
       created = true;
       body = s.project;
     } else if (p === "projects/test/actions") {
@@ -57,7 +61,9 @@ test("SIMULATED API: mobile creation, exact three proposals, selection and reloa
   await expect(page.getByRole("heading", { name: "Forjar una nueva historia" })).toBeVisible();
   // This wrapping label also contains the select's option text. Match its
   // visible prefix without requiring the entire descendant text to equal it.
-  await page.getByLabel(/^Universo/).selectOption("universe");
+  await expect(page.getByRole("button", { name: "Crear universo", exact: true })).toHaveCount(0);
+  await page.getByLabel(/^Tipo de seres/).selectOption("Frutas");
+  await expect(page.locator("textarea")).toHaveCount(0);
   const subgenre = page.getByLabel(/^Subgénero/);
   await expect(subgenre.locator("option")).toHaveCount(10);
   await subgenre.selectOption("Histórico");

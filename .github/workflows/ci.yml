@@ -15,7 +15,7 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - run: npm run lint
       - run: npm run typecheck
-      - run: bash -n c v install.sh scripts/setup-gcp.sh scripts/configure-access.sh
+      - run: bash -n c v s install.sh scripts/setup-gcp.sh scripts/configure-access.sh
       - run: npm test
       - run: npm run build
       - run: npx playwright install --with-deps chromium

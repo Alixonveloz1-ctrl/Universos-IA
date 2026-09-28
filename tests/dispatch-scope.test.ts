@@ -22,3 +22,9 @@ it("launches the isolated worker and tracks the execution", async () => {
   expect(mocks.post).toHaveBeenCalledOnce();
   expect(mocks.update).toHaveBeenCalledWith({ executionName: "execution" });
 });
+it("blocks automatic-universe projects on a worker with the old story flow", async () => {
+  vi.stubEnv("CLOUD_RUN_JOB_RESOURCE", "projects/test-project/locations/us-central1/jobs/universos-worker");
+  vi.stubGlobal("fetch", vi.fn(async () => Response.json({ labels: { "firestore-scope": "universos-ia-v1" } })));
+  await expect(dispatch({ id: "job", snapshot: { project: { automaticUniverse: true } } } as Job)).rejects.toThrow("./s");
+  expect(mocks.post).not.toHaveBeenCalled();
+});

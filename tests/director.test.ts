@@ -81,3 +81,16 @@ it("prompt compilation is checkpointed and does not modify approved source mater
   expect(generate).toHaveBeenCalledTimes(1);
   expect(JSON.stringify(j.snapshot)).toBe(original);
 });
+
+it("generates three universe drafts from dropdown preferences in the ideas call", async () => {
+  const { j, before, checkpoint } = execution();
+  j.type = "ideas";
+  j.snapshot.project.automaticUniverse = true;
+  const { revision: _revision, ...universe } = j.snapshot.project.universeSnapshot;
+  void _revision;
+  const result = { ideas: [1, 2, 3].map(n => ({ id: `i${n}`, title: `Historia ${n}`, synopsis: `Propuesta ${n}`, universe })) };
+  generate.mockResolvedValueOnce(result).mockResolvedValueOnce({ errors: [], suggestions: [] });
+  expect(await runDirector(j, before, checkpoint)).toEqual(result);
+  expect(generate.mock.calls[0][1]).toContain("solo se guardará como universo");
+  expect(JSON.stringify(generate.mock.calls[0][2])).toContain('"universe"');
+});

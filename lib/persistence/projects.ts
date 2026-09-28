@@ -12,6 +12,8 @@ import {
   validatePlan,
   type Action,
   type Universe,
+  universe,
+  projectInput,
 } from "../schemas";
 import type {
   Asset,
@@ -55,26 +57,25 @@ export async function readSnapshot(
   };
 }
 export async function createProject(
-  input: Omit<
-    Project,
-    | "id"
-    | "owner"
-    | "universeSnapshot"
-    | "title"
-    | "revision"
-    | "stage"
-    | "ideas"
-    | "createdAt"
-    | "updatedAt"
-  >,
+  input: ReturnType<typeof projectInput.parse>,
 ) {
-  const u = (await db().doc(`universes/${input.universeId}`).get()).data() as
-    | (Universe & { revision: number })
-    | undefined;
+  const u = input.universeId
+    ? (await db().doc(`universes/${input.universeId}`).get()).data() as (Universe & { revision: number }) | undefined
+    : {
+        name: "Pendiente de elegir historia",
+        beings: input.beings,
+        visualStyle: input.visualStyle,
+        environment: "El Director propondrá el entorno según cada historia.",
+        worldRules: "El Director definirá reglas coherentes con cada propuesta.",
+        characterCanon: "",
+        revision: 0,
+      };
   assert(u, "Universo no encontrado.");
   const now = Date.now(),
     p: Project = {
       ...input,
+      universeId: input.universeId || "",
+      automaticUniverse: !input.universeId,
       id: randomUUID(),
       owner: "personal",
       universeSnapshot: u,
@@ -211,6 +212,19 @@ export async function editProject(
     if (change.selectedIdeaId) {
       const idea = p.ideas.find((i) => i.id === change.selectedIdeaId);
       assert(idea, "Propuesta no encontrada.");
+      if (p.automaticUniverse) {
+        const generated = universe.parse(idea.universe);
+        const universeId = `story-${p.id}-${idea.id}`;
+        const saved = {
+          ...generated,
+          beings: p.universeSnapshot.beings,
+          visualStyle: p.universeSnapshot.visualStyle,
+          revision: 1,
+        };
+        tx.set(db().doc(`universes/${universeId}`), { ...saved, projectId: p.id });
+        patch.universeId = universeId;
+        patch.universeSnapshot = saved;
+      }
       patch.selectedIdeaId = idea.id;
       patch.title = idea.title;
       patch.stage = "story";

@@ -25,6 +25,16 @@ export const state = z
       .max(20),
   })
   .strict();
+export const universe = z
+  .object({
+    name: short,
+    beings: short,
+    visualStyle: short,
+    environment: text,
+    worldRules: text,
+    characterCanon: z.string().max(20000),
+  })
+  .strict();
 export const idea = z.object({ id, title: short, synopsis: text }).strict();
 export const ideas = z
   .object({ ideas: z.array(idea).length(3) })
@@ -206,19 +216,11 @@ export function validatePlan(value: unknown, b: z.infer<typeof bible>) {
   }
   return p;
 }
-export const universe = z
-  .object({
-    name: short,
-    beings: short,
-    visualStyle: short,
-    environment: text,
-    worldRules: text,
-    characterCanon: z.string().max(20000),
-  })
-  .strict();
 export const projectInput = z
   .object({
-    universeId: id,
+    universeId: id.optional(),
+    beings: short.default("Frutas"),
+    visualStyle: short.default("Cinemático 3D"),
     genre: short,
     subgenre: short,
     plotType: short,

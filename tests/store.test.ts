@@ -270,3 +270,27 @@ it("REGRESSION selecting an idea and restoring a narrative reads before writing"
   await editProject("test", 1, { selectedIdeaId: "idea2", versionId: "old-story" });
   expect((memory.rows.get("projects/test") as Project).selectedIdeaId).toBe("idea2");
 });
+
+it("creates only the selected proposal's universe without manual input", async () => {
+  const s = snapshot();
+  const generated = { ...s.project.universeSnapshot, name: "El mundo de la segunda historia" };
+  const { revision: _revision, ...universe } = generated;
+  void _revision;
+  memory.rows.set("projects/test", {
+    ...s.project, automaticUniverse: true, universeId: "",
+    ideas: [{ id: "idea1", title: "Primera", synopsis: "Uno", universe },
+      { id: "idea2", title: "Segunda", synopsis: "Dos", universe }],
+  });
+  await editProject("test", 1, { selectedIdeaId: "idea2" });
+  const saved = memory.rows.get("projects/test") as typeof s.project;
+  expect(saved.universeId).toBe("story-test-idea2");
+  expect(saved.universeSnapshot.name).toBe(universe.name);
+  expect(memory.rows.has("universes/story-test-idea1")).toBe(false);
+  expect(memory.rows.has("universes/story-test-idea2")).toBe(true);
+});
+it("refuses to select an automatic proposal without its generated universe", async () => {
+  const s = snapshot();
+  memory.rows.set("projects/test", { ...s.project, automaticUniverse: true, universeId: "" });
+  await expect(editProject("test", 1, { selectedIdeaId: "idea2" })).rejects.toThrow();
+  expect([...memory.rows.keys()].filter(k => k.startsWith("universes/"))).toEqual([]);
+});

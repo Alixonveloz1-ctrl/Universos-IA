@@ -17,7 +17,9 @@ export async function dispatch(job: Job) {
     headers: { Authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(15000),
   });
-  if (!current.ok || (await current.json()).labels?.["firestore-scope"] !== DATA_SCOPE)
+  const labels = current.ok ? (await current.json()).labels : undefined;
+  if (!labels || labels["firestore-scope"] !== DATA_SCOPE ||
+      (job.snapshot?.project.automaticUniverse && labels["story-flow"] !== "automatic-universe-v1"))
     throw new AppError("WORKER_UPDATE", "Actualiza el ejecutor con ./s en Cloud Shell antes de generar.", 503);
   try {
     const r = await googlePost(

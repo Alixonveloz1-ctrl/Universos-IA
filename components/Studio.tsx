@@ -12,7 +12,6 @@ import {
   bible as bibleSchema,
   validatePlan,
   type Bible,
-  type Universe,
 } from "@/lib/schemas";
 import { z } from "zod";
 import { prerequisites } from "@/lib/continuity/rules";
@@ -383,29 +382,14 @@ export default function Studio() {
     [password, setPassword] = useState(""),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
-    [universes, setUniverses] = useState<
-      (Universe & { id: string; revision: number })[]
-    >([]),
     [projects, setProjects] = useState<
       { id: string; title: string; stage: string }[]
     >([]),
     [data, setData] = useState<Data | null>(null),
     [tab, setTab] = useState("Historia");
-  const [universe, setUniverse] = useState({
-    name: "",
+  const [selection, setSelection] = useState({
     beings: "Frutas",
     visualStyle: "Cinemático 3D",
-    environment: "",
-    worldRules: "",
-    characterCanon: "",
-  });
-  const [editingUniverse, setEditingUniverse] = useState<{
-    id: string;
-    revision: number;
-  } | null>(null);
-  const [newUniverse, setNewUniverse] = useState(false),
-    [selectedUniverse, setSelectedUniverse] = useState("");
-  const [selection, setSelection] = useState({
     genre: "Drama",
     subgenre: "Familiar",
     plotType: "Traición",
@@ -416,8 +400,7 @@ export default function Studio() {
     models: DEFAULT_MODELS,
   });
   const refresh = useCallback(async (pid?: string) => {
-    const [u, p] = await Promise.all([api("universes"), api("projects")]);
-    setUniverses(u);
+    const p = await api("projects");
     setProjects(p);
     if (pid) setData(await api("projects/" + pid));
   }, []);
@@ -642,123 +625,11 @@ export default function Studio() {
             <p className="muted">
               Define el estilo y recibe tres propuestas originales.
             </p>
-            <label>
-              Universo
-              <select
-                value={selectedUniverse}
-                onChange={(e) => setSelectedUniverse(e.target.value)}
-              >
-                <option value="">Selecciona un universo guardado</option>
-                {universes.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button
-              onClick={() => {
-                setEditingUniverse(null);
-                setNewUniverse(!newUniverse);
-              }}
-            >
-              {newUniverse ? "Cerrar" : "Crear universo"}
-            </button>
-            {selectedUniverse && !newUniverse && (
-              <button
-                onClick={() => {
-                  const u = universes.find((u) => u.id === selectedUniverse)!;
-                  const {
-                    id,
-                    revision,
-                    name,
-                    beings,
-                    visualStyle,
-                    environment,
-                    worldRules,
-                    characterCanon,
-                  } = u;
-                  setUniverse({
-                    name,
-                    beings,
-                    visualStyle,
-                    environment,
-                    worldRules,
-                    characterCanon,
-                  });
-                  setEditingUniverse({ id, revision });
-                  setNewUniverse(true);
-                }}
-              >
-                Editar universo
-              </button>
-            )}
-            {newUniverse && (
-              <div className="fields">
-                <label>
-                  Nombre
-                  <input
-                    value={universe.name}
-                    onChange={(e) =>
-                      setUniverse({ ...universe, name: e.target.value })
-                    }
-                  />
-                </label>
-                <div className="grid">
-                  {field(
-                    "Tipo de seres",
-                    universe.beings,
-                    (v) => setUniverse({ ...universe, beings: v }),
-                    beings,
-                  )}
-                  {field(
-                    "Estilo visual",
-                    universe.visualStyle,
-                    (v) => setUniverse({ ...universe, visualStyle: v }),
-                    styles,
-                  )}
-                </div>
-                {(["environment", "worldRules", "characterCanon"] as const).map(
-                  (k) => (
-                    <label key={k}>
-                      {k === "environment"
-                        ? "Entorno"
-                        : k === "worldRules"
-                          ? "Reglas del mundo"
-                          : "Personajes canónicos (opcional)"}
-                      <textarea
-                        value={universe[k]}
-                        onChange={(e) =>
-                          setUniverse({ ...universe, [k]: e.target.value })
-                        }
-                      />
-                    </label>
-                  ),
-                )}
-                <button
-                  disabled={busy}
-                  onClick={() =>
-                    void perform(async () => {
-                      if (editingUniverse) {
-                        await api(`universes/${editingUniverse.id}`, "PATCH", {
-                          expectedRevision: editingUniverse.revision,
-                          data: universe,
-                        });
-                        setSelectedUniverse(editingUniverse.id);
-                      } else {
-                        const u = await api("universes", "POST", universe);
-                        setSelectedUniverse(u.id);
-                      }
-                      setEditingUniverse(null);
-                      setNewUniverse(false);
-                      await refresh();
-                    })
-                  }
-                >
-                  Guardar universo
-                </button>
-              </div>
-            )}
+            <p className="muted">El universo se creará automáticamente al elegir una de las tres historias.</p>
+            <div className="grid">
+              {field("Tipo de seres", selection.beings, (v) => setSelection({ ...selection, beings: v }), beings)}
+              {field("Estilo visual", selection.visualStyle, (v) => setSelection({ ...selection, visualStyle: v }), styles)}
+            </div>
             <div className="grid" style={{ marginTop: 20 }}>
               {field(
                 "Género",
@@ -831,34 +702,17 @@ export default function Studio() {
                     </select>
                   </label>
                 ))}
-                <label>
-                  Idioma
-                  <input
-                    value={selection.language}
-                    onChange={(e) =>
-                      setSelection({ ...selection, language: e.target.value })
-                    }
-                  />
-                </label>
-                <label>
-                  Acento
-                  <input
-                    value={selection.accent}
-                    onChange={(e) =>
-                      setSelection({ ...selection, accent: e.target.value })
-                    }
-                  />
-                </label>
+                {field("Idioma", selection.language, (v) => setSelection({ ...selection, language: v }), ["Español"])}
+                {field("Acento", selection.accent, (v) => setSelection({ ...selection, accent: v }), ["Latinoamericano", "Venezolano", "Mexicano", "Colombiano", "Argentino", "Español de España"])}
               </div>
             </details>
             <button
               className="primary wide"
-              disabled={busy || !selectedUniverse}
+              disabled={busy}
               onClick={() =>
                 void perform(async () => {
                   const p = await api("projects", "POST", {
                     ...selection,
-                    universeId: selectedUniverse,
                   });
                   await api(`projects/${p.id}/actions`, "POST", {
                     type: "ideas",

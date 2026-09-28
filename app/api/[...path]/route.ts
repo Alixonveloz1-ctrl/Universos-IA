@@ -156,7 +156,8 @@ async function handler(
           genres[p.genre]?.includes(p.subgenre) &&
             plots.includes(p.plotType) &&
             tones.includes(p.tone) &&
-            endings.includes(p.ending),
+            endings.includes(p.ending) &&
+            beings.includes(p.beings) && styles.includes(p.visualStyle),
           "Selección narrativa inválida",
         );
         for (const kind of ["text", "image", "video"] as const)
