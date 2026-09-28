@@ -73,8 +73,12 @@ export async function runDirector(
       await beforeCall(key);
       result = await textGenerate(
         j.snapshot.project.models.text,
-        narrativePrompt(j, failure),
-        z.toJSONSchema(schema),
+        j.type === "bible" || j.type === "plan"
+          ? `${narrativePrompt(j, failure)}\n\nFormato JSON obligatorio: ${JSON.stringify(z.toJSONSchema(schema))}`
+          : narrativePrompt(j, failure),
+        // The full bible and eight-clip plan schemas can exceed Google's
+        // structured-output complexity limit (HTTP 400). Validate locally.
+        j.type === "bible" || j.type === "plan" ? undefined : z.toJSONSchema(schema),
       );
       await checkpoint(key, result);
     }

@@ -100,6 +100,11 @@ export async function googlePost(url: string, body: unknown, paid = false) {
     );
   }
   if (!res.ok) {
+    // Google's JSON error message identifies invalid models and parameters.
+    // Never include request bodies or authentication headers in job errors.
+    const detail = await res.json().then((v: { error?: { message?: string } }) =>
+      typeof v?.error?.message === "string" ? v.error.message.replace(/\s+/g, " ").slice(0, 320) : "",
+    ).catch(() => "");
     const code =
       res.status === 429
         ? "QUOTA"
@@ -110,7 +115,7 @@ export async function googlePost(url: string, body: unknown, paid = false) {
             : "PROVIDER_REJECTED";
     throw new AppError(
       code,
-      `Google respondió ${res.status}. ${code === "AMBIGUOUS" ? "Reconciliar antes de repetir." : "Revisa acceso, cuota o parámetros del modelo."}`,
+      `Google respondió ${res.status}. ${detail || (code === "AMBIGUOUS" ? "Reconciliar antes de repetir." : "Revisa acceso, cuota o parámetros del modelo.")}`,
       502,
     );
   }

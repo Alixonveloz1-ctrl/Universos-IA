@@ -565,6 +565,12 @@ export async function execute(jobId: string) {
     await guarded({ state: "completed" }, true);
   } catch (e) {
     const err = safeError(e);
+    // A provider's explicit 4xx rejection cannot be a lost paid response.
+    // Keep the error, but unblock a later user-requested attempt.
+    if (err.code === "PROVIDER_REJECTED" && job.checkpoint.pendingCall && !job.checkpoint.operation) {
+      persistedCheckpoint = { ...persistedCheckpoint, pendingCall: null, submitted: false };
+      job.checkpoint = { ...job.checkpoint, pendingCall: null, submitted: false };
+    }
     const state =
       job.checkpoint.operation && !job.checkpoint.videoObject && !job.checkpoint.operationFailed
         ? "waiting"
@@ -574,7 +580,7 @@ export async function execute(jobId: string) {
             (job.checkpoint.pendingCall && !job.checkpoint.operation)
           ? "needsReview"
           : "failed";
-    await guarded({ state, error: err }, true).catch(() => {});
+    await guarded({ state, error: err, checkpoint: persistedCheckpoint }, true).catch(() => {});
     process.exitCode = 1;
   } finally {
     clearInterval(timer);

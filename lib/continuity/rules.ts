@@ -36,6 +36,8 @@ export function prerequisites(s: Snapshot, a: Action) {
       p.ideas.some((i) => i.id === p.selectedIdeaId),
       "Elige una historia de las propuestas actuales.",
     );
+  if (a.type === "ideas")
+    assert(!p.selectedIdeaId, "Ya elegiste una historia. Las otras propuestas están descartadas.");
   if (a.type === "bible") assert(p.story?.approvedAt, "Aprueba la historia.");
   if (a.type === "plan") {
     assert(p.bible?.approvedAt, "Aprueba la biblia.");

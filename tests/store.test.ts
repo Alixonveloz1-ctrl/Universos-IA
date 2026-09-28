@@ -199,11 +199,15 @@ it("SIMULATED export race: frozen manifest survives approval changes", async () 
   ).toBe(true);
   expect(memory.rows.has("projects/test/assets/v1")).toBe(true);
 });
-it("REGRESSION changing story choice invalidates downstream approvals", async () => {
+it("REGRESSION choosing a story discards the other ideas and invalidates downstream approvals", async () => {
+  const original = memory.rows.get("projects/test") as Project;
+  memory.rows.set("projects/test", { ...original, selectedIdeaId: undefined });
   await editProject("test", 1, { selectedIdeaId: "idea2" });
   const p = memory.rows.get("projects/test") as Project;
+  expect(p.ideas.map(i => i.id)).toEqual(["idea2"]);
   expect(p.story?.approvedAt).toBe(0);
   expect(p.plan?.approvedAt).toBe(0);
+  await expect(editProject("test", p.revision, { selectedIdeaId: "idea-1" })).rejects.toThrow("descartaron");
 });
 it("REGRESSION removed shots do not receive updates after deletion", async () => {
   const s = snapshot(),
@@ -225,6 +229,19 @@ it("SIMULATED recovery: manual inspection retains the ambiguous checkpoint", asy
   expect((memory.rows.get("jobs/" + j.id) as Job).checkpoint.submitted).toBe(
     true,
   );
+});
+it("retries an explicitly rejected 400 without a stuck pending response", async () => {
+  const j = await enqueue("test", { ...a, type: "bible" });
+  memory.rows.set("jobs/" + j.id, {
+    ...j, state: "needsReview", leaseUntil: 0,
+    error: { code: "PROVIDER_REJECTED", message: "Google respondió 400" },
+    checkpoint: { submitted: true, pendingCall: "director_0", reconciledAt: Date.now() },
+  });
+  await jobControl(j.id, "resume");
+  const next = memory.rows.get("jobs/" + j.id) as Job;
+  expect(next.state).toBe("queued");
+  expect(next.checkpoint.pendingCall).toBeNull();
+  expect(next.checkpoint.submitted).toBe(false);
 });
 
 it("REGRESSION two independent request IDs for same active intent return one job", async () => {
@@ -335,6 +352,7 @@ it("REGRESSION reapproving an unchanged video and observed state does not invali
 it("REGRESSION selecting an idea and restoring a narrative reads before writing", async () => {
   const narrative = (memory.rows.get("projects/test") as Project).story!;
   memory.rows.set("projects/test/narratives/old-story", narrative);
+  memory.rows.set("projects/test", { ...(memory.rows.get("projects/test") as Project), selectedIdeaId: undefined });
   await editProject("test", 1, { selectedIdeaId: "idea2", versionId: "old-story" });
   expect((memory.rows.get("projects/test") as Project).selectedIdeaId).toBe("idea2");
 });
@@ -345,7 +363,7 @@ it("creates only the selected proposal's universe without manual input", async (
   const { revision: _revision, ...universe } = generated;
   void _revision;
   memory.rows.set("projects/test", {
-    ...s.project, automaticUniverse: true, universeId: "",
+    ...s.project, automaticUniverse: true, universeId: "", selectedIdeaId: undefined,
     ideas: [{ id: "idea1", title: "Primera", synopsis: "Uno", universe },
       { id: "idea2", title: "Segunda", synopsis: "Dos", universe }],
   });

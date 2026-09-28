@@ -69,7 +69,7 @@ export function videoRequest(
 export async function textGenerate(
   id: string,
   prompt: string,
-  schema: unknown,
+  schema?: unknown,
 ) {
   model(id, "text");
   const r = await googlePost(
@@ -78,7 +78,7 @@ export async function textGenerate(
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       generationConfig: {
         responseMimeType: "application/json",
-        responseJsonSchema: schema,
+        ...(schema ? { responseJsonSchema: schema } : {}),
         candidateCount: 1,
       },
     },

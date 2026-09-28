@@ -839,7 +839,7 @@ export default function Studio() {
                     completed: "Generación terminada · pendiente de aprobación",
                     failed: "El trabajo falló",
                     stopped: "Detenido",
-                    needsReview: "Respuesta incierta · requiere revisión",
+                    needsReview: data.job.error?.code === "PROVIDER_REJECTED" ? "Google rechazó esta solicitud" : "Respuesta incierta · requiere revisión",
                   }[data.job.state]
                 }
               </strong>
@@ -887,13 +887,16 @@ export default function Studio() {
                         })
                       }
                     >
-                      {data.job.state === "needsReview"
+                      {data.job.error?.code === "PROVIDER_REJECTED"
+                        ? `Volver a intentar ${data.job.type === "bible" ? "Biblia" : "generación"}`
+                        : data.job.state === "needsReview"
                         ? "Comprobar recuperación"
                         : "Reanudar trabajo"}
                     </button>
                   )}
               </div>
               {data.job.state === "needsReview" &&
+                data.job.error?.code !== "PROVIDER_REJECTED" &&
                 !data.job.hasOperation &&
                 data.job.resumable && (
                   <details>
@@ -954,42 +957,26 @@ export default function Studio() {
           {tab === "Historia" && (
             <>
               <div className="cards">
-                {data.project.ideas.map((i) => (
+                {data.project.ideas.filter((i) => !data.project.selectedIdeaId || i.id === data.project.selectedIdeaId).map((i) => (
                   <article className="card" key={i.id}>
                     <h3>{i.title}</h3>
                     <p>{i.synopsis}</p>
                     <div className="actions">
-                      <button
-                        disabled={busy || active}
-                        onClick={() =>
-                          void perform(() => patch({ selectedIdeaId: i.id }))
-                        }
-                      >
-                        {data.project.selectedIdeaId === i.id
-                          ? "Elegida"
-                          : "Elegir"}
-                      </button>
-                      <button
-                        disabled={busy || active}
-                        onClick={() =>
-                          void perform(() =>
-                            generate("ideas", undefined, "", i.id),
-                          )
-                        }
-                      >
-                        Regenerar esta opción
-                      </button>
+                      {data.project.selectedIdeaId ? <span>Historia elegida</span> : <>
+                        <button disabled={busy || active} onClick={() => void perform(() => patch({ selectedIdeaId: i.id }))}>Elegir</button>
+                        <button disabled={busy || active} onClick={() => void perform(() => generate("ideas", undefined, "", i.id))}>Regenerar esta opción</button>
+                      </>}
                     </div>
                   </article>
                 ))}
               </div>
               <div className="actions">
-                <button
+                {!data.project.selectedIdeaId && <button
                   disabled={busy || active}
                   onClick={() => void perform(() => generate("ideas"))}
                 >
                   {data.project.ideas.length ? "Regenerar las tres" : data.project.previousChapter ? "Generar 3 continuaciones" : "Generar 3 historias"}
-                </button>
+                </button>}
                 <button
                   className="primary"
                   disabled={busy || active || !!generationBlock(data, "story")}

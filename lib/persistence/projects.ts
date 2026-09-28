@@ -297,6 +297,7 @@ export async function editProject(
     }
     if (change.models) patch.models = change.models;
     if (change.selectedIdeaId) {
+      assert(!p.selectedIdeaId, "Esta historia ya fue elegida. Las otras propuestas se descartaron.");
       const idea = p.ideas.find((i) => i.id === change.selectedIdeaId);
       assert(idea, "Propuesta no encontrada.");
       if (p.automaticUniverse) {
@@ -313,6 +314,7 @@ export async function editProject(
         patch.universeSnapshot = saved;
       }
       patch.selectedIdeaId = idea.id;
+      patch.ideas = [idea];
       patch.title = idea.title;
       patch.stage = "story";
       if (p.story) patch.story = { ...p.story, approvedAt: 0 };
@@ -572,7 +574,11 @@ export async function jobControl(id: string, operation: "stop" | "resume") {
     assert(j.state !== "completed", "Trabajo ya completado.");
     assert(!(j.state === "queued" && (j.operationName || j.executionName)),
       "Google ya recibió este trabajo. Espera a que termine la comprobación antes de reanudar.");
-    tx.update(ref, { stopRequested: false, state: "queued", error: null, executionName: "", operationName: "", dispatchedAt: Date.now() });
+    // An explicit HTTP rejection has no in-flight generation to reconcile.
+    // Older workers mistakenly retained a pending call after a 400 response.
+    const rejected = j.error?.code === "PROVIDER_REJECTED";
+    const checkpoint = rejected ? { ...j.checkpoint, pendingCall: null, submitted: false } : j.checkpoint;
+    tx.update(ref, { stopRequested: false, state: "queued", error: null, executionName: "", operationName: "", dispatchedAt: Date.now(), ...(rejected ? { checkpoint } : {}) });
     return { ...j, stopRequested: false, state: "queued" as const, executionName: "", operationName: "" };
   });
 }
