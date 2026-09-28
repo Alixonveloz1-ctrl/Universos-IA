@@ -1,13 +1,14 @@
-// An original treatment informed by reference transcripts, not a replica of a channel.
+// Original treatment informed by transcripts and the user's visual references.
 export const TELENOVELA_STYLE = "Telenovela 3D expresiva";
 
 export const TELENOVELA_DESCRIPTION =
-  "Personajes 3D expresivos, colores vivos y diálogos directos. Para frutas, diamantes u otros seres. Respeta el género y el cierre que elijas.";
+  "Personajes humanoides atractivos y expresivos, ropa y cabello cuidados, acabado 3D pulido. Rasgos de fruta o gema integrados en cabeza y piel. Diálogos directos, según el género y el cierre que elijas.";
 
 export function visualTreatment(style: string): string {
   return [
     `ESTILO ÚNICO DEL UNIVERSO: ${style}. Es obligatorio en personajes, escenarios, objetos, tomas y videos, también en capítulos siguientes.`,
     "La misma técnica, grado de estilización, diseño facial y acabado de materiales se mantienen en todo el reparto. No mezclar 2D, 3D, fotografía ni estilos de otros universos. Cambiar de generador no cambia el estilo. El tono de la historia modifica la actuación y la luz de una escena, no la técnica de animación. Los rasgos individuales distinguen personajes sin cambiar la dirección artística. Si una ficha heredada sugiere otra técnica, conserva su identidad física y represéntala con el estilo elegido aquí.",
+    "DISEÑO HUMANOIDE DEL REPARTO: al crear personajes de frutas, alimentos, cristal, diamantes o minerales, diseña personas de anatomía humanoide estilizada: cabeza, cuello, hombros, torso, cintura, brazos articulados, manos, piernas y pies con proporciones coherentes con su edad. Rostros hermosos y armoniosos, ojos expresivos, cejas, nariz y labios modelados; siluetas cuidadas y vestuario que se adapta al cuerpo. Cabello peinado cuando corresponda al diseño. Integra la especie en la forma de la cabeza, color, semillas, hojas y textura de la piel; integra gemas como facetas, brillo y material corporal. El torso y las extremidades están diseñados como un cuerpo, no como una fruta entera con bracitos pegados. Nada de recortes fotográficos de fruta, extremidades de palitos, muñecos toscos o mezcla de fotografía y dibujo. Belleza y acabado cuidado también en personajes pobres o antagonistas; expresar su situación con actuación y vestuario, sin volverlos grotescos por defecto. Conserva diferencias de edad, personalidad y complexión. En personajes YA aprobados conserva su identidad y anatomía: cambiar una ficha existente requiere regenerarla, no rediseñarla silenciosamente entre tomas.",
     specificTreatment(style),
   ].join("\n");
 }
@@ -26,8 +27,8 @@ function specificTreatment(style: string): string {
   if (style !== TELENOVELA_STYLE) return "";
   return [
     "TRATAMIENTO VISUAL: TELENOVELA 3D EXPRESIVA.",
-    "Animación 3D estilizada con volumen, colores vivos, iluminación clara y rostros legibles en pantalla de teléfono. Ojos, cejas y boca expresivos; gestos teatrales comprensibles sin deformar la identidad entre planos. Escenarios cotidianos reconocibles y pocos elementos que distraigan.",
-    "Respeta el tipo de seres elegido y las fichas aprobadas. En frutas conserva la silueta, piel, hojas y textura de su especie con rostro y extremidades integrados; no las conviertas en humanos disfrazados. En diamantes y minerales conserva facetas, reflejos y el material de cada personaje; no les añadas piel de fruta. Los demás tipos de seres conservan su propia anatomía y material. No mezcles especies por aplicar este estilo.",
+    "Animación 3D de telenovela con protagonistas humanoides hermosos, proporciones elegantes, rostros expresivos y acabado de largometraje pulido. Modelado continuo de cabeza, cuello, torso y extremidades; manos anatómicas estilizadas, ropa bien confeccionada y cabello con volumen y peinado definido cuando corresponda. Ojos grandes con párpados y pestañas, cejas articuladas, nariz y labios esculpidos. Materiales suaves y detallados, iluminación cálida y clara, colores ricos, volumen consistente. Escenarios cotidianos reconocibles; actuación teatral legible sin deformar la identidad. No convertir a todo el reparto en bebés cabezones ni en criaturas de terror.",
+    "Respeta el tipo de seres elegido y las fichas aprobadas. En frutas integra su identidad en la cabeza y la piel del cuerpo humanoide: por ejemplo semillas y color propios de la especie, hojas como detalle de la cabeza. El cuerpo lleva ropa y tiene torso y extremidades proporcionados; no es una fruta fotografiada a la que se añaden brazos. En diamantes y minerales conserva facetas, reflejos y el material de cada personaje; no les añadas piel de fruta. Los demás tipos de seres conservan su propia identidad. No mezcles especies por aplicar este estilo.",
     "Planos medios y primeros planos para diálogo y reacción, con planos abiertos solo cuando expliquen una acción. Composición vertical, separación clara entre personajes y fondo. Movimiento corporal expresivo y sincronización de boca con el diálogo aprobado. No introducir movimientos de cámara que oculten la acción. Mantener exactamente vestuario, proporciones, colores y voces aprobados. No añadir rótulos, marcas de canal ni personajes de referencia.",
   ].join("\n");
 }

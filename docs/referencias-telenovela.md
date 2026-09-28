@@ -1,6 +1,6 @@
 # Referencias y tratamiento de telenovela
 
-Revisión del 28 de septiembre de 2026. Se recuperaron transcripciones de los cinco enlaces mediante vidIQ. La transcripción de Cocardo y Cherry llegó en inglés. El reproductor de YouTube quedó negro y las miniaturas no estuvieron accesibles: **no se pudo verificar visualmente la animación ni sus movimientos**. El tratamiento visual añadido es una propuesta original pendiente de contrastar con fotogramas del usuario, no una reproducción visual verificada.
+Revisión del 28 de septiembre de 2026. Se recuperaron transcripciones de los cinco enlaces mediante vidIQ. La transcripción de Cocardo y Cherry llegó en inglés. El reproductor de YouTube quedó negro y las miniaturas no estuvieron accesibles. Posteriormente el usuario aportó capturas IMG_3470.jpeg y IMG_3471.jpeg y el perfil https://www.tiktok.com/@novelasfrutitas, que tampoco pudo abrirse directamente. **El diseño se contrastó con esas capturas; los movimientos de los videos no se pudieron verificar.**
 
 ## Referencias narrativas
 
@@ -16,7 +16,7 @@ Nueva opción **Telenovela 3D expresiva**, sin sustituir las cuatro existentes n
 
 Guion: comenzar dentro del conflicto, lenguaje cotidiano, deseo y obstáculo claros, acción y reacción, pocos personajes, consecuencias y cierre según la selección. Adaptar a ocho clips de ocho segundos; no comprimir las tramas largas completas. Crear historias originales, sin copiar nombres, escenas ni diálogos de las referencias. Conservar el género, tono, idioma, acento y continuidad elegidos.
 
-Propuesta visual pendiente de contraste: 3D estilizado, expresividad facial y corporal, material reconocible, iluminación clara, encuadres cercanos y composición vertical. Frutas conservan su especie; gemas conservan facetas y reflejos. Las fichas aprobadas mantienen identidad entre generaciones. No se promete reproducir exactamente los videos ni obtener sus resultados de audiencia.
+Dirección visual a partir de las capturas: personas humanoides estilizadas con cuerpos proporcionados, rostros hermosos y expresivos, ropa y cabello cuidados. La especie aparece en cabeza, piel, semillas, hojas o facetas; no se trata de una fruta completa con extremidades pequeñas añadidas. El ejemplo de fresa y naranja muestra torso, hombros, cintura, brazos y piernas humanoides con vestuario cotidiano. El mosaico incluye diferentes edades y situaciones, con una misma estética 3D pulida. No se incorporan contadores, marcas o textos de esas capturas. Las fichas aprobadas mantienen identidad entre generaciones; las fichas antiguas de anatomía incorrecta necesitan regenerarse para cambiarla. No se promete reproducir exactamente los videos ni obtener sus resultados de audiencia.
 
 Validación automatizada: propagación del tratamiento a las etapas narrativas y medios, conservación de los estilos anteriores y ausencia de mutación del contexto aprobado. No se realizaron generaciones pagadas para esta validación.
 

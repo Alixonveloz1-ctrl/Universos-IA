@@ -48,6 +48,8 @@ it("every selectable style has explicit shared direction in characters, location
     s.project.universeSnapshot.visualStyle = style;
     const direction = visualTreatment(style);
     expect(direction.split("\n").slice(2).join("\n").length).toBeGreaterThan(100);
+    expect(direction).toContain("DISEÑO HUMANOIDE DEL REPARTO");
+    expect(direction).toContain("no como una fruta entera con bracitos pegados");
     for (const role of ["character", "location", "shot"]) {
       expect(compileImagePrompt(s, s.targets.find(t => t.role === role)!, "")).toContain(direction);
     }
@@ -57,6 +59,14 @@ it("every selectable style has explicit shared direction in characters, location
     expect(storyPrompt).toContain(`género ${s.project.genre}; subgénero ${s.project.subgenre}; trama ${s.project.plotType}`);
     expect(storyPrompt).toContain("nunca sustituye el género o la trama");
   }
+});
+
+it("describes humanoid telenovela characters rather than whole fruit mascots", () => {
+  const direction = visualTreatment(TELENOVELA_STYLE);
+  expect(direction).toContain("protagonistas humanoides hermosos");
+  expect(direction).toContain("torso y extremidades proporcionados");
+  expect(direction).not.toContain("no las conviertas en humanos disfrazados");
+  expect(direction).not.toContain("conserva la silueta, piel, hojas");
 });
 
 it("isolates canonical character content from storyboards and other characters", () => {
