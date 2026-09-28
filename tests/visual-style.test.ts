@@ -49,6 +49,9 @@ it("every selectable style has explicit shared direction in characters, location
     const direction = visualTreatment(style);
     expect(direction.split("\n").slice(2).join("\n").length).toBeGreaterThan(100);
     expect(direction).toContain("DISEÑO HUMANOIDE DEL REPARTO");
+    expect(direction).toContain("DISEÑO DE MUJERES ADULTAS");
+    expect(direction).toContain("si se eligen Humanos, todos son humanos");
+    expect(direction).toContain("Los hombres adultos también tienen rostros armoniosos");
     expect(direction).toContain("no como una fruta entera con bracitos pegados");
     for (const role of ["character", "location", "shot"]) {
       expect(compileImagePrompt(s, s.targets.find(t => t.role === role)!, "")).toContain(direction);

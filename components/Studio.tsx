@@ -642,7 +642,7 @@ export default function Studio() {
               {field("Tipo de seres", selection.beings, (v) => setSelection({ ...selection, beings: v }), beings)}
               {field("Estilo visual", selection.visualStyle, (v) => setSelection({ ...selection, visualStyle: v }), styles)}
             </div>
-            <p className="muted">El estilo elegido se aplica a todos los personajes, escenarios y videos de esta historia.</p>
+            <p className="muted">Personajes humanos o humanoides atractivos según el tipo de seres. El estilo cambia la técnica visual y se mantiene en toda la historia.</p>
             {selection.visualStyle === TELENOVELA_STYLE && <p className="muted">{TELENOVELA_DESCRIPTION}</p>}
             <div className="grid" style={{ marginTop: 20 }}>
               {field(

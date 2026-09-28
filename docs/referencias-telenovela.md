@@ -39,3 +39,7 @@ Se inspeccionaron doce fotogramas distribuidos por cada uno de los cinco archivo
 - export_1790607997535.mp4, 71,54 s: mujer manzana con vestido verde y mujer sandía con uniforme; ambas con anatomía humanoide estilizada y el mismo acabado, frente a personaje masculino de complexión robusta.
 
 Se afinó Telenovela 3D expresiva con esas características y una dirección de planos y reacciones para el plan. No se copian marcas, contadores de frente ni argumentos literales. Los guiones siguen las selecciones narrativas del usuario. Pendiente: comprobar una generación real con el perfil afinado; no se han consumido generaciones para esta revisión.
+
+## Diseño común a todas las técnicas
+
+Por aclaración del usuario, las proporciones humanoides, el atractivo y la silueta femenina adulta de las referencias son un diseño base compartido por TODAS las opciones. La técnica cambia entre dibujo 2D, anime, render 3D o acabado realista; no cambia esa base anatómica. Humanos genera humanos sin rasgos de fruta ni gema; las otras categorías integran su identidad sobre estructura humanoide. El atractivo también se aplica a los hombres, manteniendo variaciones de complexión. Las pruebas recorren todo el catálogo para comprobar estas instrucciones. Las fichas aprobadas previamente conservan su identidad hasta ser regeneradas.
