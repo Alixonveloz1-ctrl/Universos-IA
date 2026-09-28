@@ -1,3 +1,4 @@
+import { withReferenceLook } from "../lib/director/reference-look";
 import { randomUUID, createHash } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -258,10 +259,16 @@ export async function execute(jobId: string, direct = false): Promise<"continue"
       if (recovered) result = recovered;
       else {
         assertNoPendingCall(job.checkpoint.pendingCall);
-        const refs = await refsFor(
+        let refs = await refsFor(
           inputRefs,
           imageLimits(s.project.models.image).maxInlineBytes,
         );
+        if (t.role === "character") {
+          // The universe style anchor remains before the editorial reference.
+          const guided = withReferenceLook(prompt, refs, imageLimits(s.project.models.image).maxReferenceImages, s.bible?.characters.find(character => character.id === t.entityId));
+          prompt = guided.prompt;
+          refs = guided.refs;
+        }
         await beforeCall(key);
         result = await imageGenerate(s.project.models.image, prompt, refs);
       }
