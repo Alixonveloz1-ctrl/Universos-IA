@@ -1,4 +1,5 @@
 import { femaleReference } from "./reference-look";
+import { renderHair } from "./hair";
 import { z } from "zod";
 import {
   ideas,
@@ -127,7 +128,10 @@ export function compileImagePrompt(
   t: Target,
   instructions: string,
 ) {
-  const b = s.bible!;
+  const b = {
+    ...s.bible!,
+    characters: s.bible!.characters.map(c => ({ ...c, hair: renderHair(s.project.id, c) })),
+  };
   const entity =
     t.role === "character"
       ? b.characters.find((x) => x.id === t.entityId)
@@ -156,7 +160,7 @@ export function compileImagePrompt(
       "Create a beautiful, expressive living female animation protagonist using the attached editorial portrait as the visual design reference. Match its face appeal, eye design, head-to-body scale, natural curves, organic surface and relaxed expressive pose. Preserve the requested age and identity. No deduzcas género de la fruta, ropa o profesión. Fruit heads retain the recognizable fruit silhouette with integrated facial features; no human head merely painted red. Show a lively asymmetrical three-quarter pose, relaxed hands, soft expressive eyelids and a distinct appealing facial expression. Skin and fruit surface look flexible with subtle natural texture and varied soft highlights; clothing looks like real woven or knit fabric, not a painted shell. Full body in vivid clear colors with warm flattering light. For adult women, give the contemporary casual outfit specified in her wardrobe a flattering fit and a relaxed self-assured attitude.",
       `Chosen technique: ${s.project.universeSnapshot.visualStyle}. Type of beings: ${s.project.universeSnapshot.beings}.`,
       specificTreatment(s.project.universeSnapshot.visualStyle),
-      "The specification below defines identity and clothing. Material identifies the species and skin color; render fruit and humans as living surfaces, and minerals according to their own material. The editorial reference defines appearance quality; do not copy its outfit or species. Human characters retain human heads and skin. Render the exact wardrobe from the character specification below, including its fabric and footwear; clothing changes belong in the approved Bible, not in this portrait. Approved own-character images define identity; other cast images establish shared rendering only.",
+      "The specification below defines identity, HAIR and clothing. Render the character's specified hair as visible humanlike hair with real strands, volume and the stated color and texture on top of the fruit or gemstone head; preserve the recognizable species in the visible face and body. Material identifies the species and skin color; render fruit and humans as living surfaces, and minerals according to their own material. The editorial reference defines appearance quality; do not copy its outfit, species or hairstyle. Human characters retain human heads and skin. Render the exact wardrobe from the character specification below, including its fabric and footwear; clothing changes belong in the approved Bible, not in this portrait. Approved own-character images define identity; other cast images establish shared rendering only.",
       JSON.stringify({name:characterData.name,role:characterData.role,gender:characterData.gender,age:characterData.age, speciesAndMaterial:characterData.material,color:characterData.color,hair:characterData.hair,eyes:characterData.eyes,wardrobe:characterData.wardrobe,accessories:characterData.accessories,lockedIdentityTraits:characterData.lockedTraits}),
       `User instructions: ${instructions}`,
     ].join("\n\n");
@@ -216,7 +220,7 @@ export function compileVideoPrompt(s: Snapshot, c: Clip, instructions: string) {
         version: s.project.bible?.id,
         characters: s.bible!.characters.filter((x) =>
           c.characterIds.includes(x.id),
-        ),
+        ).map(x => ({ ...x, hair: renderHair(s.project.id, x) })),
         locations: s.bible!.locations.filter((x) => x.id === c.locationId),
       }),
     "Approved observed incoming state: " +
