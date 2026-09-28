@@ -38,6 +38,7 @@ vi.mock("../lib/persistence/google", () => {
     objectPath: (p: string, v: string, n: string) =>
       `universos-ia/${p}/${v}/${n}`,
     privateObject: (key: string) => ({
+      delete: async () => { memory.files.delete(key); },
       exists: async () => [memory.files.has(key)],
       save: async (
         bytes: Buffer,
@@ -111,7 +112,7 @@ vi.mock("../lib/providers/vertex", () => ({
   startVideo: vi.fn(),
 }));
 import { textGenerate, imageGenerate, startVideo } from "../lib/providers/vertex";
-import { execute } from "../worker/main";
+import { execute, startupCheck } from "../worker/main";
 import { jobControl } from "../lib/persistence/projects";
 const jobId = "e".repeat(64);
 beforeEach(async () => {
@@ -217,4 +218,22 @@ it("uses the previous chapter's final frame as the first clip's actual image inp
   vi.unstubAllEnvs();
   expect(startVideo, JSON.stringify((memory.rows.get("jobs/" + jobId) as Job).error)).toHaveBeenCalledOnce();
   expect(JSON.stringify(vi.mocked(startVideo).mock.calls[0])).toContain(Buffer.from("previous chapter frame").toString("base64"));
+});
+
+it("startup check verifies storage and Firestore without calling generators", async () => {
+  vi.mocked(startVideo).mockReset();
+  await startupCheck();
+  expect(memory.rows.get("system/startupCheck")).toEqual(expect.objectContaining({ status: "ok" }));
+  expect(memory.files.size).toBe(0);
+  expect(textGenerate).not.toHaveBeenCalled();
+  expect(imageGenerate).not.toHaveBeenCalled();
+  expect(startVideo).not.toHaveBeenCalled();
+});
+it("records a startup capacity failure rather than leaving the job queued forever", async () => {
+  memory.rows.set("system/workerSlots", { slots: { another: Date.now() + 60000 } });
+  await expect(execute(jobId)).rejects.toThrow("otro trabajo");
+  const job = memory.rows.get(`jobs/${jobId}`) as Job;
+  expect(job.state).toBe("failed");
+  expect(job.error?.code).toBe("CONCURRENCY");
+  expect(imageGenerate).not.toHaveBeenCalled();
 });

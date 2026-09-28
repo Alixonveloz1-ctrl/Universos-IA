@@ -469,7 +469,7 @@ export default function Studio() {
     instructions = "",
     optionId?: string,
   ) => {
-    await api(`projects/${pid}/actions`, "POST", {
+    const result = await api(`projects/${pid}/actions`, "POST", {
       type,
       expectedRevision: data!.project.revision,
       requestId: crypto.randomUUID(),
@@ -478,6 +478,7 @@ export default function Studio() {
       ...(optionId ? { optionId } : {}),
     });
     await refresh(pid);
+    if (result.warning) setError(result.warning);
   };
   const active = !!data?.project.nextChapterId || (!!data?.job &&
     (data.job.blocksNewJob ??
@@ -674,9 +675,9 @@ export default function Studio() {
             <details>
               <summary>Modelos e idioma</summary>
               <div className="grid">
-                {(["image", "video"] as const).map((kind) => (
+                {(["text", "image", "video"] as const).map((kind) => (
                   <label key={kind}>
-                    {kind === "image"
+                    {kind === "text" ? "Director de historias" : kind === "image"
                       ? "Generador de imagen"
                       : "Generador de video"}
                     <select
@@ -776,7 +777,7 @@ export default function Studio() {
                     : "Video"}
                 <select
                   value={data.project.models[kind]}
-                  disabled={busy || active}
+                  disabled={busy || !!data.project.nextChapterId}
                   onChange={(e) =>
                     void perform(() =>
                       patch({

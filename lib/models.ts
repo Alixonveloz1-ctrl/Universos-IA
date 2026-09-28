@@ -1,4 +1,7 @@
 export const MODELS = {
+  "gemini-3.1-pro-preview": {
+    name: "Gemini 3.1 Pro Preview", kind: "text", location: "global", modes: ["text"],
+  },
   "gemini-3-flash-preview": {
     name: "Gemini 3 Flash Preview",
     kind: "text",

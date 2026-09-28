@@ -160,3 +160,29 @@ test("SIMULATED API: a universe groups chapters and opens its continuation witho
   await expect(page.getByRole("heading", { name: "Cristal", exact: true })).toHaveCount(1);
   await expect(page.getByRole("button", { name: /Capítulo 2/ })).toBeVisible();
 });
+
+test("SIMULATED API: queued job does not lock generator selection", async ({ page }) => {
+  const s = snapshot();
+  let selected = "";
+  await page.route("**/api/**", async route => {
+    const req = route.request(), path = new URL(req.url()).pathname.slice(5);
+    let body: unknown = {};
+    if (path === "catalog") body = { defaults: s.project.models };
+    if (path === "projects") body = [{ id: "test", title: "En espera", stage: "ideas" }];
+    if (path === "projects/test" && req.method() === "PATCH") {
+      s.project.models = req.postDataJSON().models; selected = s.project.models.text;
+    }
+    if (path === "projects/test") body = { ...s, narratives: [], exports: [], job: { id: "queue", state: "queued", resumable: true, blocksNewJob: true } };
+    await route.fulfill({ json: body });
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: /En espera/ }).click();
+  await page.getByText("Modelos de esta historia", { exact: true }).click();
+  const director = page.getByLabel(/^Director/);
+  await expect(director).toBeEnabled();
+  await director.selectOption("gemini-3.1-pro-preview");
+  await expect(director).toHaveValue("gemini-3.1-pro-preview");
+  expect(selected).toBe("gemini-3.1-pro-preview");
+  await expect(page.getByLabel(/^Imágenes/)).toBeEnabled();
+  await expect(page.getByLabel(/^Video/)).toBeEnabled();
+});

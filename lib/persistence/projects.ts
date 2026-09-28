@@ -189,6 +189,15 @@ export async function editProject(
       "REVISION",
     );
     assert(!p.nextChapterId, "Este capítulo ya tiene continuación y se conserva como historial.");
+    if (change.models && !change.selectedIdeaId && !change.kind && !change.versionId && !change.approve && change.data === undefined) {
+      // Models are preferences for future jobs; an executing snapshot stays unchanged.
+      const active = p.activeJobId ? (await tx.get(db().doc(`jobs/${p.activeJobId}`))).data() as Job | undefined : undefined;
+      if (active?.state === "queued" && active.attempts === 0 && !(active.leaseUntil > Date.now()) && !active.checkpoint.pendingCall && !active.checkpoint.operation)
+        tx.update(db().doc(`jobs/${active.id}`), { state: "stopped", stopRequested: true, error: null, checkpoint: { ...active.checkpoint, closedAt: Date.now(), reason: "models-changed-before-start" } });
+      const updated = { models: change.models, updatedAt: Date.now() };
+      tx.update(projectRef(projectId), updated);
+      return { ...p, ...updated };
+    }
     const patch: Partial<Project> = {
       revision: p.revision + 1,
       updatedAt: Date.now(),
@@ -466,7 +475,8 @@ export async function jobControl(id: string, operation: "stop" | "resume") {
       j = (await tx.get(ref)).data() as Job;
     assert(j, "Trabajo no encontrado");
     if (operation === "stop") {
-      tx.update(ref, { stopRequested: true });
+      const neverStarted = j.state === "queued" && j.attempts === 0 && !(j.leaseUntil > Date.now()) && !j.checkpoint.pendingCall && !j.checkpoint.operation;
+      tx.update(ref, { stopRequested: true, ...(neverStarted ? { state: "stopped" } : {}) });
       return j;
     }
     const p = (await tx.get(projectRef(j.projectId))).data() as Project;

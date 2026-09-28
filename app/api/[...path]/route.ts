@@ -14,7 +14,7 @@ import {
 } from "@/lib/persistence/projects";
 import { login, originCheck, requireSession, sessionCookie } from "@/lib/auth";
 import { action, id, projectInput } from "@/lib/schemas";
-import { dispatch } from "@/lib/jobs";
+import { dispatch, checkWorker, diagnoseQueuedJob } from "@/lib/jobs";
 import { model, MODELS, defaults } from "@/lib/models";
 import { AppError, safeError, assert } from "@/lib/errors";
 import {
@@ -139,6 +139,7 @@ async function handler(
         );
         for (const kind of ["text", "image", "video"] as const)
           model(p.models[kind], kind);
+        await checkWorker({ automaticUniverse: true, models: p.models } as Project);
         return response(await createProject(p), 201);
       }
     }
@@ -154,9 +155,10 @@ async function handler(
           projectRef(pid).collection("narratives").get(),
           projectRef(pid).collection("exports").get(),
         ]);
-        const active = s.project.activeJobId
+        let active = s.project.activeJobId
           ? (await db().doc(`jobs/${s.project.activeJobId}`).get()).data()
           : null;
+        if (active) active = await diagnoseQueuedJob(active as Job);
         return response({
           ...s,
           narratives: n.docs.map((d) => d.data()),
@@ -165,7 +167,7 @@ async function handler(
             ? {
                 id: active.id,
                 state: active.state,
-                error: active.error || null,
+                error: active.error || (active.dispatchError ? { code: "DISPATCH", message: active.dispatchError } : null),
                 stopRequested: active.stopRequested,
                 heartbeat: active.heartbeat,
                 leaseUntil: active.leaseUntil,
@@ -198,17 +200,17 @@ async function handler(
       }
       if (paths[2] === "actions" && req.method === "POST") {
         const a = action.parse(await body(req));
+        await checkWorker((await readSnapshot(pid)).project);
         const j = await enqueue(pid, a);
         if (j.state === "queued" && !j.executionName)
           try {
             await dispatch(j);
-          } catch {
+          } catch (error) {
             return response(
               {
                 jobId: j.id,
                 state: j.state,
-                warning:
-                  "El arranque no se confirmó. El trabajo quedó guardado; puedes reanudarlo.",
+                warning: safeError(error).message,
               },
               202,
             );

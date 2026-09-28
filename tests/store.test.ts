@@ -341,3 +341,28 @@ it("keeps the same universe when a continuation chooses its proposal", async () 
   expect(selected.universeSnapshot).toEqual(snapshot().project.universeSnapshot);
   expect((memory.rows.get(`projects/${next.id}/targets/character_a`) as Target).needsReview).toBe(false);
 });
+
+it("changing model cancels a never-started queue entry and unblocks a new request", async () => {
+  const j = await enqueue("test", a);
+  const models = { ...snapshot().project.models, text: "gemini-3.1-pro-preview" };
+  const updated = await editProject("test", 1, { models });
+  expect(updated.models).toEqual(models);
+  expect(updated.revision).toBe(1);
+  expect((memory.rows.get(`jobs/${j.id}`) as Job).state).toBe("stopped");
+  const next = await enqueue("test", { ...a, requestId: "new-model-request" });
+  expect(next.snapshot.project.models.text).toBe("gemini-3.1-pro-preview");
+});
+it("changing future models does not invalidate or alter an executing snapshot", async () => {
+  const j = await enqueue("test", a);
+  memory.rows.set(`jobs/${j.id}`, { ...j, state: "running", leaseUntil: Date.now() + 60000, attempts: 1 });
+  await editProject("test", 1, { models: { ...snapshot().project.models, image: "gemini-3.1-flash-image" } });
+  const running = memory.rows.get(`jobs/${j.id}`) as Job;
+  expect(running.state).toBe("running");
+  expect(running.snapshot.project.models.image).toBe(snapshot().project.models.image);
+  expect((memory.rows.get("projects/test") as Project).revision).toBe(1);
+});
+it("stopping a never-started queued job releases the queue immediately", async () => {
+  const j = await enqueue("test", a);
+  await jobControl(j.id, "stop");
+  expect((memory.rows.get(`jobs/${j.id}`) as Job).state).toBe("stopped");
+});

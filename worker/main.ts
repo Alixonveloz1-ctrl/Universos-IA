@@ -65,6 +65,13 @@ export async function execute(jobId: string) {
       attempts: j.attempts + 1,
     });
     return true;
+  }).catch(async (e) => {
+    await db().runTransaction(async tx => {
+      const current = (await tx.get(ref)).data() as Job | undefined;
+      if (current?.state === "queued" && !(current.leaseUntil > Date.now()))
+        tx.update(ref, { state: "failed", error: safeError(e) });
+    }).catch(() => {});
+    throw e;
   });
   if (!acquired) return;
   const job = (await ref.get()).data() as Job;
@@ -542,7 +549,20 @@ export async function execute(jobId: string) {
     await rm(dir, { recursive: true, force: true });
   }
 }
-if (process.env.JOB_ID)
+export async function startupCheck() {
+  const key = objectPath("system", randomUUID(), "startup.txt");
+  const file = privateObject(key);
+  await db().doc("system/startupCheck").set({ at: Date.now(), status: "checking" });
+  await file.save("universos-ia-startup", { resumable: false });
+  const [content] = await file.download();
+  assert(content.toString() === "universos-ia-startup", "No se pudo verificar el almacenamiento.");
+  await file.delete();
+  await db().doc("system/startupCheck").set({ at: Date.now(), status: "ok" });
+  console.log("Arranque, Firestore y almacenamiento verificados. Sin llamadas a generadores.");
+}
+if (process.env.WORKER_SELF_TEST === "1")
+  startupCheck().catch(e => { console.error(safeError(e)); process.exitCode = 1; });
+else if (process.env.JOB_ID)
   execute(process.env.JOB_ID).catch((e) => {
     console.error(safeError(e));
     process.exitCode = 1;
