@@ -132,19 +132,31 @@ it("locks character gender and age to the Bible roster and repairs a mismatched 
   expect(generate.mock.calls[1][2]).toMatchObject({ properties: { gender: { const: "mujer" }, age: { const: "adulta" } } });
 });
 
-it("reassesses an old rejected plan and repairs real causal conflicts without regenerating its saved draft", async () => {
+it("recovers the newest valid plan despite saved review rejections without a paid call", async () => {
   const { j, before, checkpoint } = execution();
   j.type = "plan";
-  const draft = j.snapshot.plan!;
-  j.checkpoint.director_0 = draft;
-  j.checkpoint.review_0 = { errors: ["Un personaje está fuera de cámara"], suggestions: [] };
-  generate.mockResolvedValueOnce({ errors: ["Clip 6: activación automática aprobada contradice pulsación manual; conservar activación automática"], suggestions: [] })
-    .mockResolvedValueOnce(draft)
-    .mockResolvedValueOnce({ errors: [], suggestions: ["Puede aclararse un cambio de plano"] });
-  expect(await runDirector(j, before, checkpoint)).toEqual(draft);
-  expect(generate).toHaveBeenCalledTimes(3);
-  expect(generate.mock.calls[1][1]).toContain("activación automática aprobada");
-  generate.mockClear();
+  const draft = structuredClone(j.snapshot.plan!);
+  draft.clips[0].goal = "Newest saved draft";
+  j.checkpoint.director_0 = j.snapshot.plan;
+  j.checkpoint.director_1 = draft;
+  j.checkpoint.review_plan_v2_1 = { errors: ["Old rejection"], suggestions: [] };
   expect(await runDirector(j, before, checkpoint)).toEqual(draft);
   expect(generate).not.toHaveBeenCalled();
+});
+it("generates a valid plan in one call with continuity and native audio instructions", async () => {
+  const { j, before, checkpoint } = execution();
+  j.type = "plan";
+  generate.mockResolvedValueOnce(j.snapshot.plan);
+  expect(await runDirector(j, before, checkpoint)).toEqual(j.snapshot.plan);
+  expect(generate).toHaveBeenCalledTimes(1);
+  expect(generate.mock.calls[0][1]).toContain("CONTINUIDAD DEL GUION");
+  expect(generate.mock.calls[0][1]).toContain("audio nativo de Veo");
+});
+it("still rejects malformed plans without running a model review", async () => {
+  const { j, before, checkpoint } = execution();
+  j.type = "plan";
+  generate.mockResolvedValue({ clips: [] });
+  await expect(runDirector(j, before, checkpoint)).rejects.toMatchObject({ code: "DIRECTOR_JSON" });
+  expect(generate).toHaveBeenCalledTimes(2);
+  expect(Object.keys(j.checkpoint).some(key => key.startsWith("review_"))).toBe(false);
 });
