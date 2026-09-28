@@ -1,4 +1,5 @@
 import { randomUUID, createHash } from "node:crypto";
+import { z } from "zod";
 import type { Transaction } from "@google-cloud/firestore";
 import { db } from "./google";
 import { assert } from "../errors";
@@ -13,6 +14,7 @@ import {
   validatePlan,
   type Action,
   universe,
+  idea,
   projectInput,
 } from "../schemas";
 import type {
@@ -28,6 +30,76 @@ export async function getProject(id: string) {
   const p = (await projectRef(id).get()).data() as Project | undefined;
   assert(p?.owner === "personal", "Historia no encontrada.");
   return p;
+}
+export async function deleteEmptyUniverse(id: string) {
+  await db().runTransaction(async tx => {
+    const ref = projectRef(id);
+    const p = (await tx.get(ref)).data() as Project | undefined;
+    assert(p?.owner === "personal", "Universo no encontrado.");
+    assert(p.automaticUniverse && (!p.universeId || p.universeId === `story-${id}`) &&
+      (p.chapterNumber || 1) === 1 && !p.previousChapter && !p.nextChapterId &&
+      !p.story && !p.bible && !p.plan,
+      "Solo puedes borrar un universo sin historia desarrollada ni capítulos.");
+    const [assets, targets, narratives, exports, jobs] = await Promise.all([
+      tx.get(ref.collection("assets")), tx.get(ref.collection("targets")),
+      tx.get(ref.collection("narratives")), tx.get(ref.collection("exports")),
+      tx.get(db().collection("jobs").where("projectId", "==", id)),
+    ]);
+    assert(!assets.docs.length && !targets.docs.length && !narratives.docs.length && !exports.docs.length,
+      "Este universo ya tiene material producido; no se puede borrar como borrador.");
+    assert(jobs.docs.length < 50 && jobs.docs.every(s => {
+      const j = s.data() as Job;
+      return ["failed", "stopped", "completed"].includes(j.state) &&
+        !(j.leaseUntil > Date.now()) && !j.checkpoint?.pendingCall &&
+        !j.checkpoint?.operation && ["ideas", "story"].includes(j.type);
+    }), "Hay una generación activa o pendiente. No se borró nada.");
+    assert(!p.activeJobId || jobs.docs.some(s => s.id === p.activeJobId),
+      "No se pudo comprobar el último trabajo. No se borró nada.");
+    let savedUniverse;
+    if (p.universeId) {
+      savedUniverse = (await tx.get(db().doc(`universes/${p.universeId}`))).data();
+      assert(savedUniverse?.projectId === id, "Este universo tiene otra referencia y no se puede borrar.");
+    }
+    const checkpoints = await Promise.all(jobs.docs.map(s =>
+      tx.get(db().doc(`jobs/${s.id}`).collection("checkpoints"))));
+    assert(checkpoints.reduce((n, q) => n + q.docs.length, 0) < 400,
+      "Demasiados intentos para borrar de una sola vez.");
+    for (let i = 0; i < jobs.docs.length; i++) {
+      for (const c of checkpoints[i].docs)
+        tx.delete(db().doc(`jobs/${jobs.docs[i].id}`).collection("checkpoints").doc(c.id));
+      tx.delete(db().doc(`jobs/${jobs.docs[i].id}`));
+    }
+    if (p.universeId) tx.delete(db().doc(`universes/${p.universeId}`));
+    tx.delete(ref);
+  });
+}
+export async function recoverReviewedIdeas(id: string) {
+  return db().runTransaction(async tx => {
+    const ref = db().doc(`jobs/${id}`);
+    const j = (await tx.get(ref)).data() as Job | undefined;
+    assert(j?.type === "ideas" && j.state === "failed" && j.error?.code === "CONTINUITY" &&
+      !(j.leaseUntil > Date.now()) && !j.checkpoint?.pendingCall,
+      "Este intento no tiene tres propuestas recuperables.");
+    const project = projectRef(j.projectId);
+    const p = (await tx.get(project)).data() as Project | undefined;
+    assert(p?.owner === "personal" && p.activeJobId === id &&
+      p.revision === j.snapshot.project.revision && !p.nextChapterId,
+      "La historia cambió; no se modificaron sus propuestas.");
+    const schema = z.object({ ideas: z.array(idea.extend({ universe })).length(3) }).strict()
+      .refine(v => new Set(v.ideas.map(i => i.id)).size === 3);
+    const latest = await tx.get(ref.collection("checkpoints").doc("director_1"));
+    const original = await tx.get(ref.collection("checkpoints").doc("director_0"));
+    const candidate = [latest.data()?.value, original.data()?.value]
+      .map(v => schema.safeParse(v)).find(v => v.success);
+    assert(candidate?.success, "No hay tres propuestas completas guardadas.");
+    const ideas = j.optionId
+      ? p.ideas.map(i => i.id === j.optionId ? { ...candidate.data.ideas[0], id: i.id } : i)
+      : candidate.data.ideas;
+    assert(ideas.length === 3, "No hay tres propuestas para recuperar.");
+    tx.update(project, { ideas, revision: p.revision + 1, updatedAt: Date.now() });
+    tx.update(ref, { state: "completed", error: null, checkpoint: { ...j.checkpoint, recoveredFromReview: true } });
+    return { recovered: true, projectId: p.id };
+  });
 }
 export async function readSnapshot(
   id: string,

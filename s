@@ -17,6 +17,8 @@ if (env.GCP_PROJECT_ID !== 'alixon-jhan' || env.GCS_OUTPUT_BUCKET !== 'universos
   throw Error('El ejecutor no corresponde al proyecto y bucket de Universos IA. No se modificó.');
 JS
 rm -f "$build_dir/job.json"
+# Allow the web app to report the real outcome of a dispatched execution.
+./d
 image="$region-docker.pkg.dev/$project/universos-ia/worker:isolated-$(git rev-parse --short HEAD)"
 cp package.json package-lock.json "$build_dir/"
 cp -R lib worker "$build_dir/"

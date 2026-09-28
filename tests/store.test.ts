@@ -9,7 +9,7 @@ vi.mock("../lib/persistence/google", () => {
     return { path, collection: (c: string) => collection(path + "/" + c) };
   }
   function collection(path: string) {
-    return { path, query: true, doc: (id: string) => doc(path + "/" + id) };
+    return { path, query: true, where: (_field: string, _op: string, value: unknown) => ({ path, query: true, filter: value }), doc: (id: string) => doc(path + "/" + id) };
   }
   return {
     db: () => ({
@@ -22,15 +22,16 @@ vi.mock("../lib/persistence/google", () => {
         await before;
         const changes: (() => void)[] = [];
         const tx = {
-          get: async (ref: { path: string; query?: boolean }) => {
+          get: async (ref: { path: string; query?: boolean; filter?: unknown }) => {
             if (changes.length)
               throw Error("Firestore forbids reads after writes");
             if (ref.query) {
               const docs = [...memory.rows]
                 .filter(
-                  ([p]) =>
+                  ([p, v]) =>
                     p.startsWith(ref.path + "/") &&
-                    p.split("/").length === ref.path.split("/").length + 1,
+                    p.split("/").length === ref.path.split("/").length + 1 &&
+                    (ref.filter === undefined || (v as Job).projectId === ref.filter),
                 )
                 .map(([p, v]) => ({
                   id: p.split("/").at(-1),
@@ -80,6 +81,8 @@ import {
   createNextChapter,
   jobControl,
   closeAmbiguousJob,
+  deleteEmptyUniverse,
+  recoverReviewedIdeas,
 } from "../lib/persistence/projects";
 import type { Asset, Job, Project, Target } from "../lib/types";
 beforeEach(() => {
@@ -100,6 +103,45 @@ const a = {
   requestId: "dddddddd-dddd-4ddd-addd-dddddddddddd",
   instructions: "",
 };
+it("deletes only an idle empty draft, its failed jobs and saved checkpoints", async () => {
+  for (const key of [...memory.rows.keys()]) if (key.startsWith("projects/test/")) memory.rows.delete(key);
+  const p = memory.rows.get("projects/test") as Project;
+  memory.rows.set("projects/test", { ...p, automaticUniverse: true, stage: "story", chapterNumber: 1,
+    universeId: "story-test", selectedIdeaId: "idea-1", story: undefined, bible: undefined, plan: undefined,
+    previousChapter: undefined, nextChapterId: undefined });
+  memory.rows.set("universes/story-test", { projectId: "test" });
+  memory.rows.set("jobs/old", { id: "old", projectId: "test", type: "ideas", state: "failed", leaseUntil: 0, checkpoint: {} });
+  memory.rows.set("jobs/old/checkpoints/director_1", { value: "old draft" });
+  await deleteEmptyUniverse("test");
+  expect([...memory.rows.keys()].filter(k => k === "projects/test" || k === "universes/story-test" || k.startsWith("jobs/old"))).toEqual([]);
+});
+it("restores three valid saved ideas after an overstrict review without invoking a generator", async () => {
+  for (const key of [...memory.rows.keys()]) if (key.startsWith("projects/test/")) memory.rows.delete(key);
+  const p = memory.rows.get("projects/test") as Project;
+  memory.rows.set("projects/test", { ...p, revision: 1, stage: "ideas", activeJobId: "old", ideas: [] });
+  const { revision: _revision, ...universe } = p.universeSnapshot;
+  void _revision;
+  const ideas = [1, 2, 3].map(n => ({ id: `i${n}`, title: `Historia ${n}`, synopsis: `Propuesta ${n}`, universe }));
+  memory.rows.set("jobs/old", { id: "old", projectId: "test", type: "ideas", state: "failed", error: { code: "CONTINUITY", message: "Objeción menor" }, leaseUntil: 0, checkpoint: {}, snapshot: { project: { revision: 1 } } });
+  memory.rows.set("jobs/old/checkpoints/director_1", { value: { ideas } });
+  await recoverReviewedIdeas("old");
+  expect((memory.rows.get("projects/test") as Project).ideas).toEqual(ideas);
+  expect((memory.rows.get("jobs/old") as Job).state).toBe("completed");
+});
+it("refuses to delete a draft while an execution might still run", async () => {
+  for (const key of [...memory.rows.keys()]) if (key.startsWith("projects/test/")) memory.rows.delete(key);
+  const p = memory.rows.get("projects/test") as Project;
+  memory.rows.set("projects/test", { ...p, automaticUniverse: true, universeId: "", story: undefined, bible: undefined, plan: undefined, nextChapterId: undefined, previousChapter: undefined });
+  memory.rows.set("jobs/active", { id: "active", projectId: "test", type: "ideas", state: "queued", leaseUntil: 0, checkpoint: {} });
+  await expect(deleteEmptyUniverse("test")).rejects.toThrow("pendiente");
+  expect(memory.rows.has("projects/test")).toBe(true);
+});
+it("refuses to delete a universe with media or an approved story", async () => {
+  const p = memory.rows.get("projects/test") as Project;
+  memory.rows.set("projects/test", { ...p, automaticUniverse: true, universeId: "", story: undefined, bible: undefined, plan: undefined, nextChapterId: undefined, previousChapter: undefined });
+  await expect(deleteEmptyUniverse("test")).rejects.toThrow("material producido");
+  expect(memory.rows.has("projects/test")).toBe(true);
+});
 it("SIMULATED transactions: concurrent duplicate submissions produce one job", async () => {
   const [x, y] = await Promise.all([enqueue("test", a), enqueue("test", a)]);
   expect(x.id).toBe(y.id);

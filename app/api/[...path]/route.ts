@@ -2,6 +2,8 @@ import { z } from "zod";
 import { db, signedUrl } from "@/lib/persistence/google";
 import {
   createProject,
+  deleteEmptyUniverse,
+  recoverReviewedIdeas,
   createNextChapter,
   enqueue,
   readSnapshot,
@@ -124,6 +126,7 @@ async function handler(
             universeName: d.data().universeSnapshot?.name || d.data().title,
             chapterNumber: d.data().chapterNumber || 1,
             stage: d.data().stage,
+            removableDraft: d.data().automaticUniverse && !d.data().story && !d.data().bible && !d.data().plan && !d.data().nextChapterId,
             updatedAt: d.data().updatedAt,
           })),
         );
@@ -145,6 +148,10 @@ async function handler(
     }
     if (paths[0] === "projects" && paths.length >= 2) {
       const pid = paths[1];
+      if (paths.length === 2 && req.method === "DELETE") {
+        await deleteEmptyUniverse(pid);
+        return response({ deleted: true });
+      }
       if (paths.length === 3 && paths[2] === "next-chapter" && req.method === "POST") {
         const b = z.object({ expectedRevision: z.number().int().nonnegative() }).strict().parse(await body(req));
         return response(await createNextChapter(pid, b.expectedRevision), 201);
@@ -166,6 +173,7 @@ async function handler(
           job: active
             ? {
                 id: active.id,
+                type: active.type,
                 state: active.state,
                 error: active.error || (active.dispatchError ? { code: "DISPATCH", message: active.dispatchError } : null),
                 stopRequested: active.stopRequested,
@@ -265,6 +273,8 @@ async function handler(
       assert(j, "Trabajo no encontrado");
       const p = (await projectRef(j.projectId).get()).data() as Project;
       assert(p?.owner === "personal", "Trabajo no autorizado");
+      if (req.method === "POST" && paths.length === 3 && paths[2] === "recover-ideas")
+        return response(await recoverReviewedIdeas(j.id));
       if (req.method === "GET")
         return response({
           id: j.id,

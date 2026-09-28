@@ -383,7 +383,7 @@ export default function Studio() {
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [projects, setProjects] = useState<
-      { id: string; title: string; stage: string; universeId?: string; universeName?: string; chapterNumber?: number }[]
+      { id: string; title: string; stage: string; universeId?: string; universeName?: string; chapterNumber?: number; removableDraft?: boolean }[]
     >([]),
     [data, setData] = useState<Data | null>(null),
     [tab, setTab] = useState("Historia");
@@ -736,6 +736,15 @@ export default function Studio() {
                 {chapters.map(p => <button key={p.id} onClick={() => void perform(async () => { await refresh(p.id); setTab("Historia"); })}>
                   Capítulo {p.chapterNumber || 1} · {p.title}
                 </button>)}
+                {chapters.length === 1 && chapters[0].removableDraft && (
+                  <button disabled={busy} onClick={() => {
+                    if (!window.confirm("¿Borrar este universo y sus intentos fallidos? Esta acción no se puede deshacer.")) return;
+                    void perform(async () => {
+                      await api(`projects/${chapters[0].id}`, "DELETE");
+                      await refresh();
+                    });
+                  }}>Borrar borrador fallido</button>
+                )}
               </section>;
             })}
           </div>
@@ -829,6 +838,12 @@ export default function Studio() {
               {data.job.error && <p role="alert">{data.job.error.message}</p>}
               {data.job.state === "queued" && !data.job.error && <p>Solicitud recibida. Comprobando si Google inició el ejecutor…</p>}
               <div className="actions">
+                {data.job.type === "ideas" && data.job.error?.code === "CONTINUITY" && data.job.resumable && (
+                  <button disabled={busy} onClick={() => void perform(async () => {
+                    await api(`jobs/${data.job!.id}/recover-ideas`, "POST", {});
+                    await refresh(pid);
+                  })}>Recuperar las 3 propuestas sin generarlas otra vez</button>
+                )}
                 {active && (
                   <button
                     disabled={busy}
@@ -845,7 +860,8 @@ export default function Studio() {
                 {data.job.state !== "completed" &&
                   !data.job.closedAt &&
                   data.job.resumable &&
-                  !(data.job.state === "queued" && !!(data.job.operationName || data.job.executionName)) && (
+                  !(data.job.state === "queued" && !!(data.job.operationName || data.job.executionName)) &&
+                  !(data.job.type === "ideas" && data.job.error?.code === "CONTINUITY") && (
                     <button
                       disabled={busy}
                       onClick={() =>

@@ -89,8 +89,23 @@ it("generates three universe drafts from dropdown preferences in the ideas call"
   const { revision: _revision, ...universe } = j.snapshot.project.universeSnapshot;
   void _revision;
   const result = { ideas: [1, 2, 3].map(n => ({ id: `i${n}`, title: `Historia ${n}`, synopsis: `Propuesta ${n}`, universe })) };
-  generate.mockResolvedValueOnce(result).mockResolvedValueOnce({ errors: [], suggestions: [] });
+  generate.mockResolvedValueOnce(result);
   expect(await runDirector(j, before, checkpoint)).toEqual(result);
+  expect(generate).toHaveBeenCalledTimes(1);
   expect(generate.mock.calls[0][1]).toContain("solo se guardará como universo");
   expect(JSON.stringify(generate.mock.calls[0][2])).toContain('"universe"');
+});
+it("recovers all three ideas from a failed subjective review without paying for another generation", async () => {
+  const { j, before, checkpoint } = execution();
+  j.type = "ideas";
+  j.snapshot.project.automaticUniverse = true;
+  const { revision: _revision, ...universe } = j.snapshot.project.universeSnapshot;
+  void _revision;
+  const older = { ideas: [1, 2, 3].map(n => ({ id: `i${n}`, title: `Idea ${n}`, synopsis: `Sinopsis ${n}`, universe })) };
+  const repaired = { ideas: older.ideas.map(i => ({ ...i, synopsis: `Reparada: ${i.synopsis}` })) };
+  j.checkpoint.director_0 = older;
+  j.checkpoint.director_1 = repaired;
+  j.checkpoint.review_1 = { errors: ["No describe la voz de un personaje"], suggestions: [] };
+  expect(await runDirector(j, before, checkpoint)).toEqual(repaired);
+  expect(generate).not.toHaveBeenCalled();
 });
