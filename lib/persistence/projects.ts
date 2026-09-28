@@ -488,8 +488,10 @@ export async function jobControl(id: string, operation: "stop" | "resume") {
     );
     assert(j.leaseUntil < Date.now(), "El ejecutor sigue activo.");
     assert(j.state !== "completed", "Trabajo ya completado.");
-    tx.update(ref, { stopRequested: false, state: "queued", error: null });
-    return { ...j, stopRequested: false, state: "queued" as const };
+    assert(!(j.state === "queued" && (j.operationName || j.executionName)),
+      "Google ya recibió este trabajo. Espera a que termine la comprobación antes de reanudar.");
+    tx.update(ref, { stopRequested: false, state: "queued", error: null, executionName: "", operationName: "", dispatchedAt: Date.now() });
+    return { ...j, stopRequested: false, state: "queued" as const, executionName: "", operationName: "" };
   });
 }
 

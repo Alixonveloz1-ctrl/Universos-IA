@@ -126,4 +126,6 @@ export interface Job {
   checkpoint: Record<string, unknown>;
   error?: { code: string; message: string };
   executionName?: string;
+  operationName?: string;
+  dispatchedAt?: number;
 }

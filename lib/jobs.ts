@@ -41,7 +41,13 @@ export async function dispatch(job: Job) {
         },
       },
     );
-    await db().doc(`jobs/${job.id}`).update({ executionName: r.name });
+    const executionName = typeof r.metadata?.name === "string" &&
+      r.metadata.name.startsWith(`${resource}/executions/`) ? r.metadata.name : undefined;
+    await db().doc(`jobs/${job.id}`).update({
+      ...(executionName ? { executionName } : {}),
+      operationName: r.name,
+      dispatchedAt: Date.now(),
+    });
   } catch (e) {
     const error = e instanceof AppError ? safeError(e) : {
       code: "DISPATCH", message: sent
@@ -60,7 +66,35 @@ export async function dispatch(job: Job) {
 
 // Read-only startup check for old queue entries: no automatic paid retry.
 export async function diagnoseQueuedJob(job: Job) {
-  if (job.state !== "queued" || job.error || job.executionName || Date.now() - job.createdAt < 30000) return job;
+  if (job.state !== "queued" || job.attempts > 0 || job.stopRequested ||
+      Date.now() - (job.dispatchedAt || job.createdAt) < 45000) return job;
+  const operation = job.operationName || (job.executionName?.includes("/operations/") ? job.executionName : undefined);
+  if (operation) {
+    const expected = `${required("CLOUD_RUN_JOB_RESOURCE").split("/jobs/")[0]}/operations/`;
+    if (!operation.startsWith(expected)) return job;
+    try {
+      const token = await googleAuth().getAccessToken();
+      const res = await fetch(`https://run.googleapis.com/v2/${operation}`, {
+        headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(15000),
+      });
+      if (!res.ok) return { ...job, error: { code: "RUN_STATUS", message: `Google no permitió comprobar la ejecución (HTTP ${res.status}). El trabajo sigue sin comenzar; no pulses Reanudar hasta revisar su estado.` } };
+      const status = await res.json();
+      if (!status.done) return job;
+      const error = status.error
+        ? { code: "RUN_FAILED", message: `Google no pudo iniciar el ejecutor (${status.error.code || "error"}): ${String(status.error.message || "sin detalles").slice(0, 250)}` }
+        : { code: "RUN_NO_JOB", message: "Google terminó la ejecución, pero el trabajo nunca comenzó. Revisa la configuración del ejecutor; no se iniciaron generaciones desde este intento." };
+      await db().runTransaction(async tx => {
+        const ref = db().doc(`jobs/${job.id}`);
+        const current = (await tx.get(ref)).data() as Job | undefined;
+        if (current?.state === "queued" && current.attempts === 0 && current.operationName === job.operationName && !(current.leaseUntil > Date.now()))
+          tx.update(ref, { error, state: "failed" });
+      });
+      return (await db().doc(`jobs/${job.id}`).get()).data() as Job;
+    } catch {
+      return { ...job, error: { code: "RUN_STATUS", message: "No se pudo comprobar la ejecución en Google. Espera unos minutos y actualiza el estado." } };
+    }
+  }
+  if (job.error || job.executionName) return job;
   try { await checkWorker(job.snapshot?.project); }
   catch (e) {
     const error = e instanceof AppError ? safeError(e) : { code: "WORKER_ACCESS", message: "No se pudo conectar con el ejecutor de Google Cloud." };

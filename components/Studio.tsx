@@ -826,7 +826,8 @@ export default function Studio() {
                   }[data.job.state]
                 }
               </strong>
-              {data.job.error && <p>{data.job.error.message}</p>}
+              {data.job.error && <p role="alert">{data.job.error.message}</p>}
+              {data.job.state === "queued" && !data.job.error && <p>Solicitud recibida. Comprobando si Google inició el ejecutor…</p>}
               <div className="actions">
                 {active && (
                   <button
@@ -843,7 +844,8 @@ export default function Studio() {
                 )}
                 {data.job.state !== "completed" &&
                   !data.job.closedAt &&
-                  data.job.resumable && (
+                  data.job.resumable &&
+                  !(data.job.state === "queued" && !!(data.job.operationName || data.job.executionName)) && (
                     <button
                       disabled={busy}
                       onClick={() =>
