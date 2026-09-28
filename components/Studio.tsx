@@ -1293,6 +1293,7 @@ function TargetPanel({
     [note, setNote] = useState("");
   const v: Asset | undefined =
     versions.find((x) => x.id === chosen) || versions[0];
+  const selectedApproved = !!v && v.id === t.approvedVersionId;
   const c = data.plan?.clips[(t.clipNumber || 1) - 1];
   const observedDraft = observed?.versionId === v?.id ? observed : null;
   const plannedEndState = v?.settings.plannedEndState ?? c?.plannedEndState;
@@ -1387,7 +1388,7 @@ function TargetPanel({
         {v && (
           <button
             className="primary"
-            disabled={disabled}
+            disabled={disabled || selectedApproved}
             onClick={() =>
               void perform(async () => {
                 await api(
@@ -1406,7 +1407,9 @@ function TargetPanel({
               })
             }
           >
-            {t.kind === "video" ? "Revisado · aprobar clip" : "Aprobar imagen"}
+            {selectedApproved
+              ? (t.kind === "video" ? "Clip aprobado" : "Imagen aprobada")
+              : (t.kind === "video" ? "Revisado · aprobar clip" : "Aprobar imagen")}
           </button>
         )}
       </div>

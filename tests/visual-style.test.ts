@@ -119,3 +119,39 @@ it("applies conflict-first short-form narration to every visual mode and narrati
     }
   }
 });
+
+it("preserves a woman's explicit identity in every character render, regardless of clothing", () => {
+  const s = structuredClone(snapshot());
+  const woman = s.bible!.characters[0];
+  woman.name = "Frambuesa";
+  woman.gender = "mujer";
+  woman.age = "adulta";
+  woman.role = "Esposa y empresaria";
+  woman.wardrobe = "Traje negro y corbata";
+  for (const style of styles) {
+    s.project.universeSnapshot.visualStyle = style;
+    const prompt = compileImagePrompt(s, s.targets.find(t => t.role === "character")!, "");
+    expect(prompt).toContain('"gender":"mujer"');
+    expect(prompt).toContain('"age":"adulta"');
+    expect(prompt).toContain('"role":"Esposa y empresaria"');
+    expect(prompt).toContain("No deduzcas género de la fruta");
+    expect(prompt).toContain("Traje negro y corbata");
+    expect(prompt).toContain("no una cabeza humana de mandíbula cuadrada pintada de rojo");
+  }
+});
+
+it("retains legacy identity clues without copying an old storyboard or another character's story", () => {
+  const s = structuredClone(snapshot());
+  const person = s.bible!.characters[0];
+  delete person.gender; delete person.age;
+  person.name = "Frambuesa";
+  person.role = "Esposa";
+  person.relationships = "Hermana de Cereza";
+  s.project.story!.data = { premise: "Frambuesa es una mujer adulta que dirige la tienda. Otro personaje huye por el techo.", conflict: "Conflicto", arc: "Arco", ending: "Final" };
+  person.visualPrompt = "LEGACY_COLLAGE four story panels";
+  const prompt = compileImagePrompt(s, s.targets.find(t => t.role === "character")!, "");
+  expect(prompt).toContain("Frambuesa es una mujer adulta");
+  expect(prompt).toContain("Hermana de Cereza");
+  expect(prompt).not.toContain("Otro personaje huye");
+  expect(prompt).not.toContain("LEGACY_COLLAGE");
+});

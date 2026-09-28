@@ -193,7 +193,7 @@ test("SIMULATED complete journey: story, canon, eight sequential clips, export a
     });
     await expect(canon).toHaveCount(2);
     for (let i = 0; i < 2; i++) {
-      await canon.nth(i).click();
+      await canon.first().click();
       await expect(
         page.getByText("Tiene versión aprobada", { exact: true }),
       ).toHaveCount(i + 1);

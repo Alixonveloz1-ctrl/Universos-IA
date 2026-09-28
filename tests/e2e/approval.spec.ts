@@ -41,3 +41,34 @@ test("SIMULATED: approving a generated story advances to Bible and stays approve
   await expect(page.getByText("Historia aprobada. Continúa en Biblia.")).toBeVisible();
   expect(approvals).toBe(1);
 });
+
+test("SIMULATED: an approved image cannot be approved again, but a new candidate can", async ({ page }) => {
+  const s = snapshot();
+  const target = s.targets.find(t => t.role === "character")!;
+  const approved = s.assets.find(a => a.id === target.approvedVersionId)!;
+  let approvals = 0;
+  await page.route("**/api/**", async route => {
+    const req = route.request(); const p = new URL(req.url()).pathname.slice(5);
+    let body: unknown = {};
+    if (p === "catalog") body = { defaults: s.project.models };
+    else if (p === "universes") body = [];
+    else if (p === "projects") body = [s.project];
+    else if (p === "projects/test") body = { ...s, narratives: [], exports: [], job: null };
+    else if (p.endsWith("/approve")) { approvals++; target.approvedVersionId = req.postDataJSON().versionId; }
+    else if (p.endsWith("/actions")) s.assets.push({ ...approved, id: "new-candidate", createdAt: Date.now() });
+    await route.fulfill({ json: body });
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: /Prueba simulada/ }).click();
+  await page.getByRole("button", { name: "Biblia", exact: true }).click();
+  const card = page.locator("article").filter({ has: page.getByRole("heading", { name: "Alba", exact: true }) });
+  await expect(card.getByRole("button", { name: "Imagen aprobada", exact: true })).toBeDisabled();
+  await expect(card.getByRole("button", { name: "Regenerar imagen", exact: true })).toBeEnabled();
+  await card.getByRole("button", { name: "Regenerar imagen", exact: true }).click();
+  await expect(card.getByRole("button", { name: "Aprobar imagen", exact: true })).toBeEnabled();
+  await card.getByRole("button", { name: "Aprobar imagen", exact: true }).click();
+  await expect(card.getByRole("button", { name: "Imagen aprobada", exact: true })).toBeDisabled();
+  await card.getByRole("combobox").selectOption(approved.id);
+  await expect(card.getByRole("button", { name: "Aprobar imagen", exact: true })).toBeEnabled();
+  expect(approvals).toBe(1);
+});

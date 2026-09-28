@@ -153,7 +153,7 @@ export function compileImagePrompt(
   // Canonical cards must not receive a whole story/shot list as drawing content.
   const characterData = singleCharacter ? b.characters.find(x => x.id === t.entityId)! : null;
   const physical = characterData ? Object.fromEntries(
-    ["id", "name", "material", "face", "silhouette", "color", "texture", "hair", "eyes", "wardrobe", "accessories", "lockedTraits"].map(key => [key, characterData[key as keyof typeof characterData]]),
+    ["id", "name", "gender", "age", "role", "relationships", "material", "face", "silhouette", "color", "texture", "hair", "eyes", "wardrobe", "accessories", "lockedTraits"].map(key => [key, characterData[key as keyof typeof characterData]]),
   ) : null;
   const styleRef = characterStyleReference(s, t);
   const outputRule = singleCharacter
@@ -165,11 +165,25 @@ export function compileImagePrompt(
     outputRule,
     "Preserve the approved identity, anatomy, materials, wardrobe and locked traits. The shared visual treatment controls rendering; character differences do not introduce different art styles.",
     visualTreatment(s.project.universeSnapshot.visualStyle),
+    singleCharacter ? "IDENTIDAD OBLIGATORIA: representa el gender y age de ESTE personaje. Si es mujer, representa una mujer de esa edad; si es hombre, un hombre de esa edad. No deduzcas género de la fruta, nombre, ropa, profesión o imagen de otro personaje. identityContext solo aclara identidad, parentesco y edad cuando faltan campos antiguos: NO representa escenas, acciones, acompañantes ni diálogos. Una esposa, madre o hermana no se convierte en hombre por vestir traje o ser antagonista. El rol femenino no se sustituye por un aspecto masculino tomado de una referencia de estilo. Las instrucciones específicas de corrección del usuario tienen prioridad sobre rasgos antiguos contradictorios." : "",
     styleRef ? `The LAST attached reference image is an approved character from this universe, used ONLY for render style, lighting, surface detail and design language. Do NOT draw that character or copy its species, costume, face or proportions. ${t.approvedVersionId ? "The FIRST reference is the requested target's own approved reference." : "Use only the requested entity specification below for content."}` : "",
     JSON.stringify(singleCharacter || singleLocation ? {
       style: s.project.universeSnapshot.visualStyle,
       beings: s.project.universeSnapshot.beings,
       entity: physical || entity,
+      ...(characterData ? { identityContext: {
+        role: characterData.role, relationships: characterData.relationships,
+        voice: characterData.voice,
+        // Legacy cards may omit identity fields. Keep only sentences mentioning
+        // this character, and explicitly prohibit staging their story as a collage.
+        storyMentions: (!characterData.gender || !characterData.age)
+          ? Object.values(s.project.story?.data || {}).concat(s.project.universeSnapshot.characterCanon)
+              .filter((value): value is string => typeof value === "string")
+              .flatMap(value => value.split(/(?<=[.!?;])\s+/))
+              .filter(sentence => sentence.toLocaleLowerCase().includes(characterData.name.toLocaleLowerCase()))
+              .join(" ").slice(0, 4000)
+          : "",
+      } } : {}),
     } : {
       style: s.project.universeSnapshot.visualStyle,
       world: s.project.universeSnapshot,

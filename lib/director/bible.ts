@@ -14,7 +14,7 @@ export function compactSchema(value: unknown): unknown {
   ).map(([key, child]) => [key, compactSchema(child)]));
 }
 const outline = z.object({
-  characters: z.array(z.object({ id, name: z.string().min(1), role: z.string().min(1) })).min(1).max(12),
+  characters: z.array(z.object({ id, name: z.string().min(1), role: z.string().min(1), gender: z.string().min(1).optional(), age: z.string().min(1).optional() })).min(1).max(12),
   locations: z.array(z.object({ id, name: z.string().min(1) })).min(1).max(12),
   props: bible.shape.props,
   relationships: bible.shape.relationships,
@@ -51,12 +51,18 @@ export async function buildBible(j: Job, prompt: string,
   }
   const previousBible = j.snapshot.project.previousChapter?.bible;
   const list = await part("outline", outline,
-    "Devuelve únicamente la lista de personajes (id, nombre y papel), escenarios (id y nombre), objetos, relaciones y rasgos fijos de la historia APROBADA. No desarrolles todavía las fichas. Conserva los IDs previos si este es otro capítulo.");
+    "Devuelve únicamente la lista de personajes (id, nombre, papel, gender y age), escenarios (id y nombre), objetos, relaciones y rasgos fijos de la historia APROBADA. No desarrolles todavía las fichas. Conserva los IDs previos si este es otro capítulo. gender identifica el género del personaje (mujer, hombre, no binario o no especificado), no el género narrativo. age indica edad o etapa vital. Derívalos de la historia aprobada, nunca del nombre de la fruta ni de su profesión. Si la historia dice mujer, esposa, madre o hermana, no la conviertas en hombre. Conserva estos datos en todas sus fichas.");
   const characters = [];
   for (const entry of list.characters) {
     const prior = previousBible?.characters.find(c => c.id === entry.id);
-    characters.push(prior || await part(`character_${entry.id}`, character.extend({ id: z.literal(entry.id), name: z.literal(entry.name) }),
-      `Completa SOLO la ficha del personaje ${JSON.stringify(entry)}. Contexto del reparto: ${JSON.stringify(list)}. Incluye todos los campos de voz en español con el idioma y acento elegidos. visualPrompt describe únicamente UN retrato de cuerpo completo de ESTE personaje, una sola vista sobre fondo neutro, sin otros personajes ni escenas, viñetas o collage. Mantén la dirección visual compartida del universo en todas las fichas; no inventes otra técnica de render para cada personaje.`));
+    const hasSavedCard = Object.keys(j.checkpoint).some(key => key.startsWith(`bible_character_${entry.id}_`));
+    const cardSchema = (hasSavedCard ? character : character.required({ gender: true, age: true })).extend({
+      id: z.literal(entry.id), name: z.literal(entry.name),
+      ...(entry.gender ? { gender: z.literal(entry.gender) } : {}),
+      ...(entry.age ? { age: z.literal(entry.age) } : {}),
+    });
+    characters.push(prior || await part(`character_${entry.id}`, cardSchema,
+      `Completa SOLO la ficha del personaje ${JSON.stringify(entry)}. Contexto del reparto: ${JSON.stringify(list)}. Incluye gender y age explícitos, coherentes con la historia aprobada y el papel; conserva exactamente los de la lista. Rostro, silueta y voz deben corresponder a ESA identidad. No inventes que una mujer es hombre por llevar traje, tener poder o antagonizar. Incluye todos los campos de voz en español con el idioma y acento elegidos. visualPrompt describe únicamente UN retrato de cuerpo completo de ESTE personaje, una sola vista sobre fondo neutro, sin otros personajes ni escenas, viñetas o collage. Mantén la dirección visual compartida del universo en todas las fichas; no inventes otra técnica de render para cada personaje.`));
   }
   const locations = [];
   for (const entry of list.locations) {

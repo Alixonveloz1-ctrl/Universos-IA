@@ -51,6 +51,9 @@ export const character = z
     id,
     name: short,
     role: short,
+    // Optional only for compatibility with existing approved Bibles.
+    gender: short.optional(),
+    age: short.optional(),
     material: short,
     face: short,
     silhouette: short,

@@ -119,3 +119,15 @@ it("recovers all three ideas from a failed subjective review without paying for 
   expect(await runDirector(j, before, checkpoint)).toEqual(repaired);
   expect(generate).not.toHaveBeenCalled();
 });
+
+it("locks character gender and age to the Bible roster and repairs a mismatched card", async () => {
+  const { j, before, checkpoint } = execution(); j.type = "bible";
+  const expected = j.snapshot.bible!;
+  generate.mockResolvedValueOnce(expected)
+    .mockResolvedValueOnce({ ...expected.characters[0], gender: "hombre" })
+    .mockResolvedValueOnce(expected.characters[0])
+    .mockResolvedValueOnce(expected.locations[0]);
+  expect(await runDirector(j, before, checkpoint)).toEqual(expected);
+  expect(generate).toHaveBeenCalledTimes(4);
+  expect(generate.mock.calls[1][2]).toMatchObject({ properties: { gender: { const: "mujer" }, age: { const: "adulta" } } });
+});

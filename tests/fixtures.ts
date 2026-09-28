@@ -7,6 +7,8 @@ export const b = bible.parse({
       id: "a",
       name: "Alba",
       role: "Protagonista",
+      gender: "mujer",
+      age: "adulta",
       material: "Cristal",
       face: "Oval",
       silhouette: "Alta",

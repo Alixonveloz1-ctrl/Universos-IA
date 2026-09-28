@@ -43,3 +43,11 @@ Se afinó Telenovela 3D expresiva con esas características y una dirección de 
 ## Diseño común a todas las técnicas
 
 Por aclaración del usuario, las proporciones humanoides, el atractivo y la silueta femenina adulta de las referencias son un diseño base compartido por TODAS las opciones. La técnica cambia entre dibujo 2D, anime, render 3D o acabado realista; no cambia esa base anatómica. Humanos genera humanos sin rasgos de fruta ni gema; las otras categorías integran su identidad sobre estructura humanoide. El atractivo también se aplica a los hombres, manteniendo variaciones de complexión. Las pruebas recorren todo el catálogo para comprobar estas instrucciones. Las fichas aprobadas previamente conservan su identidad hasta ser regeneradas.
+
+## Identidad y aprobación de referencias
+
+La tarjeta de Frambuesa enviada por el usuario mostró apariencia masculina para un personaje que él identifica como mujer. El esquema antiguo no guardaba género ni edad explícitos y el compilador de imagen omitía papel y relaciones. Se incorporan `gender` y `age` en las fichas nuevas, con compatibilidad para las antiguas; cuando están en la lista del reparto, la ficha debe conservarlos exactamente. El retrato recibe estos campos, papel y relaciones. Para fichas antiguas también recibe únicamente frases de la historia que mencionan al personaje, marcadas como contexto de identidad y no como escenas para dibujar. No se infiere género por nombre de fruta ni por vestuario.
+
+Se precisa la cabeza con forma reconocible de fruta, rostro animado integrado, color vivo y proporciones humanoides. En Cinemático 3D se evita el rostro de actor pintado o figura de acción. Esto modifica instrucciones para nuevas generaciones; no equivale a verificar visualmente un resultado del proveedor ni reemplaza imágenes guardadas.
+
+El botón de aprobar compara la versión visible con `approvedVersionId`. La versión aprobada queda deshabilitada y se identifica como aprobada; regenerar sigue disponible y una candidata nueva puede aprobarse. Si una aprobación requiere revisión por cambios de continuidad, conserva el control separado de revisión.
