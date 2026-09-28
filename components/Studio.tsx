@@ -469,6 +469,8 @@ export default function Studio() {
     await perform(async () => {
       await patch(change);
       saved = true;
+      const approval = change as { kind?: string; approve?: boolean };
+      if (approval.approve && approval.kind === "story") setTab("Biblia");
     });
     return saved;
   };
@@ -836,7 +838,7 @@ export default function Studio() {
                     queued: "En cola",
                     running: "Trabajando",
                     waiting: "Esperando a Google",
-                    completed: "Generación terminada · pendiente de aprobación",
+                    completed: "Generación terminada",
                     failed: "El trabajo falló",
                     stopped: "Detenido",
                     needsReview: data.job.error?.code === "PROVIDER_REJECTED" ? "Google rechazó esta solicitud" : "Respuesta incierta · requiere revisión",
@@ -1140,6 +1142,8 @@ function NarrativePanel({
     candidates[0] ||
     data.project[kind];
   if (!current) return null;
+  const alreadyApproved = draft === null && !!data.project[kind]?.approvedAt &&
+    JSON.stringify(current.data) === JSON.stringify(data.project[kind]?.data);
   const saveDraft = async (approve: boolean) => {
     try {
       setValidationError("");
@@ -1180,6 +1184,7 @@ function NarrativePanel({
             ? "Biblia de continuidad"
             : "Guion completo"}
       </h2>
+      {alreadyApproved && <p role="status">{kind === "story" ? "Historia aprobada. Continúa en Biblia." : kind === "bible" ? "Biblia aprobada." : "Guion aprobado."}</p>}
       {kind === "story" && !data.project.story?.approvedAt &&
         <p>Lee la historia aquí. Si te gusta, pulsa «Aprobar historia». Después sigue a «Biblia». No tienes que escribir nada para avanzar.</p>}
       {kind !== "story" && <label>
@@ -1241,7 +1246,7 @@ function NarrativePanel({
         </button>
         <button
           className="primary"
-          disabled={busy}
+          disabled={busy || alreadyApproved}
           onClick={() => void saveDraft(true)}
         >
           Aprobar{" "}
