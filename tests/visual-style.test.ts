@@ -68,7 +68,7 @@ it("describes humanoid telenovela characters rather than whole fruit mascots", (
   const direction = visualTreatment(TELENOVELA_STYLE);
   expect(direction).toContain("protagonistas humanoides hermosos");
   expect(direction).toContain("DISEÑO DE MUJERES ADULTAS");
-  expect(direction).toContain("cintura definida, caderas y curvas equilibradas");
+  expect(direction).toContain("silueta de reloj de arena");
   expect(direction).toContain("torso y extremidades proporcionados");
   expect(direction).not.toContain("no las conviertas en humanos disfrazados");
   expect(direction).not.toContain("conserva la silueta, piel, hojas");
