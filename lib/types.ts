@@ -53,11 +53,30 @@ export interface Asset {
   technicalReport: Record<string, unknown>;
   lastFrameObject?: string;
 }
+export interface ChapterMemory {
+  projectId: string;
+  chapterNumber: number;
+  title: string;
+  story: unknown;
+  finalState: unknown;
+  exportId: string;
+}
 export interface Project {
   id: string;
   owner: "personal";
   universeId: string;
   automaticUniverse?: boolean;
+  chapterNumber?: number;
+  rootProjectId?: string;
+  nextChapterId?: string;
+  history?: ChapterMemory[];
+  previousChapter?: {
+    projectId: string;
+    exportId: string;
+    finalState: unknown;
+    lastClip: Asset;
+    bible: Bible;
+  };
   universeSnapshot: Universe & { revision: number };
   title: string;
   revision: number;

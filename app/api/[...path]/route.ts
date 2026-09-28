@@ -1,8 +1,8 @@
-import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { db, signedUrl } from "@/lib/persistence/google";
 import {
   createProject,
+  createNextChapter,
   enqueue,
   readSnapshot,
   editProject,
@@ -13,7 +13,7 @@ import {
   projectRef,
 } from "@/lib/persistence/projects";
 import { login, originCheck, requireSession, sessionCookie } from "@/lib/auth";
-import { action, id, projectInput, universe } from "@/lib/schemas";
+import { action, id, projectInput } from "@/lib/schemas";
 import { dispatch } from "@/lib/jobs";
 import { model, MODELS, defaults } from "@/lib/models";
 import { AppError, safeError, assert } from "@/lib/errors";
@@ -105,36 +105,10 @@ async function handler(
             ...d.data(),
           })),
         );
-      if (req.method === "POST") {
-        const u = universe.parse(await body(req)),
-          uid = randomUUID();
-        await db()
-          .doc(`universes/${uid}`)
-          .create({ ...u, revision: 1, createdAt: Date.now() });
-        return response({ id: uid, ...u }, 201);
-      }
+      throw new AppError("METHOD", "El universo se crea al elegir la historia.", 405);
     }
-    if (
-      paths[0] === "universes" &&
-      paths.length === 2 &&
-      req.method === "PATCH"
-    ) {
-      const b = z
-        .object({ expectedRevision: z.number().int(), data: universe })
-        .strict()
-        .parse(await body(req));
-      await db().runTransaction(async (tx) => {
-        const ref = db().doc(`universes/${paths[1]}`),
-          old = (await tx.get(ref)).data();
-        assert(old?.revision === b.expectedRevision, "El universo cambió");
-        tx.update(ref, {
-          ...b.data,
-          revision: b.expectedRevision + 1,
-          updatedAt: Date.now(),
-        });
-      });
-      return response({ ok: true });
-    }
+    if (paths[0] === "universes" && req.method !== "GET")
+      throw new AppError("METHOD", "Cada universo pertenece a una historia; continúa desde su último capítulo.", 405);
     if (route === "projects") {
       if (req.method === "GET")
         return response(
@@ -146,6 +120,9 @@ async function handler(
           ).docs.map((d) => ({
             id: d.id,
             title: d.data().title,
+            universeId: d.data().universeId || d.id,
+            universeName: d.data().universeSnapshot?.name || d.data().title,
+            chapterNumber: d.data().chapterNumber || 1,
             stage: d.data().stage,
             updatedAt: d.data().updatedAt,
           })),
@@ -167,6 +144,10 @@ async function handler(
     }
     if (paths[0] === "projects" && paths.length >= 2) {
       const pid = paths[1];
+      if (paths.length === 3 && paths[2] === "next-chapter" && req.method === "POST") {
+        const b = z.object({ expectedRevision: z.number().int().nonnegative() }).strict().parse(await body(req));
+        return response(await createNextChapter(pid, b.expectedRevision), 201);
+      }
       if (paths.length === 2 && req.method === "GET") {
         const s = await readSnapshot(pid);
         const [n, e] = await Promise.all([

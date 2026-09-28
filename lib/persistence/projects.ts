@@ -2,6 +2,7 @@ import { randomUUID, createHash } from "node:crypto";
 import type { Transaction } from "@google-cloud/firestore";
 import { db } from "./google";
 import { assert } from "../errors";
+import { validateChapterBible, validateChapterPlan } from "../continuity/chapters";
 import { blocksNewJob } from "../job-state";
 import { affected, prerequisites } from "../continuity/rules";
 import {
@@ -11,7 +12,6 @@ import {
   state,
   validatePlan,
   type Action,
-  type Universe,
   universe,
   projectInput,
 } from "../schemas";
@@ -59,18 +59,12 @@ export async function readSnapshot(
 export async function createProject(
   input: ReturnType<typeof projectInput.parse>,
 ) {
-  const u = input.universeId
-    ? (await db().doc(`universes/${input.universeId}`).get()).data() as (Universe & { revision: number }) | undefined
-    : {
-        name: "Pendiente de elegir historia",
-        beings: input.beings,
-        visualStyle: input.visualStyle,
-        environment: "El Director propondrá el entorno según cada historia.",
-        worldRules: "El Director definirá reglas coherentes con cada propuesta.",
-        characterCanon: "",
-        revision: 0,
-      };
-  assert(u, "Universo no encontrado.");
+  assert(!input.universeId, "Cada historia nueva crea su propio universo. Usa Crear siguiente capítulo para continuar.");
+  const u = {
+    name: "Pendiente de elegir historia", beings: input.beings, visualStyle: input.visualStyle,
+    environment: "El Director propondrá el entorno según cada historia.",
+    worldRules: "El Director definirá reglas coherentes con cada propuesta.", characterCanon: "", revision: 0,
+  };
   const now = Date.now(),
     p: Project = {
       ...input,
@@ -82,6 +76,7 @@ export async function createProject(
       title: "Nueva historia",
       revision: 0,
       stage: "ideas",
+      chapterNumber: 1,
       ideas: [],
       createdAt: now,
       updatedAt: now,
@@ -193,6 +188,7 @@ export async function editProject(
       "La historia cambió. Actualiza.",
       "REVISION",
     );
+    assert(!p.nextChapterId, "Este capítulo ya tiene continuación y se conserva como historial.");
     const patch: Partial<Project> = {
       revision: p.revision + 1,
       updatedAt: Date.now(),
@@ -214,7 +210,7 @@ export async function editProject(
       assert(idea, "Propuesta no encontrada.");
       if (p.automaticUniverse) {
         const generated = universe.parse(idea.universe);
-        const universeId = `story-${p.id}-${idea.id}`;
+        const universeId = `story-${p.id}`;
         const saved = {
           ...generated,
           beings: p.universeSnapshot.beings,
@@ -232,7 +228,7 @@ export async function editProject(
       if (p.bible) patch.bible = { ...p.bible, approvedAt: 0 };
       if (p.plan) patch.plan = { ...p.plan, approvedAt: 0 };
       for (const t of s.targets)
-        if (t.approvedVersionId)
+        if (t.approvedVersionId && !(p.previousChapter && ["character", "location"].includes(t.role)))
           tx.update(projectRef(projectId).collection("targets").doc(t.id), {
             needsReview: true,
           });
@@ -252,7 +248,9 @@ export async function editProject(
           ? story.parse(data)
           : kind === "bible"
             ? bible.parse(data)
-            : validatePlan(data, s.bible!);
+            : validatePlan(data, s.bible!, !!p.previousChapter);
+      if (kind === "bible") validateChapterBible(p, bible.parse(data));
+      if (kind === "plan") validateChapterPlan(p, plan.parse(data));
       const v: Narrative = {
         id: randomUUID(),
         kind,
@@ -290,7 +288,7 @@ export async function editProject(
             ...t,
             kind: "image",
             instructions: old?.instructions || "",
-            needsReview: !!old?.approvedVersionId,
+            needsReview: !!old?.approvedVersionId && !(p.previousChapter && JSON.stringify(s.bible?.[t.role === "character" ? "characters" : "locations"].find(x => x.id === t.entityId)) === JSON.stringify(b[t.role === "character" ? "characters" : "locations"].find(x => x.id === t.entityId))),
             ...(old?.approvedVersionId
               ? { approvedVersionId: old.approvedVersionId }
               : {}),
@@ -357,7 +355,8 @@ export async function editProject(
         if (
           t.approvedVersionId &&
           !(kind === "bible" && ["character", "location"].includes(t.role)) &&
-          kind !== "plan"
+          kind !== "plan" &&
+          !(p.previousChapter && ["character", "location"].includes(t.role))
         )
           tx.update(projectRef(projectId).collection("targets").doc(t.id), {
             needsReview: true,
@@ -382,6 +381,7 @@ export async function approveAsset(
       "La historia cambió. Actualiza.",
       "REVISION",
     );
+    assert(!p.nextChapterId, "Este capítulo ya tiene continuación y se conserva como historial.");
     const t = s.targets.find((x) => x.id === targetId),
       v = s.assets.find((x) => x.id === versionId);
     assert(
@@ -442,6 +442,7 @@ export async function resolveReview(
 ) {
   await db().runTransaction(async (tx) => {
     const p = (await tx.get(projectRef(projectId))).data() as Project;
+    assert(!p.nextChapterId, "Este capítulo ya tiene continuación y se conserva como historial.");
     const ref = projectRef(projectId).collection("targets").doc(targetId);
     const t = (await tx.get(ref)).data() as Target;
     assert(
@@ -470,6 +471,7 @@ export async function jobControl(id: string, operation: "stop" | "resume") {
     }
     const p = (await tx.get(projectRef(j.projectId))).data() as Project;
     assert(p?.activeJobId === id, "Este intento ya no es el trabajo activo.");
+    assert(!p.nextChapterId, "Este capítulo ya tiene continuación y se conserva como historial.");
     assert(
       !j.checkpoint.closedAt,
       "El intento fue cerrado y no puede ejecutarse otra vez.",
@@ -520,5 +522,57 @@ export async function closeAmbiguousJob(
     });
     // Preserve submitted, snapshot and every asset. This does not dispatch anything.
     return { id, state: "failed" as const };
+  });
+}
+
+export async function createNextChapter(projectId: string, revision: number) {
+  return db().runTransaction(async (tx) => {
+    const s = await readSnapshot(projectId, tx), p = s.project;
+    if (p.nextChapterId) {
+      const existing = (await tx.get(projectRef(p.nextChapterId))).data() as Project;
+      assert(existing?.previousChapter?.projectId === p.id && existing.universeId === p.universeId, "Continuación no disponible.");
+      return existing;
+    }
+    assert(p.revision === revision, "El capítulo cambió. Actualiza.", "REVISION");
+    assert(p.universeId, "Elige primero la historia de este universo.");
+    const exports = await tx.get(projectRef(p.id).collection("exports"));
+    const active = p.activeJobId ? (await tx.get(db().doc(`jobs/${p.activeJobId}`))).data() as Job | undefined : undefined;
+    assert(!active || !blocksNewJob(active), "Espera a que termine el trabajo actual.");
+    prerequisites(s, { type: "finalize", expectedRevision: revision, requestId: randomUUID(), instructions: "" });
+    const clips = s.targets.filter(t => t.role === "clip").sort((a, b) => a.clipNumber! - b.clipNumber!);
+    const manifest = clips.map(t => t.approvedVersionId);
+    const completed = exports.docs.map(d => d.data()).filter(e => e.state === "completed" && JSON.stringify(e.approvedClipVersionIds) === JSON.stringify(manifest)).sort((a, b) => b.createdAt - a.createdAt)[0];
+    assert(completed, "Une primero los ocho clips aprobados de este capítulo.");
+    const lastClip = s.assets.find(a => a.id === clips[7].approvedVersionId);
+    assert(lastClip?.lastFrameObject, "Falta el fotograma final del capítulo anterior.");
+    const { versionId: _versionId, ...observedEnd } = s.observed[clips[7].id] as Record<string, unknown>;
+    void _versionId;
+    const finalState = state.parse(observedEnd);
+    const now = Date.now(), nextId = randomUUID();
+    const next: Project = {
+      id: nextId, owner: "personal", universeId: p.universeId, universeSnapshot: p.universeSnapshot,
+      automaticUniverse: false, chapterNumber: (p.chapterNumber || 1) + 1, rootProjectId: p.rootProjectId || p.id,
+      title: `${p.universeSnapshot.name} · Capítulo ${(p.chapterNumber || 1) + 1}`,
+      genre: p.genre, subgenre: p.subgenre, plotType: p.plotType, tone: p.tone, ending: p.ending,
+      language: p.language, accent: p.accent, models: p.models, revision: 0, stage: "ideas", ideas: [],
+      bible: { ...p.bible!, approvedAt: 0 },
+      history: [...(p.history || []), { projectId: p.id, chapterNumber: p.chapterNumber || 1, title: p.title, story: p.story!.data, finalState, exportId: completed.id }],
+      previousChapter: { projectId: p.id, exportId: completed.id, finalState, lastClip, bible: s.bible! },
+      createdAt: now, updatedAt: now,
+    };
+    assert(Buffer.byteLength(JSON.stringify(next)) < 400000, "El historial supera el tamaño admitido; no se ha recortado ni perdido información.");
+    const canonical = s.targets.filter(t => ["character", "location"].includes(t.role));
+    for (const t of canonical) {
+      const asset = s.assets.find(a => a.id === t.approvedVersionId);
+      assert(asset && !t.needsReview, "Aprueba las referencias de personajes y escenarios antes de continuar.");
+    }
+    tx.create(projectRef(next.id), next);
+    for (const t of canonical) {
+      const asset = s.assets.find(a => a.id === t.approvedVersionId)!;
+      tx.create(projectRef(next.id).collection("targets").doc(t.id), { ...t, needsReview: false });
+      tx.create(projectRef(next.id).collection("assets").doc(asset.id), asset);
+    }
+    tx.update(projectRef(p.id), { nextChapterId: next.id, updatedAt: now });
+    return next;
   });
 }

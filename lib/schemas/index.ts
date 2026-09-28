@@ -187,14 +187,12 @@ export const plan = z
           message: "Diálogo o hablante inválido",
         });
     }
-    if (v.clips[0].startMode === "previousFrame")
-      ctx.addIssue({
-        code: "custom",
-        message: "El primer clip no tiene fotograma previo",
-      });
+
   });
-export function validatePlan(value: unknown, b: z.infer<typeof bible>) {
+export function validatePlan(value: unknown, b: z.infer<typeof bible>, hasPreviousChapter = false) {
   const p = plan.parse(value);
+  if (p.clips[0].startMode === "previousFrame" && !hasPreviousChapter)
+    throw new Error("El primer clip no tiene fotograma previo");
   const chars = new Set(b.characters.map((c) => c.id)),
     locs = new Set(b.locations.map((l) => l.id));
   for (const c of p.clips) {

@@ -133,3 +133,30 @@ test("SIMULATED API: provider errors are visible, no automatic generation", asyn
   ).toBeVisible();
   expect(generations).toBe(0);
 });
+
+test("SIMULATED API: a universe groups chapters and opens its continuation without generating automatically", async ({ page }) => {
+  const first = snapshot();
+  const next = snapshot();
+  next.project = { ...first.project, id: "chapter2", title: "La carta continúa", chapterNumber: 2, ideas: [], previousChapter: { projectId: "test", exportId: "final", finalState: first.observed.clip_8, bible: first.bible!, lastClip: first.assets.find(a => a.id === "v8")! } };
+  let created = false, generations = 0;
+  await page.route("**/api/**", async route => {
+    const path = new URL(route.request().url()).pathname.slice(5);
+    let body: unknown = {};
+    if (path === "catalog") body = { defaults: first.project.models };
+    if (path === "projects") body = [first.project, ...(created ? [next.project] : [])].map(p => ({ id: p.id, title: p.title, universeId: p.universeId, universeName: "Cristal", chapterNumber: p.chapterNumber || 1 }));
+    if (path === "projects/test") body = { ...first, narratives: [], exports: [{ id: "final", approvedClipVersionIds: Array.from({length: 8}, (_, i) => `v${i + 1}`), createdAt: 1 }], job: null };
+    if (path === "projects/test/next-chapter") { created = true; first.project.nextChapterId = "chapter2"; body = next.project; }
+    if (path === "projects/chapter2") body = { ...next, narratives: [], exports: [], job: null };
+    if (path.endsWith("/actions")) generations++;
+    await route.fulfill({ json: body });
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: /Capítulo 1/ }).click();
+  await page.getByRole("button", { name: "Crear siguiente capítulo", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "La carta continúa" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Generar 3 continuaciones" })).toBeVisible();
+  expect(generations).toBe(0);
+  await page.getByRole("button", { name: "Mis proyectos", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Cristal", exact: true })).toHaveCount(1);
+  await expect(page.getByRole("button", { name: /Capítulo 2/ })).toBeVisible();
+});

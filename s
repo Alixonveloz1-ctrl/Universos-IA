@@ -30,5 +30,5 @@ options:
   logging: CLOUD_LOGGING_ONLY
 BUILD
 gcloud builds submit "$build_dir" --project="$project" --region="$region" --config="$build_dir/cloudbuild.yaml" --service-account="projects/$project/serviceAccounts/universos-build@$project.iam.gserviceaccount.com" --gcs-source-staging-dir=gs://universos_ia/universos-ia/build/source
-gcloud run jobs update "$job" --project="$project" --region="$region" --image="$image" --update-labels=firestore-scope=universos-ia-v1,story-flow=automatic-universe-v1
+gcloud run jobs update "$job" --project="$project" --region="$region" --image="$image" --update-labels=firestore-scope=universos-ia-v1,story-flow=chapters-v1
 printf '\nEjecutor actualizado. Universos IA usa su propio espacio de datos. No se iniciaron generaciones.\n'

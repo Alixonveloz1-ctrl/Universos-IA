@@ -7,6 +7,6 @@ El formulario inicial usa desplegables: seres, estilo, género, subgénero, tram
 3. Elegir una propuesta guarda su universo y lo vincula al proyecto en la misma transacción. Las otras propuestas no crean universos guardados.
 4. Historia, biblia y guion reciben ese universo como contexto. Se mantienen las aprobaciones de producción existentes.
 
-Los proyectos anteriores que ya usan un universo conservan su funcionamiento. No se añade continuación entre capítulos.
+Los proyectos anteriores que ya usan un universo conservan su funcionamiento. Cada universo pertenece a una única historia; los capítulos siguientes se crean desde el capítulo terminado.
 
-Actualizar el worker existente con `./s` desde una copia actualizada de main. La web exige la etiqueta `story-flow=automatic-universe-v1` para los proyectos de este flujo; así evita ejecutarlos con código anterior. No cambia contraseñas ni variables de Vercel.
+Actualizar el worker existente con `./s` desde una copia actualizada de main. La web exige la etiqueta `story-flow=chapters-v1` para los proyectos de este flujo; así evita ejecutarlos con código anterior. No cambia contraseñas ni variables de Vercel.

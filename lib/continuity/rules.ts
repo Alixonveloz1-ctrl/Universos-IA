@@ -25,6 +25,7 @@ function canonicalReady(s: Snapshot) {
 }
 export function prerequisites(s: Snapshot, a: Action) {
   const p = s.project;
+  assert(!p.nextChapterId, "Este capítulo ya tiene continuación y se conserva como historial.");
   assert(
     p.revision === a.expectedRevision,
     "El proyecto cambió. Actualiza antes de continuar.",

@@ -383,7 +383,7 @@ export default function Studio() {
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [projects, setProjects] = useState<
-      { id: string; title: string; stage: string }[]
+      { id: string; title: string; stage: string; universeId?: string; universeName?: string; chapterNumber?: number }[]
     >([]),
     [data, setData] = useState<Data | null>(null),
     [tab, setTab] = useState("Historia");
@@ -479,10 +479,9 @@ export default function Studio() {
     });
     await refresh(pid);
   };
-  const active =
-    !!data?.job &&
+  const active = !!data?.project.nextChapterId || (!!data?.job &&
     (data.job.blocksNewJob ??
-      !["completed", "failed", "stopped"].includes(data.job.state));
+      !["completed", "failed", "stopped"].includes(data.job.state)));
   const field = (
     label: string,
     value: string,
@@ -727,22 +726,17 @@ export default function Studio() {
               ✦ Generar 3 historias
             </button>
           </section>
-          <h2>Mis proyectos</h2>
+          <h2>Mis universos</h2>
           <div className="cards">
-            {projects.map((p) => (
-              <button
-                className="card"
-                key={p.id}
-                onClick={() =>
-                  void perform(async () => {
-                    await refresh(p.id);
-                  })
-                }
-              >
-                <h3>{p.title}</h3>
-                <span className="muted">Abrir historia</span>
-              </button>
-            ))}
+            {Array.from(new Set(projects.map(p => p.universeId || p.id))).map(universeId => {
+              const chapters = projects.filter(p => (p.universeId || p.id) === universeId).sort((a, b) => (a.chapterNumber || 1) - (b.chapterNumber || 1));
+              return <section className="card" key={universeId}>
+                <h3>{chapters[0].universeName || chapters[0].title}</h3>
+                {chapters.map(p => <button key={p.id} onClick={() => void perform(async () => { await refresh(p.id); setTab("Historia"); })}>
+                  Capítulo {p.chapterNumber || 1} · {p.title}
+                </button>)}
+              </section>;
+            })}
           </div>
           {!projects.length && (
             <p className="empty">Tus historias aparecerán aquí.</p>
@@ -752,8 +746,21 @@ export default function Studio() {
         <>
           <div className="topline">
             <h1>{data.project.title}</h1>
-            <span className="badge">8 × 8 segundos</span>
+            <span className="badge">Capítulo {data.project.chapterNumber || 1} · 64 segundos</span>
           </div>
+          <section className="panel">
+            <p>Universo: {data.project.universeSnapshot.name}. Cada capítulo continúa esta misma historia.</p>
+            {data.project.previousChapter && <button onClick={() => void perform(async () => { await refresh(data.project.previousChapter!.projectId); setTab("Final"); })}>Ver capítulo anterior</button>}
+            <button className="primary" disabled={busy || (!data.project.nextChapterId && (active || !data.exports.length || !!generationBlock(data, "finalize")))}
+              onClick={() => void perform(async () => {
+                const next = await api(`projects/${data.project.id}/next-chapter`, "POST", { expectedRevision: data.project.revision });
+                await refresh(next.id); setTab("Historia");
+              })}>
+              {data.project.nextChapterId ? "Abrir siguiente capítulo" : "Crear siguiente capítulo"}
+            </button>
+            {!data.exports.length && !data.project.nextChapterId && <p className="muted">Disponible cuando termines y unas los ocho clips de este capítulo.</p>}
+            {data.project.nextChapterId && <p className="muted">Este capítulo se conserva sin cambios porque su continuación ya está creada.</p>}
+          </section>
           <details className="panel">
             <summary>Modelos de esta historia</summary>
             <p>
@@ -946,7 +953,7 @@ export default function Studio() {
                   disabled={busy || active}
                   onClick={() => void perform(() => generate("ideas"))}
                 >
-                  Regenerar las tres
+                  {data.project.ideas.length ? "Regenerar las tres" : data.project.previousChapter ? "Generar 3 continuaciones" : "Generar 3 historias"}
                 </button>
                 <button
                   className="primary"
@@ -959,7 +966,7 @@ export default function Studio() {
               <NarrativePanel
                 kind="story"
                 data={data}
-                busy={busy}
+                busy={busy || !!data.project.nextChapterId}
                 save={saveNarrative}
               />
             </>
@@ -976,7 +983,7 @@ export default function Studio() {
               <NarrativePanel
                 kind="bible"
                 data={data}
-                busy={busy}
+                busy={busy || !!data.project.nextChapterId}
                 save={saveNarrative}
               />
               <button
@@ -1019,7 +1026,7 @@ export default function Studio() {
               <NarrativePanel
                 kind="plan"
                 data={data}
-                busy={busy}
+                busy={busy || !!data.project.nextChapterId}
                 save={saveNarrative}
               />
               {data.plan?.clips.map((c) => (
@@ -1120,7 +1127,7 @@ function NarrativePanel({
           ? story.parse(value)
           : kind === "bible"
             ? bibleSchema.parse(value)
-            : validatePlan(value, data.bible!);
+            : validatePlan(value, data.bible!, !!data.project.previousChapter);
       const saved = await save({
         kind,
         data: validated,

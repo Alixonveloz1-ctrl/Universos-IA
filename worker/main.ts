@@ -250,7 +250,7 @@ export async function execute(jobId: string) {
       );
       let refs: ImageRef[];
       if (c.startMode === "previousFrame") {
-        const v = s.assets.find((x) => x.id === previous?.approvedVersionId);
+        const v = c.number === 1 ? s.project.previousChapter?.lastClip : s.assets.find((x) => x.id === previous?.approvedVersionId);
         assert(
           v?.lastFrameObject,
           "Falta el último fotograma del clip aprobado",
@@ -380,7 +380,7 @@ export async function execute(jobId: string) {
         project: s.project.revision,
         bible: s.project.bible?.id || "",
         plan: s.project.plan?.id || "",
-        previousClip: prev?.approvedVersionId || null,
+        previousClip: prev?.approvedVersionId || (t.clipNumber === 1 ? s.project.previousChapter?.lastClip.id : null) || null,
       },
       createdAt: Date.now(),
       technicalReport,

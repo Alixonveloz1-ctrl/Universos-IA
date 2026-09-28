@@ -12,6 +12,7 @@ import {
 import type { Job, Snapshot, Target } from "../types";
 import { profiles } from "./catalog";
 import { textGenerate } from "../providers/vertex";
+import { validateChapterBible, validateChapterPlan } from "../continuity/chapters";
 import { AppError } from "../errors";
 const schemas = { ideas, story, bible, plan };
 export function narrativePrompt(j: Job, repair?: string) {
@@ -27,6 +28,9 @@ export function narrativePrompt(j: Job, repair?: string) {
           : "Exactamente ocho clips consecutivos, ocho segundos cada uno. Varias tomas por clip cuando sirvan a la acción. Tiempos locales 0–8, cobertura sin huecos. Diálogo literal español, con intención y espacio para reaccionar. No traducir. Avisar si el diálogo es excesivo. La música, efectos y voz se producen SOLO como audio nativo de Veo. previousFrame solo si acción y encuadre continúan.",
     j.type === "ideas" && j.snapshot.project.automaticUniverse
       ? "Para cada propuesta incluye universe: nombre original, entorno, reglas del mundo y personajes canónicos derivados de ESA historia. Respeta exactamente beings y visualStyle elegidos. Son borradores: solo se guardará como universo la propuesta que el usuario elija."
+      : "",
+    j.snapshot.project.previousChapter
+      ? "ESTA ES LA CONTINUACIÓN DE UNA HISTORIA ÚNICA, no otra historia en el mismo mundo. Las tres propuestas deben avanzar desde el final anterior, sin reiniciar ni repetir lo sucedido. Usa el historial de TODOS los capítulos. Conserva exactamente las fichas existentes de personajes, sus voces y lugares en la biblia; puedes añadir entidades nuevas. La evolución emocional, heridas, conocimientos y objetos se expresan en los estados de las escenas. En el primer clip copia exactamente previousChapter.finalState en continuityIn. Usa previousFrame si continúa la misma acción y encuadre; el fotograma final anterior está disponible. Cada capítulo tiene ocho clips de ocho segundos."
       : "",
     `Perfiles editoriales: ${JSON.stringify(profiles)}`,
     `Contexto aprobado: ${JSON.stringify({ project: j.snapshot.project, bible: j.snapshot.bible, observed: j.snapshot.observed })}`,
@@ -66,7 +70,11 @@ export async function runDirector(
     }
     try {
       const parsed = schema.parse(result);
-      if (j.type === "plan") validatePlan(parsed, j.snapshot.bible!);
+      if (j.type === "plan") {
+        const validated = validatePlan(parsed, j.snapshot.bible!, !!j.snapshot.project.previousChapter);
+        validateChapterPlan(j.snapshot.project, validated);
+      }
+      if (j.type === "bible") validateChapterBible(j.snapshot.project, bible.parse(parsed));
     } catch (e) {
       failure =
         e instanceof Error ? e.message.slice(0, 5000) : "Salida inválida";
@@ -122,6 +130,7 @@ export function compileImagePrompt(
       entity,
       bible: b,
       clip: t.clipNumber ? s.plan?.clips[t.clipNumber - 1] : null,
+      previousChapter: s.project.previousChapter?.finalState || null,
     }),
     instructions,
   ].join("\n");
@@ -147,7 +156,7 @@ export function compileVideoPrompt(s: Snapshot, c: Clip, instructions: string) {
         locations: s.bible!.locations.filter((x) => x.id === c.locationId),
       }),
     "Approved observed incoming state: " +
-      JSON.stringify(prev ? s.observed[prev.id] : c.continuityIn),
+      JSON.stringify(prev ? s.observed[prev.id] : s.project.previousChapter?.finalState || c.continuityIn),
     "Local shots, literal dialogue, performance, audio and expected final state: " +
       JSON.stringify(c),
     instructions,

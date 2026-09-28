@@ -77,6 +77,7 @@ import {
   enqueue,
   approveAsset,
   editProject,
+  createNextChapter,
   jobControl,
   closeAmbiguousJob,
 } from "../lib/persistence/projects";
@@ -283,14 +284,60 @@ it("creates only the selected proposal's universe without manual input", async (
   });
   await editProject("test", 1, { selectedIdeaId: "idea2" });
   const saved = memory.rows.get("projects/test") as typeof s.project;
-  expect(saved.universeId).toBe("story-test-idea2");
+  expect(saved.universeId).toBe("story-test");
   expect(saved.universeSnapshot.name).toBe(universe.name);
   expect(memory.rows.has("universes/story-test-idea1")).toBe(false);
-  expect(memory.rows.has("universes/story-test-idea2")).toBe(true);
+  expect(memory.rows.has("universes/story-test")).toBe(true);
 });
 it("refuses to select an automatic proposal without its generated universe", async () => {
   const s = snapshot();
   memory.rows.set("projects/test", { ...s.project, automaticUniverse: true, universeId: "" });
   await expect(editProject("test", 1, { selectedIdeaId: "idea2" })).rejects.toThrow();
   expect([...memory.rows.keys()].filter(k => k.startsWith("universes/"))).toEqual([]);
+});
+
+function finishedChapter() {
+  const s = snapshot();
+  const last = s.assets.find(a => a.id === "v8")!;
+  memory.rows.set("projects/test/assets/v8", { ...last, lastFrameObject: "universos-ia/test/v8/last.png" });
+  memory.rows.set("projects/test/exports/final", { id: "final", state: "completed", createdAt: 1, approvedClipVersionIds: Array.from({ length: 8 }, (_, i) => `v${i + 1}`) });
+}
+it("creates one continuation even with concurrent requests, preserving universe, canon and chapter history", async () => {
+  finishedChapter();
+  const [first, second] = await Promise.all([createNextChapter("test", 1), createNextChapter("test", 1)]);
+  expect(second.id).toBe(first.id);
+  expect(first.chapterNumber).toBe(2);
+  expect(first.universeId).toBe("universe");
+  expect(first.previousChapter?.lastClip.lastFrameObject).toContain("v8/last.png");
+  expect(first.history).toHaveLength(1);
+  expect(first.history![0].story).toEqual(snapshot().project.story!.data);
+  expect(first.ideas).toEqual([]);
+  expect(first.automaticUniverse).toBe(false);
+  expect(memory.rows.get(`projects/${first.id}/assets/canonical_a`)).toEqual(snapshot().assets.find(a => a.id === "canonical_a"));
+  expect(memory.rows.has(`projects/${first.id}/assets/v8`)).toBe(false);
+  expect([...memory.rows.keys()].filter(k => k.startsWith("universes/"))).toEqual([]);
+  await expect(editProject("test", 1, { selectedIdeaId: "idea2" })).rejects.toThrow("continuación");
+  await expect(enqueue("test", a)).rejects.toThrow("continuación");
+});
+it("requires a current completed export before continuing", async () => {
+  await expect(createNextChapter("test", 1)).rejects.toThrow("Une primero");
+  finishedChapter();
+  memory.rows.set("projects/test/exports/final", { id: "final", state: "completed", approvedClipVersionIds: ["old"] });
+  await expect(createNextChapter("test", 1)).rejects.toThrow("Une primero");
+  expect((memory.rows.get("projects/test") as Project).nextChapterId).toBeUndefined();
+});
+it("refuses a chapter with unresolved clip continuity", async () => {
+  finishedChapter();
+  const clip = memory.rows.get("projects/test/targets/clip_8") as Target;
+  memory.rows.set("projects/test/targets/clip_8", { ...clip, needsReview: true });
+  await expect(createNextChapter("test", 1)).rejects.toThrow("ocho clips");
+});
+it("keeps the same universe when a continuation chooses its proposal", async () => {
+  finishedChapter();
+  const next = await createNextChapter("test", 1);
+  memory.rows.set(`projects/${next.id}`, { ...next, ideas: [{ id: "continue", title: "La carta se abre", synopsis: "Continúa" }] });
+  const selected = await editProject(next.id, 0, { selectedIdeaId: "continue" });
+  expect(selected.universeId).toBe("universe");
+  expect(selected.universeSnapshot).toEqual(snapshot().project.universeSnapshot);
+  expect((memory.rows.get(`projects/${next.id}/targets/character_a`) as Target).needsReview).toBe(false);
 });

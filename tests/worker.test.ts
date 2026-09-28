@@ -110,7 +110,7 @@ vi.mock("../lib/providers/vertex", () => ({
   pollVideo: vi.fn(),
   startVideo: vi.fn(),
 }));
-import { textGenerate, imageGenerate } from "../lib/providers/vertex";
+import { textGenerate, imageGenerate, startVideo } from "../lib/providers/vertex";
 import { execute } from "../worker/main";
 import { jobControl } from "../lib/persistence/projects";
 const jobId = "e".repeat(64);
@@ -198,4 +198,23 @@ it("REGRESSION a worker that loses its lease cannot write a late text checkpoint
   expect(memory.rows.has(`jobs/${jobId}/checkpoints/prompt_character_a`)).toBe(false);
   expect(imageGenerate).not.toHaveBeenCalled();
   expect((memory.rows.get("jobs/" + jobId) as Job).leaseOwner).toBe("replacement-worker");
+});
+
+it("uses the previous chapter's final frame as the first clip's actual image input", async () => {
+  const j = memory.rows.get("jobs/" + jobId) as Job;
+  vi.stubEnv("GCP_PROJECT_ID", "test-project");
+  vi.stubEnv("GCS_OUTPUT_BUCKET", "test-bucket");
+  j.type = "video"; j.targetId = "clip_1";
+  j.snapshot.plan = structuredClone(j.snapshot.plan!);
+  j.snapshot.plan.clips[0].startMode = "previousFrame";
+  const last = { ...j.snapshot.assets.find(a => a.id === "v8")!, lastFrameObject: "universos-ia/previous/last.png" };
+  j.snapshot.project.previousChapter = { projectId: "previous", exportId: "final", finalState: j.snapshot.observed.clip_8, bible: j.snapshot.bible!, lastClip: last };
+  memory.files.set(last.lastFrameObject, Buffer.from("previous chapter frame"));
+  memory.rows.set("jobs/" + jobId, j);
+  vi.mocked(startVideo).mockReset().mockRejectedValue(new Error("Stop simulated provider before any real video processing"));
+  await execute(jobId);
+  process.exitCode = 0;
+  vi.unstubAllEnvs();
+  expect(startVideo, JSON.stringify((memory.rows.get("jobs/" + jobId) as Job).error)).toHaveBeenCalledOnce();
+  expect(JSON.stringify(vi.mocked(startVideo).mock.calls[0])).toContain(Buffer.from("previous chapter frame").toString("base64"));
 });
