@@ -11,7 +11,7 @@ import {
   type Clip,
 } from "../schemas";
 import type { Job, Snapshot, Target } from "../types";
-import { profiles } from "./catalog";
+import { settingDirection } from "./setting";
 import { textGenerate } from "../providers/vertex";
 import { validateChapterPlan } from "../continuity/chapters";
 import { AppError } from "../errors";
@@ -40,7 +40,8 @@ export function narrativePrompt(j: Job, repair?: string) {
     j.snapshot.project.previousChapter
       ? "ESTA ES LA CONTINUACIÓN DE UNA HISTORIA ÚNICA, no otra historia en el mismo mundo. Las tres propuestas deben avanzar desde el final anterior, sin reiniciar ni repetir lo sucedido. Usa el historial de TODOS los capítulos. Conserva exactamente las fichas existentes de personajes, sus voces y lugares en la biblia; puedes añadir entidades nuevas. La evolución emocional, heridas, conocimientos y objetos se expresan en los estados de las escenas. En el primer clip copia exactamente previousChapter.finalState en continuityIn. Usa previousFrame si continúa la misma acción y encuadre; el fotograma final anterior está disponible. Cada capítulo tiene ocho clips de ocho segundos."
       : "",
-    `Perfiles editoriales: ${JSON.stringify(profiles)}`,
+    settingDirection(j.snapshot.project).instruction,
+    `Perfiles editoriales: ${JSON.stringify(settingDirection(j.snapshot.project).profiles)}`,
     narrativeTreatment(j.snapshot.project.universeSnapshot.visualStyle),
     `Contexto aprobado: ${JSON.stringify({ project: j.snapshot.project, bible: j.snapshot.bible, observed: j.snapshot.observed })}`,
     `Instrucciones adicionales: ${j.instructions}`,
