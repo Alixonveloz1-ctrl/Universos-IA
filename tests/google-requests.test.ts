@@ -31,3 +31,13 @@ it("requests low reasoning on the selected text model and structured JSON", asyn
   expect(body.generationConfig.thinkingConfig).toEqual({ thinkingLevel: "LOW" });
   expect(body.generationConfig.responseMimeType).toBe("application/json");
 });
+
+it("gives text a bounded 210-second window and a compact output budget", async () => {
+  const timeout = vi.spyOn(AbortSignal, "timeout");
+  const request = vi.fn().mockResolvedValue(Response.json({ candidates: [{ content: { parts: [{ text: '{"ok":true}' }] } }] }));
+  vi.stubGlobal("fetch", request);
+  await textGenerate("gemini-3-flash-preview", "Three brief ideas");
+  expect(timeout).toHaveBeenCalledWith(210000);
+  expect(JSON.parse(request.mock.calls[0][1].body).generationConfig.maxOutputTokens).toBe(8192);
+  timeout.mockRestore();
+});

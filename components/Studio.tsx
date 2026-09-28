@@ -892,7 +892,9 @@ export default function Studio() {
                         })
                       }
                     >
-                      {data.job.error?.code === "PROVIDER_REJECTED"
+                      {data.job.error?.code === "TEXT_RESPONSE_LOST"
+                        ? "Generar de nuevo la parte perdida"
+                        : data.job.error?.code === "PROVIDER_REJECTED"
                         ? `Volver a intentar ${data.job.type === "bible" ? "Biblia" : "generación"}`
                         : data.job.state === "needsReview"
                         ? "Comprobar recuperación"

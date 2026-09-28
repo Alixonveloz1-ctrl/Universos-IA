@@ -319,3 +319,37 @@ it("uploads Vercel images directly, verifies bytes and does not use the broken S
   expect(request).toHaveBeenCalledTimes(2);
   expect(imageGenerate).toHaveBeenCalledTimes(1); expect(textGenerate).not.toHaveBeenCalled();
 });
+
+it("ends a fruitless text recovery without a paid request and allows an explicit retry", async () => {
+  const j = memory.rows.get("jobs/" + jobId) as Job;
+  j.type = "ideas";
+  j.checkpoint = { pendingCall: "director_0", submitted: true, completedPart: "keep" };
+  memory.rows.set("jobs/" + jobId, j);
+  await execute(jobId, true);
+  let saved = memory.rows.get("jobs/" + jobId) as Job;
+  expect(saved.state).toBe("failed");
+  expect(saved.error?.code).toBe("TEXT_RESPONSE_LOST");
+  expect(saved.checkpoint.pendingCall).toBeNull();
+  expect(saved.checkpoint.completedPart).toBe("keep");
+  expect(saved.checkpoint.lostTextCalls).toEqual([expect.objectContaining({ key: "director_0", possibleCharge: true })]);
+  expect(textGenerate).not.toHaveBeenCalled();
+  const result = { ideas: ["one", "two", "three"].map(id => ({ id, title: "A title", synopsis: "A clear conflict and consequence." })) };
+  vi.mocked(textGenerate).mockResolvedValue(result);
+  await jobControl(jobId, "resume");
+  await execute(jobId, true);
+  saved = memory.rows.get("jobs/" + jobId) as Job;
+  expect(saved.state).toBe("completed");
+  expect(textGenerate).toHaveBeenCalledTimes(1);
+});
+
+it("recovers a saved text response without declaring it lost or paying again", async () => {
+  const j = memory.rows.get("jobs/" + jobId) as Job;
+  j.type = "ideas";
+  j.checkpoint = { pendingCall: "director_0", submitted: true };
+  memory.rows.set("jobs/" + jobId, j);
+  const result = { ideas: ["one", "two", "three"].map(id => ({ id, title: "A title", synopsis: "A clear conflict and consequence." })) };
+  memory.rows.set(`jobs/${jobId}/checkpoints/director_0`, { value: result });
+  await execute(jobId, true);
+  expect((memory.rows.get("jobs/" + jobId) as Job).state).toBe("completed");
+  expect(textGenerate).not.toHaveBeenCalled();
+});

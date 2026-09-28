@@ -85,7 +85,7 @@ export async function mediaResponse(key: string, range: string | null = null) {
     if (upstream.headers.has(name)) headers.set(name, upstream.headers.get(name)!);
   return new Response(upstream.body, { status: upstream.status, headers });
 }
-export async function googlePost(url: string, body: unknown, paid = false) {
+export async function googlePost(url: string, body: unknown, paid = false, timeoutMs = 120000) {
   const started = Date.now();
   const label = new URL(url).pathname.split("/").pop();
   const token = await googleAuth().getAccessToken();
@@ -99,9 +99,11 @@ export async function googlePost(url: string, body: unknown, paid = false) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(120000),
+      signal: AbortSignal.timeout(timeoutMs),
     });
-  } catch {
+  } catch (error) {
+    const cause = error as { name?: string; cause?: { code?: string } };
+    console.error("google_transport_failed", { operation: label, elapsedMs: Date.now() - started, timeoutMs, name: cause?.name, cause: cause?.cause?.code });
     throw new AppError(
       paid ? "AMBIGUOUS" : "PROVIDER_NETWORK",
       paid

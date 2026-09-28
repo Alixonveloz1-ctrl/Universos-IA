@@ -37,7 +37,6 @@ function specificTreatment(style: string): string {
 }
 
 export function narrativeTreatment(style: string): string {
-  if (style !== TELENOVELA_STYLE) return visualTreatment(style);
   return [
     visualTreatment(style),
     "RITMO NARRATIVO DE TELENOVELA BREVE: aplica este tratamiento respetando género, subgénero, trama, tono, idioma, acento y cierre seleccionados; no impongas romance, violencia ni humor si no corresponden.",

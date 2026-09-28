@@ -471,9 +471,16 @@ export async function execute(jobId: string, direct = false): Promise<"continue"
       typeof job.checkpoint.pendingCall === "string" &&
       !job.checkpoint.pendingCall.startsWith("asset_")
     ) {
-      // Synchronous text APIs expose no operation to poll; persisted checkpoints
-      // are the only recoverable response. Never reissue the missing call.
+      // A synchronous text response cannot be polled at Google. We have checked
+      // the durable result above. End this recovery without another paid call;
+      // a separate explicit retry can request just the missing part.
       await reconciled();
+      const missingCall = job.checkpoint.pendingCall;
+      const lostTextCalls = [...(Array.isArray(job.checkpoint.lostTextCalls) ? job.checkpoint.lostTextCalls : []),
+        { key: missingCall, reconciledAt: Date.now(), possibleCharge: true }];
+      persistedCheckpoint = { ...persistedCheckpoint, lostTextCalls, pendingCall: null, submitted: false };
+      job.checkpoint = { ...job.checkpoint, lostTextCalls, pendingCall: null, submitted: false };
+      throw new AppError("TEXT_RESPONSE_LOST", "No se encontró una respuesta de texto guardada. Puedes generar de nuevo solo la parte perdida; las partes terminadas se conservan. El intento anterior pudo consumir créditos.", 502);
     }
     if (["ideas", "story", "bible", "plan"].includes(job.type)) {
       const result = await runDirector(job, beforeCall, checkpoint);
@@ -585,7 +592,7 @@ export async function execute(jobId: string, direct = false): Promise<"continue"
     const err = safeError(e);
     // A provider's explicit 4xx rejection cannot be a lost paid response.
     // Keep the error, but unblock a later user-requested attempt.
-    if (err.code === "PROVIDER_REJECTED" && job.checkpoint.pendingCall && !job.checkpoint.operation) {
+    if (["PROVIDER_REJECTED", "PROVIDER_AUTH", "QUOTA", "PROVIDER_BLOCKED"].includes(err.code) && job.checkpoint.pendingCall && !job.checkpoint.operation) {
       persistedCheckpoint = { ...persistedCheckpoint, pendingCall: null, submitted: false };
       job.checkpoint = { ...job.checkpoint, pendingCall: null, submitted: false };
     }

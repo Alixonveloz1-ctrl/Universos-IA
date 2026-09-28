@@ -86,6 +86,7 @@ export async function runDirector(
         // The full bible and eight-clip plan schemas can exceed Google's
         // structured-output complexity limit (HTTP 400). Validate locally.
         j.type === "plan" ? undefined : z.toJSONSchema(schema),
+        j.type === "plan" ? 32768 : 8192,
       );
       await checkpoint(key, result);
     }

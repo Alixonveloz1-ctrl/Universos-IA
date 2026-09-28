@@ -49,3 +49,12 @@ it("retries a failed delivery with the same step, without reexecuting the paid g
   expect(m.execute).toHaveBeenCalledTimes(1); expect(request).toHaveBeenCalledTimes(2);
   expect(request.mock.calls.map(c => c[1].headers["x-universos-step"])).toEqual(["2", "2"]);
 });
+
+it("hands off after 30 seconds so a slow text call has a fresh invocation budget", async () => {
+  let now = 100000; vi.spyOn(Date, "now").mockImplementation(() => now);
+  m.execute.mockImplementation(async () => { now += 35000; return "continue"; });
+  const request = vi.fn().mockResolvedValue({ ok: true }); vi.stubGlobal("fetch", request);
+  await launch(job); await m.after.mock.calls[0][0]();
+  expect(m.execute).toHaveBeenCalledTimes(1);
+  expect(request).toHaveBeenCalledTimes(1);
+});

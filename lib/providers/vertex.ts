@@ -70,6 +70,7 @@ export async function textGenerate(
   id: string,
   prompt: string,
   schema?: unknown,
+  maxOutputTokens = 8192,
 ) {
   model(id, "text");
   const r = await googlePost(
@@ -79,12 +80,13 @@ export async function textGenerate(
       generationConfig: {
         responseMimeType: "application/json",
         thinkingConfig: { thinkingLevel: "LOW" },
-        maxOutputTokens: 32768,
+        maxOutputTokens,
         ...(schema ? { responseJsonSchema: schema } : {}),
         candidateCount: 1,
       },
     },
     true,
+    210000,
   );
   const parts = r.candidates?.[0]?.content?.parts;
   if (!Array.isArray(parts))

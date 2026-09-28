@@ -30,8 +30,8 @@ export function scheduleDirect(job: Job) {
           return;
         }
         // Continue short saved steps locally. Leave enough time for a full
-        // 120s provider call + persistence inside Vercel's 300s execution.
-        if (Date.now() - started < 90000) continue;
+        // 210s text call + persistence inside Vercel's 300s execution.
+        if (Date.now() - started < 30000) continue;
         const step = Number(current.checkpoint.directStep || 0);
         const url = new URL(`/api/work/${job.id}`, required("APP_ORIGIN"));
         // Retrying this handoff never retries a model call: the signed step,

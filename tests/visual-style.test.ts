@@ -103,3 +103,19 @@ it("attaches an approved style anchor but never a pending or stale character", (
   anchor.needsReview = true;
   expect(imageReferenceIds(s, target)).toEqual([]);
 });
+
+it("applies conflict-first short-form narration to every visual mode and narrative stage", () => {
+  const s = structuredClone(snapshot());
+  for (const style of styles) {
+    s.project.universeSnapshot.visualStyle = style;
+    for (const type of ["ideas", "story", "bible", "plan"]) {
+      const prompt = narrativePrompt({ type, snapshot: s, instructions: "" } as Job);
+      expect(prompt).toContain("Abre dentro de un conflicto concreto");
+      expect(prompt).toContain("diálogo corto de acción y respuesta");
+      expect(prompt).toContain("64 segundos");
+      expect(prompt).toContain("ocho clips de ocho segundos");
+      expect(prompt).toContain(`ESTILO ÚNICO DEL UNIVERSO: ${style}`);
+      expect(prompt).toContain("no impongas romance, violencia ni humor si no corresponden");
+    }
+  }
+});
