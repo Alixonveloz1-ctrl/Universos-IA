@@ -376,6 +376,7 @@ function Media({
 export default function Studio() {
   const busyRef = useRef(false);
   const [recoveryNote, setRecoveryNote] = useState("");
+  const showRecoveredStory = useRef<string | null>(null);
   const [acknowledged, setAcknowledged] = useState(false);
   const [session, setSession] = useState(false),
     [checked, setChecked] = useState(false),
@@ -439,6 +440,14 @@ export default function Studio() {
     };
   }, [refresh]);
   const pid = data?.project.id;
+  useEffect(() => {
+    if (!showRecoveredStory.current || tab !== "Historia" ||
+      !data?.narratives.some(n => n.kind === "story" && n.id === showRecoveredStory.current)) return;
+    const panel = document.getElementById("historia-generada");
+    panel?.querySelector("details")?.setAttribute("open", "");
+    panel?.scrollIntoView({ behavior: "smooth", block: "start" });
+    showRecoveredStory.current = null;
+  }, [data, tab]);
   useEffect(() => {
     if (!pid) return;
     const timer = setInterval(() => {
@@ -846,8 +855,10 @@ export default function Studio() {
                 {data.job.type === "story" && data.job.error?.code === "CONTINUITY" && data.job.resumable && (
                   <button disabled={busy} onClick={() => void perform(async () => {
                     await api(`jobs/${data.job!.id}/recover-story`, "POST", {});
+                    setTab("Historia");
+                    showRecoveredStory.current = data.job!.id;
                     await refresh(pid);
-                  })}>Recuperar borrador de historia para revisarlo</button>
+                  })}>Mostrar historia ya generada</button>
                 )}
                 {active && (
                   <button
@@ -1174,7 +1185,7 @@ function NarrativePanel({
     }
   };
   return (
-    <section className="panel">
+    <section className="panel" id={kind === "story" ? "historia-generada" : undefined}>
       <h2>
         {kind === "story"
           ? "Historia"
@@ -1182,6 +1193,8 @@ function NarrativePanel({
             ? "Biblia de continuidad"
             : "Guion completo"}
       </h2>
+      {kind === "story" && !data.project.story?.approvedAt &&
+        <p>Lee la historia aquí. Si te gusta, pulsa «Aprobar historia». Después sigue a «Biblia». No tienes que escribir nada para avanzar.</p>}
       <label>
         Versiones narrativas
         <select
