@@ -305,8 +305,8 @@ function Editor({
           value={String(value)}
           onChange={(e) => onChange(e.target.value)}
         >
-          <option value="storyboard">Imagen de storyboard</option>
-          <option value="previousFrame">Último fotograma anterior</option>
+          <option value="storyboard">Imagen inicial propia del clip</option>
+          <option value="previousFrame">Continuidad anterior · imagen inicial propia</option>
         </select>
       ) : (
         <textarea
@@ -1304,7 +1304,7 @@ function TargetPanel({
       : t.role === "location"
         ? data.bible?.locations.find((x) => x.id === t.entityId)?.name
         : t.role === "shot"
-          ? "Toma " + t.entityId
+          ? "Imagen inicial del clip " + t.clipNumber
           : "Video del clip " + t.clipNumber;
   return (
     <article className="panel">

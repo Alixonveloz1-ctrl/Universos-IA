@@ -233,7 +233,7 @@ it("REGRESSION a worker that loses its lease cannot write a late text checkpoint
   expect((memory.rows.get("jobs/" + jobId) as Job).leaseOwner).toBe("replacement-worker");
 });
 
-it("uses the previous chapter's final frame as the first clip's actual image input", async () => {
+it("uses the clip's own image even when continuing the previous chapter", async () => {
   const j = memory.rows.get("jobs/" + jobId) as Job;
   vi.stubEnv("GCP_PROJECT_ID", "test-project");
   vi.stubEnv("GCS_OUTPUT_BUCKET", "test-bucket");
@@ -243,13 +243,15 @@ it("uses the previous chapter's final frame as the first clip's actual image inp
   const last = { ...j.snapshot.assets.find(a => a.id === "v8")!, lastFrameObject: "universos-ia/previous/last.png" };
   j.snapshot.project.previousChapter = { projectId: "previous", exportId: "final", finalState: j.snapshot.observed.clip_8, bible: j.snapshot.bible!, lastClip: last };
   memory.files.set(last.lastFrameObject, Buffer.from("previous chapter frame"));
+  memory.files.set(j.snapshot.assets.find(a => a.id === "i1")!.storageObject, Buffer.from("reference"));
   memory.rows.set("jobs/" + jobId, j);
   vi.mocked(startVideo).mockReset().mockRejectedValue(new Error("Stop simulated provider before any real video processing"));
   await execute(jobId);
   process.exitCode = 0;
   vi.unstubAllEnvs();
   expect(startVideo, JSON.stringify((memory.rows.get("jobs/" + jobId) as Job).error)).toHaveBeenCalledOnce();
-  expect(JSON.stringify(vi.mocked(startVideo).mock.calls[0])).toContain(Buffer.from("previous chapter frame").toString("base64"));
+  expect(JSON.stringify(vi.mocked(startVideo).mock.calls[0])).toContain(Buffer.from("reference").toString("base64"));
+  expect(JSON.stringify(vi.mocked(startVideo).mock.calls[0])).not.toContain(Buffer.from("previous chapter frame").toString("base64"));
 });
 
 it("startup check verifies storage and Firestore without calling generators", async () => {

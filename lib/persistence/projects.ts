@@ -14,6 +14,7 @@ import {
   state,
   validatePlan,
   type Action,
+  type Plan,
   universe,
   idea,
   projectInput,
@@ -135,7 +136,12 @@ export async function readSnapshot(
     project: p.selectedIdeaId
       ? { ...p, ideas: p.ideas.filter(i => i.id === p.selectedIdeaId) }
       : p,
-    targets: t.docs.map((d) => d.data() as Target),
+    // Older plans may have saved one image target per camera cut. Only the
+    // first shot is the actual initial frame Veo consumes for each clip.
+    targets: t.docs.map((d) => d.data() as Target).filter(target =>
+      target.role !== "shot" || !p.plan ||
+      (p.plan.data as Plan).clips?.some(c => c.number === target.clipNumber && c.shots[0]?.id === target.entityId)
+    ),
     assets: a.docs.map((d) => d.data() as Asset),
     bible: p.bible ? bible.parse(p.bible.data) : null,
     plan: p.plan ? plan.parse(p.plan.data) : null,
@@ -415,7 +421,7 @@ export async function editProject(
               instructions: "",
               needsReview: false,
             },
-            ...c.shots.map((sh) => ({
+            ...c.shots.slice(0, 1).map((sh) => ({
               id: "shot_" + sh.id,
               kind: "image" as const,
               role: "shot" as const,

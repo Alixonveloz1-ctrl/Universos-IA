@@ -52,12 +52,15 @@ export function prerequisites(s: Snapshot, a: Action) {
     if (t.role === "shot") {
       assert(p.plan?.approvedAt, "Aprueba el guion.");
       canonicalReady(s);
+      assert(s.plan?.clips.some(c => c.number === t.clipNumber && c.shots[0]?.id === t.entityId),
+        "Cada clip utiliza solo su imagen inicial.");
     }
   }
   if (a.type === "images" && p.plan?.approvedAt) {
     canonicalReady(s);
     s.targets
-      .filter((t) => t.kind === "image" && !t.approvedVersionId)
+      .filter((t) => t.kind === "image" && !t.approvedVersionId &&
+        (t.role !== "shot" || s.plan?.clips.some(c => c.number === t.clipNumber && c.shots[0]?.id === t.entityId)))
       .forEach((t) => imageReferenceIds(s, t));
   }
   if (a.type === "video") {
@@ -69,8 +72,8 @@ export function prerequisites(s: Snapshot, a: Action) {
     const c = s.plan!.clips[n - 1];
     assert(c, "Clip sin guion");
     assert(
-      c.shots.every((shot) => approvedImage(s, "shot", shot.id)),
-      "Aprueba las imágenes y resuelve sus revisiones.",
+      approvedImage(s, "shot", c.shots[0].id),
+      "Aprueba la imagen inicial de este clip.",
     );
     if (n > 1) {
       const prev = s.targets.find(
@@ -133,10 +136,10 @@ export function affected(
     const video = targets.find(
       (t) => t.role === "clip" && t.clipNumber === target.clipNumber,
     );
-    if (video?.approvedVersionId) result.add(video.id);
+    const initial = targets.find(t => t.role === "shot" && t.clipNumber === target.clipNumber);
+    if (video?.approvedVersionId && initial?.id === target.id) result.add(video.id);
   }
-  // Canonical references affect their storyboard and the videos directed by it,
-  // even when Veo used only the first storyboard image as its physical input.
+  // Canonical references affect the initial image and videos that consume it.
   if (target.role === "character" || target.role === "location") {
     for (const shot of targets.filter((t) => t.role === "shot" && result.has(t.id))) {
       const video = targets.find((t) => t.role === "clip" && t.clipNumber === shot.clipNumber);

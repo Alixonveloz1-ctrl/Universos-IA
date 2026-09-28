@@ -91,6 +91,7 @@ import {
   readSnapshot,
 } from "../lib/persistence/projects";
 import type { Asset, Job, Project, Target } from "../lib/types";
+import type { Plan } from "../lib/schemas";
 beforeEach(() => {
   process.env.GCP_PROJECT_ID = "alixon-jhan";
   process.env.GCS_OUTPUT_BUCKET = "universos_ia";
@@ -226,6 +227,32 @@ it("REGRESSION removed shots do not receive updates after deletion", async () =>
   await editProject("test", 1, { kind: "plan", data: p, approve: true });
   expect(memory.rows.has("projects/test/targets/shot_s0")).toBe(false);
   expect(memory.rows.has("projects/test/targets/shot_changed")).toBe(true);
+});
+it("shows only eight initial images for an older plan with extra camera cuts", async () => {
+  const p = structuredClone(memory.rows.get("projects/test") as Project);
+  const plan = structuredClone(p.plan!.data as Plan);
+  plan.clips[0].shots.push({ ...plan.clips[0].shots[0], id: "extra", start: 4, end: 8 });
+  plan.clips[0].shots[0].end = 4;
+  p.plan = { ...p.plan!, data: plan };
+  memory.rows.set("projects/test", p);
+  memory.rows.set("projects/test/targets/shot_extra", {
+    ...memory.rows.get("projects/test/targets/shot_s0") as Target,
+    id: "shot_extra", entityId: "extra", approvedVersionId: undefined,
+  });
+  const current = await readSnapshot("test");
+  expect(current.targets.filter(t => t.role === "shot")).toHaveLength(8);
+  expect(current.targets.some(t => t.id === "shot_extra")).toBe(false);
+  const { prerequisites } = await import("../lib/continuity/rules");
+  expect(() => prerequisites(current, { type: "video", expectedRevision: 1, targetId: "clip_1", requestId: "test", instructions: "" })).not.toThrow();
+});
+
+it("creates only eight initial image targets when approving a multi-cut plan", async () => {
+  const p = structuredClone((memory.rows.get("projects/test") as Project).plan!.data as Plan);
+  p.clips[0].shots[0].end = 4;
+  p.clips[0].shots.push({ ...p.clips[0].shots[0], id: "extra", start: 4, end: 8 });
+  await editProject("test", 1, { kind: "plan", data: p, approve: true });
+  expect(memory.rows.has("projects/test/targets/shot_extra")).toBe(false);
+  expect((await readSnapshot("test")).targets.filter(t => t.role === "shot")).toHaveLength(8);
 });
 it("SIMULATED recovery: manual inspection retains the ambiguous checkpoint", async () => {
   const j = await enqueue("test", a);

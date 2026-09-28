@@ -314,32 +314,15 @@ export async function execute(jobId: string, direct = false): Promise<"continue"
         beforeCall,
         checkpoint,
       );
-      const previous = s.targets.find(
-        (x) => x.role === "clip" && x.clipNumber === c.number - 1,
-      );
       let refs: ImageRef[];
-      if (c.startMode === "previousFrame") {
-        const v = c.number === 1 ? s.project.previousChapter?.lastClip : s.assets.find((x) => x.id === previous?.approvedVersionId);
-        assert(
-          v?.lastFrameObject,
-          "Falta el último fotograma del clip aprobado",
-        );
-        const [bytes] = await privateObject(v.lastFrameObject).download();
-        refs = [
-          {
-            bytesBase64Encoded: bytes.toString("base64"),
-            mimeType: "image/png",
-          },
-        ];
-        inputRefs = [v.id];
-      } else {
-        const image = s.targets.find(
-          (x) => x.entityId === c.shots[0].id && x.role === "shot",
-        );
-        assert(image?.approvedVersionId, "Falta imagen inicial");
-        inputRefs = [image.approvedVersionId];
-        refs = await refsFor(inputRefs);
-      }
+      // Exactly one approved image starts each eight-second clip. The plan's
+      // later camera cuts are directions for Veo, not extra image jobs.
+      const image = s.targets.find(
+        (x) => x.entityId === c.shots[0].id && x.role === "shot",
+      );
+      assert(image?.approvedVersionId, "Falta imagen inicial");
+      inputRefs = [image.approvedVersionId];
+      refs = await refsFor(inputRefs);
       let operation = job.checkpoint.operation as string | undefined;
       let recoveredObject = job.checkpoint.videoObject as string | undefined;
       if (
@@ -544,7 +527,8 @@ export async function execute(jobId: string, direct = false): Promise<"continue"
         (t) =>
           t.kind === "image" &&
           !t.approvedVersionId &&
-          (t.role !== "shot" || job.snapshot.project.plan?.approvedAt),
+          (t.role !== "shot" || (job.snapshot.project.plan?.approvedAt && job.snapshot.plan?.clips.some(c =>
+            c.number === t.clipNumber && c.shots[0]?.id === t.entityId))),
       );
       for (const t of targets) await generate(t);
     } else if (job.type === "video") {

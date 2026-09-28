@@ -133,7 +133,7 @@ describe("Access", () => {
     ).toThrow();
   });
 });
-it("REGRESSION alternate storyboard shot invalidates its own video even if not sent as initial image", () => {
+it("an unused additional camera cut does not invalidate a video fed by its opening image", () => {
   const s = snapshot();
   const second = {
     ...s.targets[1],
@@ -142,15 +142,13 @@ it("REGRESSION alternate storyboard shot invalidates its own video even if not s
     approvedVersionId: "secondimage",
   };
   s.targets.push(second);
-  expect([...affected(second, s.targets, s.assets, "secondimage")]).toEqual([
-    "clip_1",
-  ]);
+  expect([...affected(second, s.targets, s.assets, "secondimage")]).toEqual([]);
 });
 
 it("REGRESSION deleting a required target cannot bypass approval guards", () => {
   const s = snapshot();
   s.targets = s.targets.filter((t) => t.id !== "shot_s1");
-  expect(() => prerequisites(s, action)).toThrow("imágenes");
+  expect(() => prerequisites(s, action)).toThrow("imagen inicial");
   const canonical = snapshot();
   canonical.targets = canonical.targets.filter((t) => t.role !== "character");
   expect(() => prerequisites(canonical, action)).toThrow("canónicas");
