@@ -88,6 +88,7 @@ import {
   deleteUniverse,
   recoverReviewedIdeas,
   recoverReviewedStory,
+  readSnapshot,
 } from "../lib/persistence/projects";
 import type { Asset, Job, Project, Target } from "../lib/types";
 beforeEach(() => {
@@ -231,9 +232,13 @@ it("SIMULATED recovery: manual inspection retains the ambiguous checkpoint", asy
   );
 });
 it("retries an explicitly rejected 400 without a stuck pending response", async () => {
+  const original = memory.rows.get("projects/test") as Project;
+  expect(original.ideas.length).toBe(3);
+  expect((await readSnapshot("test")).project.ideas.map(i => i.id)).toEqual([original.selectedIdeaId]);
   const j = await enqueue("test", { ...a, type: "bible" });
   memory.rows.set("jobs/" + j.id, {
     ...j, state: "needsReview", leaseUntil: 0,
+    snapshot: { ...j.snapshot, project: { ...j.snapshot.project, ideas: original.ideas } },
     error: { code: "PROVIDER_REJECTED", message: "Google respondió 400" },
     checkpoint: { submitted: true, pendingCall: "director_0", reconciledAt: Date.now() },
   });
@@ -242,6 +247,7 @@ it("retries an explicitly rejected 400 without a stuck pending response", async 
   expect(next.state).toBe("queued");
   expect(next.checkpoint.pendingCall).toBeNull();
   expect(next.checkpoint.submitted).toBe(false);
+  expect(next.snapshot.project.ideas.map(i => i.id)).toEqual([original.selectedIdeaId]);
 });
 
 it("REGRESSION two independent request IDs for same active intent return one job", async () => {

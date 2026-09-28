@@ -130,7 +130,11 @@ export async function readSnapshot(
     read("observed"),
   ]);
   return {
-    project: p,
+    // Older projects retained the full shortlist after selection. Never pass
+    // discarded proposals back to the Director or render them in the editor.
+    project: p.selectedIdeaId
+      ? { ...p, ideas: p.ideas.filter(i => i.id === p.selectedIdeaId) }
+      : p,
     targets: t.docs.map((d) => d.data() as Target),
     assets: a.docs.map((d) => d.data() as Asset),
     bible: p.bible ? bible.parse(p.bible.data) : null,
@@ -578,7 +582,11 @@ export async function jobControl(id: string, operation: "stop" | "resume") {
     // Older workers mistakenly retained a pending call after a 400 response.
     const rejected = j.error?.code === "PROVIDER_REJECTED";
     const checkpoint = rejected ? { ...j.checkpoint, pendingCall: null, submitted: false } : j.checkpoint;
-    tx.update(ref, { stopRequested: false, state: "queued", error: null, executionName: "", operationName: "", dispatchedAt: Date.now(), ...(rejected ? { checkpoint } : {}) });
+    const snapshot = rejected && j.snapshot.project.selectedIdeaId
+      ? { ...j.snapshot, project: { ...j.snapshot.project,
+          ideas: j.snapshot.project.ideas.filter(i => i.id === j.snapshot.project.selectedIdeaId) } }
+      : j.snapshot;
+    tx.update(ref, { stopRequested: false, state: "queued", error: null, executionName: "", operationName: "", dispatchedAt: Date.now(), ...(rejected ? { checkpoint, snapshot } : {}) });
     return { ...j, stopRequested: false, state: "queued" as const, executionName: "", operationName: "" };
   });
 }
