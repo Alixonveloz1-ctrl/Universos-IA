@@ -676,6 +676,7 @@ export async function createNextChapter(projectId: string, revision: number) {
       automaticUniverse: false, chapterNumber: (p.chapterNumber || 1) + 1, rootProjectId: p.rootProjectId || p.id,
       title: `${p.universeSnapshot.name} · Capítulo ${(p.chapterNumber || 1) + 1}`,
       genre: p.genre, subgenre: p.subgenre, plotType: p.plotType, tone: p.tone, ending: p.ending,
+      ...(p.concept ? { concept: p.concept } : {}),
       language: p.language, accent: p.accent, models: p.models, revision: 0, stage: "ideas", ideas: [],
       bible: { ...p.bible!, approvedAt: 0 },
       history: [...(p.history || []), { projectId: p.id, chapterNumber: p.chapterNumber || 1, title: p.title, story: p.story!.data, finalState, exportId: completed.id }],

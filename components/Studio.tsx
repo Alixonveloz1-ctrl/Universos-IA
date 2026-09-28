@@ -390,6 +390,7 @@ export default function Studio() {
     [data, setData] = useState<Data | null>(null),
     [tab, setTab] = useState("Historia");
   const [selection, setSelection] = useState({
+    concept: "",
     beings: "Frutas",
     visualStyle: "Cinemático 3D",
     genre: "Drama",
@@ -638,6 +639,17 @@ export default function Studio() {
               Define el estilo y recibe tres propuestas originales.
             </p>
             <p className="muted">El universo se creará automáticamente al elegir una de las tres historias.</p>
+            <label style={{ display: "block", marginTop: 20 }}>
+              Concepto de la historia (opcional)
+              <textarea
+                value={selection.concept}
+                onChange={(e) => setSelection({ ...selection, concept: e.target.value })}
+                maxLength={1000}
+                rows={3}
+                placeholder="Ej.: Una historia en una lavandería, en una heladería o sobre los problemas de una familia"
+                style={{ width: "100%", marginTop: 8 }}
+              />
+            </label>
             <div className="grid">
               {field("Tipo de seres", selection.beings, (v) => setSelection({ ...selection, beings: v }), beings)}
               {field("Estilo visual", selection.visualStyle, (v) => setSelection({ ...selection, visualStyle: v }), styles)}

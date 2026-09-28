@@ -121,6 +121,18 @@ it("generates three universe drafts from dropdown preferences in the ideas call"
   expect(generate.mock.calls[0][1]).toContain("solo se guardará como universo");
   expect(JSON.stringify(generate.mock.calls[0][2])).toContain('"universe"');
 });
+it("passes the optional concept to all three proposals and the chosen story", async () => {
+  const { j } = execution();
+  j.type = "ideas";
+  j.snapshot.project.concept = "Una lavandería de barrio";
+  const { narrativePrompt } = await import("../lib/director");
+  expect(narrativePrompt(j)).toContain("las TRES propuestas deben basarse");
+  expect(narrativePrompt(j)).toContain("Una lavandería de barrio");
+  j.type = "story";
+  expect(narrativePrompt(j)).toContain("Conserva el concepto al desarrollar la historia elegida");
+  j.snapshot.project.concept = "";
+  expect(narrativePrompt(j)).not.toContain("CONCEPTO ELEGIDO POR EL USUARIO");
+});
 it("recovers all three ideas from a failed subjective review without paying for another generation", async () => {
   const { j, before, checkpoint } = execution();
   j.type = "ideas";

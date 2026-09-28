@@ -66,6 +66,7 @@ export interface Project {
   owner: "personal";
   universeId: string;
   automaticUniverse?: boolean;
+  concept?: string;
   chapterNumber?: number;
   rootProjectId?: string;
   nextChapterId?: string;
