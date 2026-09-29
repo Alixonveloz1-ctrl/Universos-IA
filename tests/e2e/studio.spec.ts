@@ -41,7 +41,8 @@ test("SIMULATED API: mobile creation, exact three proposals, selection and reloa
       const input = req.postDataJSON();
       expect(input.universeId).toBeUndefined();
       expect(input.beings).toBe("Frutas");
-      expect(input.visualStyle).toBe("Cinemático 3D");
+      expect(input.visualStyle).toBe("3D Viral Estilizado");
+      expect(input.worldSetting).toBe("Mundo real actual");
       created = true;
       body = s.project;
     } else if (p === "projects/test/actions") {
@@ -65,7 +66,8 @@ test("SIMULATED API: mobile creation, exact three proposals, selection and reloa
   // visible prefix without requiring the entire descendant text to equal it.
   await expect(page.getByRole("button", { name: "Crear universo", exact: true })).toHaveCount(0);
   await page.getByLabel(/^Tipo de seres/).selectOption("Frutas");
-  await expect(page.locator("textarea")).toHaveCount(0);
+  await expect(page.getByLabel(/^Concepto de la historia/)).toHaveCount(1);
+  await expect(page.getByLabel(/^Mundo \/ ambientación/)).toHaveValue("Mundo real actual");
   const subgenre = page.getByLabel(/^Subgénero/);
   await expect(subgenre.locator("option")).toHaveCount(10);
   await subgenre.selectOption("Histórico");
