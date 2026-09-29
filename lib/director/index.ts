@@ -7,6 +7,8 @@ import {
   compileVideoPrompt as legacyVideoPrompt,
 } from "./core";
 import { AppError } from "../errors";
+import { renderHair } from "./hair";
+import { visualTreatment } from "./styles";
 import type { Clip } from "../schemas";
 import type { Job, Snapshot, Target } from "../types";
 import { dialogueProblems, dialogueWarnings, speechDirection, SPEECH_PLAN_DIRECTION, withoutDialogue } from "./speech";
@@ -29,6 +31,30 @@ export function narrativePrompt(j: Job, repair?: string) {
 }
 export function runDirector(j: Job, beforeCall: (key: string) => Promise<void>, checkpoint: (key: string, value: unknown) => Promise<void>) {
   return coreRunDirector(directedJob(j), beforeCall, checkpoint);
+}
+
+function vehicleDirection(s: Snapshot, c?: Clip | null) {
+  if (!c) return "";
+  const location = s.bible?.locations.find(l => l.id === c.locationId);
+  const context = [c.goal, ...c.shots.map(sh => sh.action), location?.name, location?.visualPrompt, location?.layout].join(" ");
+  if (!/\\b(?:carro|auto|autom[oó]vil|coche|veh[ií]culo|camioneta|volante|conduc|asiento|parabrisas|estaci[oó]n de servicio|gasolinera|car|vehicle|steering|driver|passenger)\\b/i.test(context)) return "";
+  return "VEHICLE GEOGRAPHY: If the scene is inside a vehicle, use a left-hand-drive car as in the Americas unless the approved story explicitly sets a right-hand-drive country. For a camera positioned in the back seat looking FORWARD through the windshield, the steering wheel and DRIVER are on the IMAGE LEFT; the front PASSENGER is on the IMAGE RIGHT. The driver alone holds the wheel; the passenger must not appear behind it. A camera looking back from the dashboard reverses their image positions but never moves the physical steering wheel to the passenger side. Identify the driver from the approved action and preserve each named character in that seat across the clip. The steering wheel, dashboard, windows and exterior view must share one coherent direction. Seat roles override generic cast-order screen-left instructions. Never mirror the scene.";
+}
+
+function performanceTimeline(s: Snapshot, c: Clip) {
+  const phase = [
+    "Start from the approved image. Establish the eyelines and initiate the scheduled action; if its climax is scheduled here, perform it here.",
+    "Continue the scheduled action or its consequence with a distinct physical step, appropriate gaze and any scheduled words.",
+    "Carry out the action scheduled in this interval, or show the direct result of an action completed earlier. Never repeat an earlier climax.",
+    "Complete the scheduled action if it belongs here; otherwise show its immediate reaction and resulting state naturally until the clip ends. Do not reset it.",
+  ];
+  return [0, 2, 4, 6].map((start, i) => {
+    const end = start + 2;
+    const active = c.shots.filter(shot => shot.start < end && shot.end > start);
+    const words = c.dialogue.filter(d => d.start < end && d.end > start)
+      .map(d => `${s.bible!.characters.find(x => x.id === d.characterId)?.name || d.characterId} (${d.start}-${d.end}s, ${d.intention}): «${d.text}»`);
+    return `${start}-${end}s: ${phase[i]} Approved overlapping shot direction (if the same shot spans intervals, advance it without restarting it): ${active.map(sh => `[${sh.start}-${sh.end}s; continuous group framing; ${sh.characterIds.map(id => s.bible!.characters.find(x => x.id === id)?.name || id).join(", ")}]: ${sh.action}`).join(" THEN ") || "continue the previous planned framing"}. ${words.length ? `Scheduled speech: ${words.join("; ")}.` : "No scheduled speech: let the action, expression, ambient sound or a motivated still reaction breathe; do not add dialogue."}`;
+  }).join("\n");
 }
 
 export function compileVideoPrompt(s: Snapshot, c: Clip, instructions: string) {
