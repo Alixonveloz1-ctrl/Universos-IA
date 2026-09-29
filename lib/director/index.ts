@@ -10,8 +10,6 @@ import { AppError } from "../errors";
 import type { Clip } from "../schemas";
 import type { Job, Snapshot, Target } from "../types";
 import { dialogueProblems, dialogueWarnings, speechDirection, SPEECH_PLAN_DIRECTION, withoutDialogue } from "./speech";
-import { visualTreatment } from "./styles";
-import { renderHair } from "./hair";
 export { compileImagePrompt } from "./core";
 
 const continuousCamera = "ONE CONTINUOUS TAKE for all 8 seconds. No cuts, shot/reverse-shot, montage, transitions, inserts or sudden viewpoint changes. Use only a slow shallow push-in, pull-back or small lateral camera move while keeping EVERY participating character visible and recognizable throughout. Keep faces and clothing in view; nobody exits the frame, crosses behind another person, disappears behind a door or furniture, or becomes fully occluded. If a requested close-up or movement would hide a participant, retain the wider group framing instead. Preserve the initial image identities, hairstyles, clothes, materials and screen positions without transformation. Older shot divisions are timing beats ONLY: replace their camera cuts with continuous movement. This camera rule overrides conflicting framing directions in older plans or saved prompts.";
