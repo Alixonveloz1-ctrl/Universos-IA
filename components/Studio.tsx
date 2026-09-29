@@ -23,6 +23,7 @@ import {
   endings,
   beings,
   styles,
+  worlds,
 } from "@/lib/director/catalog";
 import { MODELS, DEFAULT_MODELS } from "@/lib/models";
 import { TELENOVELA_STYLE, TELENOVELA_DESCRIPTION } from "@/lib/director/styles";
@@ -392,7 +393,8 @@ export default function Studio() {
   const [selection, setSelection] = useState({
     concept: "",
     beings: "Frutas",
-    visualStyle: "Cinemático 3D",
+    visualStyle: "3D Viral Estilizado",
+    worldSetting: "Mundo real actual",
     genre: "Drama",
     subgenre: "Familiar",
     plotType: "Traición",
@@ -653,6 +655,7 @@ export default function Studio() {
             <div className="grid">
               {field("Tipo de seres", selection.beings, (v) => setSelection({ ...selection, beings: v }), beings)}
               {field("Estilo visual", selection.visualStyle, (v) => setSelection({ ...selection, visualStyle: v }), styles)}
+              {field("Mundo / ambientación", selection.worldSetting, (v) => setSelection({ ...selection, worldSetting: v }), worlds)}
             </div>
             <p className="muted">Personajes humanos o humanoides atractivos según el tipo de seres. El estilo cambia la técnica visual y se mantiene en toda la historia.</p>
             {selection.visualStyle === TELENOVELA_STYLE && <p className="muted">{TELENOVELA_DESCRIPTION}</p>}
