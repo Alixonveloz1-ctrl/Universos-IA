@@ -603,7 +603,11 @@ export async function jobControl(id: string, operation: "stop" | "resume") {
     // An explicit HTTP rejection has no in-flight generation to reconcile.
     // Older workers mistakenly retained a pending call after a 400 response.
     const rejected = j.error?.code === "PROVIDER_REJECTED";
-    const definitivelyFailedVideo = rejected && j.checkpoint.operationFailed === true;
+    const definitivelyFailedVideo =
+      rejected &&
+      j.type === "video" &&
+      j.checkpoint.operationFailed === true &&
+      typeof j.checkpoint.operation === "string";
     const narrativeRetry = j.error?.code === "DIRECTOR_JSON" && !j.checkpoint.pendingCall;
     const checkpoint = narrativeRetry
       ? { ...j.checkpoint, narrativeRetry: Number(j.checkpoint.narrativeRetry || 0) + 1 }
