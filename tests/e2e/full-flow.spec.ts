@@ -118,10 +118,12 @@ test("SIMULATED complete journey: story, canon, eight sequential clips, export a
                   (t) => t.kind === "image" && !t.approvedVersionId,
                 )
               : s.targets.filter((t) => t.id === input.targetId);
-          for (const t of targets)
-            s.assets.push(
-              structuredClone(full.assets.find((a) => a.targetId === t.id)!),
-            );
+          for (const t of targets) {
+            const generated = structuredClone(full.assets.find((a) => a.targetId === t.id)!);
+            s.assets.push(generated);
+            t.approvedVersionId = generated.id;
+            if (t.kind === "video") s.observed[t.id] = { ...full.observed[t.id], versionId: generated.id };
+          }
         } else if (input.type === "finalize") {
           expect(
             s.targets.filter((t) => t.kind === "video" && t.approvedVersionId),
@@ -172,14 +174,14 @@ test("SIMULATED complete journey: story, canon, eight sequential clips, export a
       .getByRole("button", { name: "Desarrollar historia", exact: true })
       .click();
     await page
-      .getByRole("button", { name: "Aprobar historia", exact: true })
+      .getByRole("button", { name: "Guardar cambios", exact: true })
       .click();
     await page.getByRole("button", { name: "Biblia", exact: true }).click();
     await page
       .getByRole("button", { name: "Generar biblia", exact: true })
       .click();
     await page
-      .getByRole("button", { name: "Aprobar biblia", exact: true })
+      .getByRole("button", { name: "Guardar cambios", exact: true })
       .click();
     await page
       .getByRole("button", {
@@ -187,17 +189,7 @@ test("SIMULATED complete journey: story, canon, eight sequential clips, export a
         exact: true,
       })
       .click();
-    const canon = page.getByRole("button", {
-      name: "Aprobar imagen",
-      exact: true,
-    });
-    await expect(canon).toHaveCount(2);
-    for (let i = 0; i < 2; i++) {
-      await canon.first().click();
-      await expect(
-        page.getByText("Tiene versión aprobada", { exact: true }),
-      ).toHaveCount(i + 1);
-    }
+    await expect(page.getByText("Lista · en uso", { exact: true })).toHaveCount(2);
     await page.getByRole("button", { name: "Producción", exact: true }).click();
     await page
       .getByRole("button", {
@@ -206,16 +198,13 @@ test("SIMULATED complete journey: story, canon, eight sequential clips, export a
       })
       .click();
     await page
-      .getByRole("button", { name: "Aprobar guion", exact: true })
+      .getByRole("button", { name: "Guardar cambios", exact: true })
       .click();
     await page
       .getByRole("button", { name: "Generar imágenes pendientes", exact: true })
       .click();
     for (let i = 0; i < 8; i++) {
       const clip = page.locator("section.clip").nth(i);
-      await clip
-        .getByRole("button", { name: "Aprobar imagen", exact: true })
-        .click();
       await clip
         .getByRole("button", { name: "Generar clip", exact: true })
         .click();
@@ -226,12 +215,7 @@ test("SIMULATED complete journey: story, canon, eight sequential clips, export a
           player.evaluate((video: HTMLVideoElement) => video.readyState),
         )
         .toBeGreaterThanOrEqual(1);
-      await clip
-        .getByRole("button", { name: "Revisado · aprobar clip", exact: true })
-        .click();
-      await expect(
-        clip.getByText("Tiene versión aprobada", { exact: true }),
-      ).toHaveCount(2);
+      await expect(clip.getByText("Lista · en uso", { exact: true })).toHaveCount(2);
     }
     await page.getByRole("button", { name: "Final", exact: true }).click();
     await page
