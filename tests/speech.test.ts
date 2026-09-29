@@ -131,7 +131,8 @@ it("replaces an old unsubmitted rewrite but never resubmits or edits accepted le
 });
 it("does not clear pending-call recovery checkpoints", async () => {
   const { s, c, target } = scene();
-  const j = { type: "video", snapshot: s, checkpoint: { pendingCall: "asset_clip_1" }, instructions: "" } as Job;
+  const j = { type: "video", snapshot: s, checkpoint: {}, instructions: "" } as Job;
+  j.checkpoint.pendingCall = "asset_clip_1";
   const before = vi.fn(), save = vi.fn();
   await directPrompt(j, target, compileVideoPrompt(s, c, ""), before, save);
   expect(j.checkpoint.pendingCall).toBe("asset_clip_1");
