@@ -185,11 +185,11 @@ test("SIMULATED complete journey: story, canon, eight sequential clips, export a
       .click();
     await page
       .getByRole("button", {
-        name: "Generar referencias pendientes",
+        name: "Generar personajes pendientes",
         exact: true,
       })
       .click();
-    await expect(page.getByText("Lista · en uso", { exact: true })).toHaveCount(2);
+    await expect(page.getByText("Lista · en uso", { exact: true })).toHaveCount(1);
     await page.getByRole("button", { name: "Producción", exact: true }).click();
     await page
       .getByRole("button", {
