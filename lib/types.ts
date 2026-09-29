@@ -82,6 +82,7 @@ export interface Project {
   title: string;
   revision: number;
   stage: string;
+  worldSetting: string;
   genre: string;
   subgenre: string;
   plotType: string;
