@@ -194,7 +194,16 @@ export const plan = z
 
   });
 export function validatePlan(value: unknown, b: z.infer<typeof bible>, hasPreviousChapter = false) {
-  const p = plan.parse(value);
+  const parsed = plan.parse(value);
+  // Continuity between clips is a deterministic application invariant, not a
+  // formatting task for the Director. Preserve the Director's planned end of
+  // each clip and make it the exact incoming state of the next clip.
+  const p = {
+    ...parsed,
+    clips: parsed.clips.map((clip, index) =>
+      index === 0 ? clip : { ...clip, continuityIn: parsed.clips[index - 1].plannedEndState },
+    ),
+  };
   if (p.clips[0].startMode === "previousFrame" && !hasPreviousChapter)
     throw new Error("El primer clip no tiene fotograma previo");
   const chars = new Set(b.characters.map((c) => c.id)),
