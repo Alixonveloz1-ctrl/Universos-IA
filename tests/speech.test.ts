@@ -157,3 +157,16 @@ it("adds natural dialogue direction to new plans without mutating the job", () =
   expect(narrativePrompt(j)).toContain("shots[].dialogue queda vacío");
   expect(j.instructions).toBe("User instruction");
 });
+
+
+it("sends canonical voice profiles only for characters who actually speak", () => {
+  const { s, c } = scene();
+  const silent = { ...s.bible!.characters[0], id: "silent", name: "Silent Listener", voice: { ...s.bible!.characters[0].voice, timbre: "SILENT_UNIQUE_TIMBRE" } };
+  s.bible!.characters.push(silent);
+  c.characterIds.push("silent");
+  const prompt = compileVideoPrompt(s, c, "");
+  expect(prompt).toContain("CANONICAL VOICE FOR THIS CHARACTER");
+  expect(prompt).toContain("reuse this same baseline whenever this character speaks in any clip");
+  expect(prompt).not.toContain("SILENT_UNIQUE_TIMBRE");
+  expect(prompt).toContain("Silent Listener [speaker_silent] listen silently");
+});
