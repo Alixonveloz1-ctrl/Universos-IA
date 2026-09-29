@@ -35,7 +35,7 @@ test("SIMULATED: approving a generated story advances to Bible and stays approve
   await expect(page.getByText(/pendiente de aprobación/)).toHaveCount(0);
   await page.getByRole("button", { name: "Historia", exact: true }).click();
   await expect(page.getByText("Historia aprobada. Continúa en Biblia.")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Aprobar historia", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Guardar cambios", exact: true })).toBeDisabled();
   await page.reload();
   await page.getByRole("button", { name: /Prueba simulada/ }).click();
   await expect(page.getByText("Historia aprobada. Continúa en Biblia.")).toBeVisible();
