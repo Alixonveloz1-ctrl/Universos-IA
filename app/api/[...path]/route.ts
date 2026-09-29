@@ -28,6 +28,7 @@ import {
   endings,
   beings,
   styles,
+  worlds,
 } from "@/lib/director/catalog";
 import type { Job, Project } from "@/lib/types";
 import { blocksNewJob } from "@/lib/job-state";
@@ -99,6 +100,7 @@ async function handler(
         endings,
         beings,
         styles,
+        worlds,
         models: MODELS,
         defaults: defaults(),
       });
@@ -139,7 +141,7 @@ async function handler(
             plots.includes(p.plotType) &&
             tones.includes(p.tone) &&
             endings.includes(p.ending) &&
-            beings.includes(p.beings) && styles.includes(p.visualStyle),
+            beings.includes(p.beings) && styles.includes(p.visualStyle) && worlds.includes(p.worldSetting),
           "Selección narrativa inválida",
         );
         for (const kind of ["text", "image", "video"] as const)
