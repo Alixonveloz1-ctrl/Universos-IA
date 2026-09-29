@@ -170,7 +170,16 @@ export const plan = z
     const ids = v.clips.flatMap((c) => c.shots.map((s) => s.id));
     if (new Set(ids).size !== ids.length)
       ctx.addIssue({ code: "custom", message: "IDs de tomas duplicados" });
-    for (const c of v.clips) {
+    for (let clipIndex = 0; clipIndex < v.clips.length; clipIndex++) {
+      const c = v.clips[clipIndex];
+      if (clipIndex > 0) {
+        const previous = v.clips[clipIndex - 1];
+        if (JSON.stringify(c.continuityIn) !== JSON.stringify(previous.plannedEndState))
+          ctx.addIssue({
+            code: "custom",
+            message: `El clip ${c.number} debe heredar exactamente plannedEndState del clip ${previous.number} en continuityIn`,
+          });
+      }
       if (
         c.shots[0].start !== 0 ||
         c.shots.at(-1)!.end !== 8 ||
