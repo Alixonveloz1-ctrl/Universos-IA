@@ -314,7 +314,6 @@ export async function execute(jobId: string, direct = false): Promise<"continue"
         beforeCall,
         checkpoint,
       );
-      let refs: ImageRef[];
       // Exactly one approved image starts each eight-second clip. The plan's
       // later camera cuts are directions for Veo, not extra image jobs.
       const image = s.targets.find(
@@ -322,7 +321,7 @@ export async function execute(jobId: string, direct = false): Promise<"continue"
       );
       assert(image?.approvedVersionId, "Falta imagen inicial");
       inputRefs = [image.approvedVersionId];
-      refs = await refsFor(inputRefs);
+      const refs = await refsFor(inputRefs);
       let operation = job.checkpoint.operation as string | undefined;
       let recoveredObject = job.checkpoint.videoObject as string | undefined;
       if (
