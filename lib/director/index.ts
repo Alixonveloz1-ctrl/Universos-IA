@@ -57,7 +57,7 @@ function performanceTimeline(s: Snapshot, c: Clip) {
     const active = c.shots.filter(shot => shot.start < end && shot.end > start);
     const words = c.dialogue.filter(d => d.start >= start && d.start < end)
       .map(d => `${s.bible!.characters.find(x => x.id === d.characterId)?.name || d.characterId} (${d.start}-${d.end}s, ${d.intention}): «${d.text}»`);
-    return `${start}-${end}s: ${phase[i]} Approved overlapping shot direction (if the same shot spans intervals, advance it without restarting it): ${active.map(sh => `[${sh.start}-${sh.end}s; continuous group framing; ${sh.characterIds.map(id => s.bible!.characters.find(x => x.id === id)?.name || id).join(", ")}]: ${sh.action}`).join(" THEN ") || "continue the previous planned framing"}. ${words.length ? `Scheduled speech: ${words.join("; ")}.` : "No scheduled speech: let the action, expression, ambient sound or a motivated still reaction breathe; do not add dialogue."}`;
+    return `${start}-${end}s: ${phase[i]} Approved overlapping shot direction (if the same shot spans intervals, advance it without restarting it): ${active.map(sh => `[${sh.start}-${sh.end}s; continuous group framing; ${sh.characterIds.map(id => s.bible!.characters.find(x => x.id === id)?.name || id).join(", ")}]: ${withoutDialogue(sh.action, c)}`).join(" THEN ") || "continue the previous planned framing"}. ${words.length ? `Scheduled speech: ${words.join("; ")}.` : "No scheduled speech: let the action, expression, ambient sound or a motivated still reaction breathe; do not add dialogue."}`;
   }).join("\n");
 }
 
@@ -99,7 +99,7 @@ export function compileVideoPrompt(s: Snapshot, c: Clip, instructions: string) {
       JSON.stringify(prev ? s.observed[prev.id] || c.continuityIn : s.project.previousChapter?.finalState || c.continuityIn),
     "Local physical plan, constraints, audio and expected final state. Spoken words are defined ONLY in the canonical speech schedule above and are omitted here to prevent duplication: " +
       JSON.stringify({ ...c, dialogue: [], shots: c.shots.map(sh => ({ ...sh, dialogue: "", action: withoutDialogue(sh.action, c), framing: "Continuous group view; smooth movement only; all clip characters remain visible", characterIds: c.characterIds })) }),
-    instructions,
+    withoutDialogue(instructions, c),
     continuousCamera,
   ].join("\n\n");
 }
