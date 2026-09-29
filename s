@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
+# One-command mobile updater. Always build from the latest main so an old
+# Cloud Shell tab cannot silently redeploy a stale worker.
+git fetch origin main
+git checkout -B main origin/main
 # Update only this application's existing worker; preserve environment and IAM.
 project=alixon-jhan
 region=us-central1
@@ -49,4 +53,6 @@ JS
   fi
   exit 1
 fi
-printf '\nEjecutor actualizado. Universos IA usa su propio espacio de datos. No se iniciaron generaciones.\n'
+deployed_image=$(gcloud run jobs describe "$job" --project="$project" --region="$region" --format='value(spec.template.spec.template.spec.containers[0].image)')
+[[ "$deployed_image" == "$image" ]] || { echo "Cloud Run no quedó apuntando a la imagen recién construida." >&2; exit 1; }
+printf '\nLISTO: Universos IA actualizado a %s y verificado sin generaciones de pago.\n' "$(git rev-parse --short HEAD)"
