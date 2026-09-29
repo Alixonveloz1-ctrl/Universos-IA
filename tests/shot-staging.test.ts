@@ -83,3 +83,22 @@ it("converts older cut-based framing into a continuous group take", () => {
   expect(prompt).toContain("EVERY participating character visible");
   expect(prompt).toContain("retain the wider group framing");
 });
+it("keeps the wheel and driver on the image left when a car is viewed from the back seat", () => {
+  const s = structuredClone(snapshot());
+  const clip = s.plan!.clips[0];
+  clip.goal = "Llegan en automóvil a una estación de servicio";
+  clip.shots[0].action = "Alba va de pasajera y Mateo conduce mirando el parabrisas";
+  clip.characterIds = ["a", "mateo"];
+  s.bible!.characters.push({ ...s.bible!.characters[0], id: "mateo", name: "Mateo" });
+  s.targets.push({ ...s.targets.find(t => t.role === "character")!, id: "character_mateo", entityId: "mateo", approvedVersionId: "canonical_mateo" });
+  const target = s.targets.find(t => t.role === "shot" && t.clipNumber === 1)!;
+  const imagePrompt = compileImagePrompt(s, target, "");
+  const videoPrompt = compileVideoPrompt(s, clip, "");
+  for (const prompt of [imagePrompt, videoPrompt]) {
+    expect(prompt).toContain("the steering wheel and DRIVER are on the IMAGE LEFT");
+    expect(prompt).toContain("front PASSENGER is on the IMAGE RIGHT");
+    expect(prompt).toContain("Seat roles override generic cast-order");
+  }
+  expect(imagePrompt).not.toContain("Alba (screen LEFT)");
+  expect(videoPrompt).not.toContain("Establish Alba screen LEFT");
+});

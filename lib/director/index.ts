@@ -20,6 +20,13 @@ import { buildBible } from "./bible";
 import { narrativeTreatment, visualTreatment, specificTreatment } from "./styles";
 import { characterStyleReference, imageReferenceIds } from "../continuity/rules";
 const continuousCamera = "ONE CONTINUOUS TAKE for all 8 seconds. No cuts, shot/reverse-shot, montage, transitions, inserts or sudden viewpoint changes. Use only a slow shallow push-in, pull-back or small lateral camera move while keeping EVERY participating character visible and recognizable throughout. Keep faces and clothing in view; nobody exits the frame, crosses behind another person, disappears behind a door or furniture, or becomes fully occluded. If a requested close-up or movement would hide a participant, retain the wider group framing instead. Preserve the initial image identities, hairstyles, clothes, materials and screen positions without transformation. Older shot divisions are timing beats ONLY: replace their camera cuts with continuous movement. This camera rule overrides conflicting framing directions in older plans or saved prompts.";
+function vehicleDirection(s: Snapshot, c?: Clip | null) {
+  if (!c) return "";
+  const location = s.bible?.locations.find(l => l.id === c.locationId);
+  const context = [c.goal, ...c.shots.map(sh => sh.action), location?.name, location?.visualPrompt, location?.layout].join(" ");
+  if (!/\b(?:carro|auto|autom[oó]vil|coche|veh[ií]culo|camioneta|volante|conduc|asiento|parabrisas|estaci[oó]n de servicio|gasolinera|car|vehicle|steering|driver|passenger)\b/i.test(context)) return "";
+  return "VEHICLE GEOGRAPHY: If the scene is inside a vehicle, use a left-hand-drive car as in the Americas unless the approved story explicitly sets a right-hand-drive country. For a camera positioned in the back seat looking FORWARD through the windshield, the steering wheel and DRIVER are on the IMAGE LEFT; the front PASSENGER is on the IMAGE RIGHT. The driver alone holds the wheel; the passenger must not appear behind it. A camera looking back from the dashboard reverses their image positions but never moves the physical steering wheel to the passenger side. Identify the driver from the approved action and preserve each named character in that seat across the clip. The steering wheel, dashboard, windows and exterior view must share one coherent direction. Seat roles override generic cast-order screen-left instructions. Never mirror the scene.";
+}
 const schemas = { ideas, story, bible, plan };
 export function narrativePrompt(j: Job, repair?: string) {
   return [
@@ -155,13 +162,15 @@ export function compileImagePrompt(
   ) : null;
   const styleRef = characterStyleReference(s, t);
   const shotClip = t.role === "shot" ? s.plan?.clips.find(c => c.number === t.clipNumber) : null;
+  const vehicleBlocking = vehicleDirection(s, shotClip);
   const currentShot = shotClip?.shots.find(sh => sh.id === t.entityId);
   const cast = shotClip?.characterIds.map(id => b.characters.find(c => c.id === id)).filter((c): c is typeof b.characters[number] => !!c) || [];
   const onCamera = cast.filter(c => currentShot?.characterIds.includes(c.id));
   const openingExchange = !!shotClip && t.role === "shot" && shotClip.shots[0]?.id === t.entityId;
   const shotBlocking = cast.length > 0 && t.role === "shot"
     ? [
-        `SCENE BLOCKING, one continuous shared ${b.locations.find(l => l.id === currentShot?.locationId)?.name || "location"}: ${cast.map((c, i) => `${c.name} (${i === 0 ? "screen LEFT" : i === cast.length - 1 ? "screen RIGHT" : "screen CENTER"})`).join(", ")}. Keep these identities, positions, furniture, clothing and light consistent across the clip.`,
+        `SCENE BLOCKING, one continuous shared ${b.locations.find(l => l.id === currentShot?.locationId)?.name || "location"}: ${vehicleBlocking ? cast.map(c => c.name).join(", ") + " keep their approved driver/passenger roles" : cast.map((c, i) => `${c.name} (${i === 0 ? "screen LEFT" : i === cast.length - 1 ? "screen RIGHT" : "screen CENTER"})`).join(", ")}. Keep these identities, positions, furniture, clothing and light consistent across the clip.`,
+        vehicleBlocking,
         openingExchange
           ? `OPENING FRAME: show ALL ${cast.length} named characters (${cast.map(c => c.name).join(", ")}) visibly and recognizably in ONE shared scene, even if a later camera cut focuses on just one of them. Place them with separated readable silhouettes, visible faces and clothing, with enough space for shallow camera motion without anyone leaving the frame or hiding behind another person or furniture. Match each person to their own approved character reference and wardrobe. If one points, the gesture must visibly reach the correct person. No pointing at an empty chair or at the lens.`
           : onCamera.length === 1
@@ -262,8 +271,9 @@ export function compileVideoPrompt(s: Snapshot, c: Clip, instructions: string) {
     "EIGHT-SECOND PERFORMANCE MAP (local time, continuous and non-repeating):\n" + performanceTimeline(s, c),
     "Direct every second through concrete causal movement, the approved dialogue and motivated reactions. If the main action is brief (for example opening a door), use the surrounding seconds for its natural preparation, the action itself and its immediate consequence. Do not invent turns around the character's own axis, pacing, repeated hand motions, camera orbit, a second opening of the same door, unrelated gestures, empty filler or an abrupt freeze. Keep the same continuous viewpoint and preserve every participant in frame. Keep a continuous spatial and emotional state across all four intervals. The four intervals above are performance instructions, not four new still images or extra video clips.",
     c.characterIds.length === 2
-      ? `Film both people in ONE shared physical scene. Establish ${s.bible!.characters.find(x => x.id === c.characterIds[0])?.name || "the first character"} screen LEFT and ${s.bible!.characters.find(x => x.id === c.characterIds[1])?.name || "the second character"} screen RIGHT. Any pointing or accusation reaches the other visible person in the opening exchange. Show reactions within the shared group framing; the listener looks toward the visible speaker, never directly into the lens. Preserve furniture and lighting throughout the take.`
+      ? `Film both people in ONE shared physical scene. ${vehicleDirection(s, c) ? "Preserve their approved physical seats." : `Establish ${s.bible!.characters.find(x => x.id === c.characterIds[0])?.name || "the first character"} screen LEFT and ${s.bible!.characters.find(x => x.id === c.characterIds[1])?.name || "the second character"} screen RIGHT.`} Any pointing or accusation reaches the other visible person in the opening exchange. Show reactions within the shared group framing; the listener looks toward the visible speaker, never directly into the lens. Preserve furniture and lighting throughout the take.`
       : "",
+    vehicleDirection(s, c),
     "Locked universe, premise and arc: " +
       JSON.stringify({
         universe: s.project.universeSnapshot,
