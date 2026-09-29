@@ -206,7 +206,7 @@ export function compileImagePrompt(
   const outputRule = singleCharacter
     ? "OUTPUT CONTRACT: exactly ONE character, ONE full-body view, centered with head, hands and feet visible, on a plain neutral studio background. One continuous vertical 9:16 image. This is a reusable character reference portrait, NOT a storyboard, contact sheet, turnaround, collage, comic strip, grid, sequence or scene from the story. No other characters, extra views, inset pictures, panels, labels or text."
     : singleLocation
-      ? "OUTPUT CONTRACT: exactly ONE establishing view of this location, empty of characters, in one continuous vertical 9:16 image. No storyboard, collage, panels, alternate angles, labels or text."
+      ? "OUTPUT CONTRACT: exactly ONE establishing view of this location, empty of characters, in one continuous vertical 9:16 image. This is a canonical ENVIRONMENT reference from the SAME artistic production as the characters: obey the chosen visual treatment for every plant, wall, floor, prop, sky, light and material. For 3D animation styles render a stylized 3D environment, never a photograph or photoreal garden/interior. Match the characters' level of stylization, material response, color treatment and lighting so later shots are seamless. No storyboard, collage, panels, alternate angles, labels or text."
       : "OUTPUT CONTRACT: exactly ONE still frame depicting only the requested shot, in one continuous vertical 9:16 image. No storyboard, collage, sequence, panels or text overlays.";
   if (characterData && femaleReference(characterData)) {
     return [
@@ -222,8 +222,10 @@ export function compileImagePrompt(
   return [
     outputRule,
     singleCharacter
-      ? "CHARACTER DESIGN: preserve the requested identity, age, gender, species, colors and wardrobe. This is a living animated character portrait, not a manufactured figurine. The chosen visual treatment and editorial image govern facial design, organic anatomy and surface finish; descriptive material words in the entity are not instructions to make a plastic toy. Approved own-identity references preserve recognizability. Pose naturally, with relaxed shoulders, an expressive face and believable weight distribution."
-      : "Preserve the approved identity, anatomy, materials, wardrobe and locked traits. The shared visual treatment controls rendering; character differences do not introduce different art styles.",
+      ? "CHARACTER DESIGN: preserve the requested identity, age, gender, species, colors and wardrobe. This is a living animated character portrait from the SAME production as every environment, not a manufactured figurine. The chosen visual treatment and editorial image govern facial design, organic anatomy and surface finish; descriptive material words never mean plastic, resin, vinyl, clay or collectible toy. Use living surface variation, soft broad highlights, natural cloth folds, dimensional hair and believable weight distribution. Approved own-identity references preserve recognizability."
+      : singleLocation
+        ? "ENVIRONMENT DESIGN: this location establishes the canonical rendering language for later shots. Translate real-world plants, glass, wood, concrete, fabric and sky into the selected animation style instead of rendering them photographically. Keep coherent stylized geometry, controlled microtexture, broad material highlights, unified color grading and the same lighting language expected on the characters."
+        : "Preserve the approved identity, anatomy, materials, wardrobe and locked traits. The shared visual treatment controls rendering; character differences do not introduce different art styles.",
     visualTreatment(s.project.universeSnapshot.visualStyle),
     t.role === "shot"
       ? "ANATOMICAL MARKING VISIBILITY: any number, symbol, tattoo, scar or story-specific mark assigned to a body part must exist ONLY on that exact anatomical surface. A forehead number belongs on forehead skin between the eyebrows/hairline as defined by the story. If the forehead is hidden by hair, angle, another character or framing, the number is naturally hidden too: do NOT move, duplicate or float it onto hair, scalp, crown, cheek, clothing or empty space just to keep it visible. Never treat a forehead number as a text overlay; it follows the forehead perspective and occlusion."
