@@ -66,9 +66,15 @@ export function speakerDescription(s: Snapshot, characterId: string) {
 export function speechDirection(s: Snapshot, c: Clip) {
   const turns = [...c.dialogue].sort((a, b) => a.start - b.start);
   const cast = c.characterIds.map(id => s.bible?.characters.find(x => x.id === id)).filter(x => !!x);
-  const voices = cast.map(character => {
+  // Only characters who actually speak in this clip receive a voice
+  // specification. Silent visible characters get reaction/mouth instructions
+  // below, but no competing voice profile for Veo to accidentally assign.
+  const speakingIds = [...new Set(turns.map(turn => turn.characterId))];
+  const voices = speakingIds.flatMap(characterId => {
+    const character = s.bible?.characters.find(x => x.id === characterId);
+    if (!character) return [];
     const v = character.voice;
-    return `${speakerDescription(s, character.id)}. This identity keeps its OWN voice: timbre ${v.timbre}; register ${v.register}; rhythm ${v.rhythm}; energy ${v.energy}; diction ${v.diction}; expression ${v.expression}.`;
+    return [`${speakerDescription(s, character.id)}. CANONICAL VOICE FOR THIS CHARACTER — reuse this same baseline whenever this character speaks in any clip: gender ${useful(character.gender)}; perceived age ${useful(character.age)}; language ${s.project.language}; accent ${s.project.accent}; timbre ${v.timbre}; register ${v.register}; base rhythm ${v.rhythm}; base energy ${v.energy}; diction ${v.diction}; baseline expression ${v.expression}. Keep timbre, register, perceived age, accent, base cadence and vocal identity as close as possible to this same profile across clips. Scene emotion may alter intensity or pace slightly, but must not create a different voice.`];
   });
   const schedule: string[] = [];
   let previousEnd = 0;
@@ -91,7 +97,7 @@ export function speechDirection(s: Snapshot, c: Clip) {
     "Audio is diegetic speech coming from the visible speaking character, with natural synchronized lip, jaw and facial articulation to the actual Spanish phonemes. The speaker looks at the visible interlocutor. Listeners react silently with eyes, eyebrows and posture; their mouths do not articulate another person's words. No narrator, voice-over, off-screen substitute, dubbing-like detached voice, extra speech or vocal music.",
     "Speak in complete conversational phrases with idiomatic Spanish word stress, connected words, clear vowels and consonants, and natural question/exclamation intonation. Commas allow a short breath and sentence endings a natural pause. Do not chant, spell, syllabify, flatten the intonation, pause after every word, rush or stretch words to fill time. Emotion changes delivery, not identity or accent. A rhythm or diction descriptor in a voice card never overrides these natural-phrase rules or authorizes broken grammar.",
     "Each time window is ONE complete speech turn. Speak the line once across its window; do not restart it at visual timing boundaries or synchronize syllables to two-second beats. A short line may finish early: use the remaining time for silence and reaction, not slower robotic speech. Finish the last word before the clip ends. Direction labels, IDs and timestamps are silent instructions, never spoken or rendered as subtitles.",
-    "VOICE AND VISIBLE IDENTITY BINDINGS:\n" + voices.map(line => withoutDialogue(line, c)).join("\n"),
+    "VOICE BINDINGS FOR SPEAKERS IN THIS CLIP ONLY:\n" + voices.map(line => withoutDialogue(line, c)).join("\n"),
     "SPEECH SCHEDULE:\n" + schedule.join("\n\n"),
   ].join("\n\n");
 }
