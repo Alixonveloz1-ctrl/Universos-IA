@@ -1,0 +1,26 @@
+name: Verify speech direction without paid generations
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'lib/director/**'
+      - 'tests/speech.test.ts'
+      - '.github/workflows/speech.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  speech:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npx --no-install eslint lib/director/index.ts lib/director/speech.ts tests/speech.test.ts
+      - run: npx --no-install vitest run tests/speech.test.ts
+      - run: npm run build
