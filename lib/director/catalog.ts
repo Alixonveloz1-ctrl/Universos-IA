@@ -65,26 +65,26 @@ export const tones = [
 ];
 export const endings = ["Resolución", "Giro final", "Cliffhanger"];
 export const beings = [
-  "Frutas",
-  "Alimentos",
-  "Cristal",
-  "Diamante y minerales",
-  "Objetos",
-  "Humanos",
-  "Robots",
-  "Animales antropomorfos",
-  "Seres fantásticos",
-  "Personalizado",
+  "Frutas", "Verduras", "Diamantes y minerales", "Humanos", "Animales",
+  "Objetos", "Robots", "Antropomorfos", "Insectos", "Ángeles",
 ];
 export const styles = [
-  "3D Viral Estilizado",
-  "Cinemático 3D",
-  TELENOVELA_STYLE,
-  "Animación 3D familiar (tipo Pixar)",
-  "Animación 2D",
-  "Anime",
-  "Realista",
-  "Ilustración animada",
+  "3D Viral Estilizado", "Cinemático Épico", "Anime 2D", "Realista",
+];
+export const worlds = [
+  "Mundo real actual", "Ciudad moderna", "Pueblo contemporáneo", "Vida cotidiana",
+  "Instituto / universidad", "Mundo corporativo", "Alta sociedad",
+  "Época antigua", "Antigua Roma", "Antiguo Egipto", "Grecia antigua", "Edad Media",
+  "Renacimiento", "Era victoriana", "Oeste salvaje", "Años 1920", "Años 1950", "Años 1980",
+  "Futuro cercano", "Futuro lejano", "Megaciudad futurista", "Cyberpunk", "Solarpunk", "Steampunk",
+  "Ciencia ficción", "Colonias espaciales", "Nave espacial", "Planeta alienígena",
+  "Distopía", "Utopía", "Posapocalíptico", "Apocalipsis zombi", "Mundo devastado",
+  "Fantasía medieval", "Alta fantasía", "Fantasía urbana", "Fantasía oscura",
+  "Reino mágico", "Academia de magia", "Mundo de dioses y mitología",
+  "Cielo / reino angelical", "Inframundo", "Mundo sobrenatural", "Gótico",
+  "Isekai / otro mundo", "Videojuego / mundo virtual", "Realidad simulada",
+  "Universo paralelo", "Viaje en el tiempo", "Mundo submarino", "Isla remota",
+  "Selva fantástica", "Desierto fantástico", "Mundo helado", "Personalizado por el concepto",
 ];
 export const profiles = {
   romance:
