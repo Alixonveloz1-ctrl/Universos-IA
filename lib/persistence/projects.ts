@@ -616,7 +616,6 @@ export async function jobControl(id: string, operation: "stop" | "resume") {
             // terminal failure forever.
             operation: null,
             operationFailed: false,
-            operationError: null,
             pendingCall: null,
             submitted: false,
           }
