@@ -356,10 +356,21 @@ export async function execute(jobId: string, direct = false): Promise<"continue"
           const r = await pollVideo(s.project.models.video, operation!);
           if (r.done) {
             if (r.error) {
+              const providerCode = String(r.error.code ?? "error").replace(/\s+/g, " ").slice(0, 80);
+              const providerMessage = String(r.error.message ?? "sin detalles").replace(/\s+/g, " ").slice(0, 700);
+              // Persist the terminal provider error before failing the job.
+              // This is safe to retry: done=true + error means this operation
+              // cannot later turn into a successful/billable video result.
+              await checkpoint("operationError", {
+                code: providerCode,
+                message: providerMessage,
+                operation,
+                failedAt: Date.now(),
+              });
               await checkpoint("operationFailed", true);
               throw new AppError(
                 "PROVIDER_REJECTED",
-                "Veo no pudo completar el clip. Revisa cuota o restricciones.",
+                `Veo no pudo completar el clip (${providerCode}): ${providerMessage}`,
                 502,
               );
             }
