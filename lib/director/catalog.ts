@@ -77,6 +77,7 @@ export const beings = [
   "Personalizado",
 ];
 export const styles = [
+  "3D Viral Estilizado",
   "Cinemático 3D",
   TELENOVELA_STYLE,
   "Animación 3D familiar (tipo Pixar)",
