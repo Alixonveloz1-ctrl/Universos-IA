@@ -76,6 +76,17 @@ export function prerequisites(s: Snapshot, a: Action) {
       approvedImage(s, "shot", c.shots[0].id),
       "Genera la imagen inicial de este clip.",
     );
+    const initialTarget = s.targets.find(x => x.role === "shot" && x.entityId === c.shots[0].id);
+    const initialAsset = initialTarget?.approvedVersionId
+      ? s.assets.find(asset => asset.id === initialTarget.approvedVersionId && asset.targetId === initialTarget.id && asset.kind === "image")
+      : undefined;
+    const requiredCharacterRefs = c.characterIds
+      .map(characterId => s.targets.find(x => x.role === "character" && x.entityId === characterId)?.approvedVersionId)
+      .filter((versionId): versionId is string => !!versionId);
+    assert(
+      initialAsset && requiredCharacterRefs.every(versionId => initialAsset.inputRefs.includes(versionId)),
+      "La imagen inicial no contiene las referencias canónicas de todos los personajes del clip. Regenera y aprueba esa imagen antes de crear el video.",
+    );
   }
 
   if (a.type === "finalize") {
