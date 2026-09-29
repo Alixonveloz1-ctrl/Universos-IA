@@ -25,11 +25,10 @@ it("carries the chosen treatment through all narrative stages and both media pro
   expect(JSON.stringify(s)).toBe(before);
 });
 
-it("keeps existing styles and does not apply the new treatment to them", () => {
+it("exposes only the four intentional visual families", () => {
   const s = structuredClone(snapshot());
-  expect(styles).toContain(TELENOVELA_STYLE);
-  for (const style of ["Cinemático 3D", "Anime", "Realista", "Ilustración animada"]) {
-    expect(styles).toContain(style);
+  expect(styles).toEqual(["3D Viral Estilizado", "Cinemático Épico", "Anime 2D", "Realista"]);
+  for (const style of styles) {
     s.project.universeSnapshot.visualStyle = style;
     for (const prompt of [
       narrativePrompt({ type: "ideas", snapshot: s, instructions: "" } as Job),
@@ -83,14 +82,14 @@ it("describes humanoid telenovela characters rather than whole fruit mascots", (
 
 it("isolates canonical character content from storyboards and other characters", () => {
   const s = structuredClone(snapshot());
-  s.project.universeSnapshot.visualStyle = "Cinemático 3D";
+  s.project.universeSnapshot.visualStyle = "Cinemático Épico";
   s.bible!.characters[0].visualPrompt = "BAD_LEGACY_STORYBOARD four panels with everyone";
   s.bible!.relationships = "UNRELATED_STORY_ACTION";
   s.bible!.characters.push({ ...s.bible!.characters[0], id: "other", name: "OTHER_CHARACTER" });
   const prompt = compileImagePrompt(s, s.targets.find(t => t.role === "character")!, "");
   expect(prompt).toContain("exactly ONE full-body woman");
   expect(prompt).toContain("softly blurred contemporary everyday interior");
-  expect(prompt).toContain("DIRECCIÓN VISUAL COMPARTIDA: CINEMÁTICO 3D");
+  expect(prompt).toContain("DIRECCIÓN VISUAL COMPARTIDA: CINEMÁTICO ÉPICO");
   expect(prompt).not.toContain("BAD_LEGACY_STORYBOARD");
   expect(prompt).not.toContain("UNRELATED_STORY_ACTION");
   expect(prompt).not.toContain("OTHER_CHARACTER");
@@ -143,7 +142,7 @@ it("preserves a woman's explicit identity in every character render, regardless 
     expect(prompt).toContain('"role":"Esposa y empresaria"');
     expect(prompt).toContain("No deduzcas género de la fruta");
     expect(prompt).toContain("Traje negro y corbata");
-    expect(prompt).toContain("recognizable fruit silhouette");
+    expect(prompt).toContain("fully humanoid head and face");
   }
 });
 
