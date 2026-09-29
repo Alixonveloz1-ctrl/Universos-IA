@@ -237,10 +237,41 @@ export async function enqueue(projectId: string, a: Action) {
         s.project.ideas.some((i) => i.id === a.optionId),
         "Propuesta no encontrada.",
       );
-    const selected = s.assets.filter((x) =>
+    // Jobs only need lightweight metadata for already-generated media.
+    // The actual image/video bytes remain in Cloud Storage, and the full asset
+    // documents remain in the project's assets collection. Never copy huge
+    // historical prompts/reports into every job snapshot.
+    const approved = s.assets.filter((x) =>
       s.targets.some((t) => t.approvedVersionId === x.id),
     );
-    s.assets = selected;
+    const compactAsset = (asset: Asset): Asset => ({
+      ...asset,
+      prompt: "",
+      settings: {},
+      technicalReport: {},
+      // Keep only dependency IDs needed by continuity/references. Media bytes
+      // are resolved later from storageObject in the bucket.
+      inputRefs: [...asset.inputRefs],
+    });
+    if (a.type === "video") {
+      const target = s.targets.find(t => t.id === a.targetId && t.role === "clip");
+      const clip = target?.clipNumber ? s.plan?.clips[target.clipNumber - 1] : undefined;
+      const initialTarget = clip
+        ? s.targets.find(t => t.role === "shot" && t.entityId === clip.shots[0]?.id)
+        : undefined;
+      const initialId = initialTarget?.approvedVersionId;
+      s.assets = approved.filter(asset => asset.id === initialId).map(compactAsset);
+    } else if (a.type === "finalize") {
+      const videoIds = new Set(
+        s.targets.filter(t => t.role === "clip" && t.approvedVersionId).map(t => t.approvedVersionId!),
+      );
+      s.assets = approved.filter(asset => videoIds.has(asset.id)).map(compactAsset);
+    } else if (a.type === "image" || a.type === "images") {
+      // Image generation may need approved character/location references.
+      s.assets = approved.filter(asset => asset.kind === "image").map(compactAsset);
+    } else {
+      s.assets = [];
+    }
     if (a.type === "finalize")
       s.manifest = s.targets
         .filter((t) => t.role === "clip")
