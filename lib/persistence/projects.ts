@@ -603,10 +603,24 @@ export async function jobControl(id: string, operation: "stop" | "resume") {
     // An explicit HTTP rejection has no in-flight generation to reconcile.
     // Older workers mistakenly retained a pending call after a 400 response.
     const rejected = j.error?.code === "PROVIDER_REJECTED";
+    const definitivelyFailedVideo = rejected && j.checkpoint.operationFailed === true;
     const narrativeRetry = j.error?.code === "DIRECTOR_JSON" && !j.checkpoint.pendingCall;
     const checkpoint = narrativeRetry
       ? { ...j.checkpoint, narrativeRetry: Number(j.checkpoint.narrativeRetry || 0) + 1 }
-      : rejected ? { ...j.checkpoint, pendingCall: null, submitted: false } : j.checkpoint;
+      : definitivelyFailedVideo
+        ? {
+            ...j.checkpoint,
+            // Veo returned done=true with an error, so this operation is no
+            // longer in flight and cannot later produce a billable result.
+            // Resume must submit a NEW operation instead of polling the same
+            // terminal failure forever.
+            operation: null,
+            operationFailed: false,
+            operationError: null,
+            pendingCall: null,
+            submitted: false,
+          }
+        : rejected ? { ...j.checkpoint, pendingCall: null, submitted: false } : j.checkpoint;
     const snapshot = rejected && j.snapshot.project.selectedIdeaId
       ? { ...j.snapshot, project: { ...j.snapshot.project,
           ideas: j.snapshot.project.ideas.filter(i => i.id === j.snapshot.project.selectedIdeaId) } }
