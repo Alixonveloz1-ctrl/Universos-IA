@@ -78,9 +78,6 @@ it("uses a valid saved story draft after an earlier subjective rejection without
 it("prompt compilation is checkpointed and does not modify approved source material", async () => {
   const { j, before, checkpoint } = execution();
   const original = JSON.stringify(j.snapshot);
-  generate.mockResolvedValueOnce({
-    prompt: "Preserve the approved identity and literal dialogue.",
-  });
   const target = j.snapshot.targets[0];
   const first = await directPrompt(
     j,
@@ -92,20 +89,21 @@ it("prompt compilation is checkpointed and does not modify approved source mater
   expect(
     await directPrompt(j, target, "approved context", before, checkpoint),
   ).toBe(first);
-  expect(generate).toHaveBeenCalledTimes(1);
+  expect(generate).not.toHaveBeenCalled();
+  expect(first).toBe("approved context");
   expect(JSON.stringify(j.snapshot)).toBe(original);
 });
 
 it("asks for a timed video performance before a Veo clip is submitted", async () => {
   const { j, before, checkpoint } = execution();
   j.type = "video";
-  generate.mockResolvedValueOnce({ prompt: "Opening action and reaction with approved dialogue." });
   const target = j.snapshot.targets.find(t => t.role === "clip")!;
   const { compileVideoPrompt } = await import("../lib/director");
   const prompt = await directPrompt(j, target, compileVideoPrompt(j.snapshot, j.snapshot.plan!.clips[0], ""), before, checkpoint);
-  expect(generate.mock.calls[0][1]).toContain("0–2, 2–4, 4–6 y 6–8 segundos");
+  expect(generate).not.toHaveBeenCalled();
   expect(prompt).toContain("6-8s:");
-  expect(prompt).toContain("No scheduled speech");
+  expect(prompt).toContain("no speech");
+  expect(prompt).toContain("ONLY audible speaker");
 });
 
 it("generates three universe drafts from dropdown preferences in the ideas call", async () => {
