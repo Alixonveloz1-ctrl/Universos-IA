@@ -64,8 +64,17 @@ export async function dispatch(job: Job) {
   }
 }
 
-// Read-only startup check for old queue entries: no automatic paid retry.
+// Status checks never dispatch an automatic paid retry.
 export async function diagnoseQueuedJob(job: Job) {
+  if (job.type === "plan" && job.state === "failed" && job.error?.code === "DIRECTOR_JSON") {
+    try {
+      const { diagnoseFailedPlan } = await import("./director/plan-diagnostics");
+      return await diagnoseFailedPlan(job);
+    } catch {
+      // Diagnostics must not prevent the owner from opening the project.
+      return job;
+    }
+  }
   if (job.backend === "direct") {
     const stalled = !(job.leaseUntil > Date.now()) &&
       ((job.state === "queued" && Date.now() - Math.max(job.heartbeat || 0, job.dispatchedAt || job.createdAt) > 90000) ||

@@ -1,0 +1,18 @@
+name: Verify Director across every genre and style
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  plan-modes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npx --no-install eslint lib/director/index.ts lib/director/plan-runner.ts lib/director/plan-diagnostics.ts lib/jobs.ts tests/plan-modes.test.ts
+      - run: npx --no-install vitest run tests/plan-modes.test.ts tests/director.test.ts tests/dispatch-scope.test.ts
+      - run: npm run build
