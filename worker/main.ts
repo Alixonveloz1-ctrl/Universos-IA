@@ -307,6 +307,21 @@ export async function execute(jobId: string, direct = false): Promise<"continue"
       settings = { aspectRatio: "9:16", mode: "references" };
     } else {
       const c = s.plan!.clips[t.clipNumber! - 1];
+      // Recover a terminal Veo operation before compiling/checkpointing a new
+      // prompt. Otherwise a resumed failed job sees checkpoint.operation and
+      // falls back to the legacy prompt, undoing the speech/voice fixes.
+      if (job.checkpoint.operationFailed === true && job.checkpoint.operation) {
+        job.checkpoint = {
+          ...job.checkpoint,
+          previousFailedOperation: job.checkpoint.operation,
+          operation: null,
+          operationFailed: false,
+          pendingCall: null,
+          submitted: false,
+        };
+        persistedCheckpoint = { ...job.checkpoint };
+        await guarded({ checkpoint: persistedCheckpoint }, true);
+      }
       prompt = await directPrompt(
         job,
         t,
