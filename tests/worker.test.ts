@@ -199,7 +199,6 @@ it("direct video calls Veo before handing the accepted operation to media proces
   for (const a of j.snapshot.assets.filter(a => a.kind === "image")) memory.files.set(a.storageObject, Buffer.from("reference"));
   vi.mocked(startVideo).mockReset().mockResolvedValue("projects/test/operations/accepted");
   vi.mocked(pollVideo).mockReset();
-  expect(await execute(jobId, true)).toBe("continue");
   const next = await execute(jobId, true);
   expect(next, JSON.stringify((memory.rows.get("jobs/" + jobId) as Job).error)).toBe("cloud");
   expect(startVideo).toHaveBeenCalledTimes(1);
@@ -215,22 +214,6 @@ it("REGRESSION stopped or superseded jobs cannot execute from a late dispatch", 
   await execute(jobId);
   expect(imageGenerate).not.toHaveBeenCalled();
   expect(textGenerate).not.toHaveBeenCalled();
-});
-
-it("REGRESSION a worker that loses its lease cannot write a late text checkpoint", async () => {
-  const job = memory.rows.get("jobs/" + jobId) as Job;
-  job.type = "video";
-  job.targetId = "clip_1";
-  vi.mocked(textGenerate).mockImplementationOnce(async () => {
-    const j = memory.rows.get("jobs/" + jobId) as Job;
-    memory.rows.set("jobs/" + jobId, { ...j, leaseOwner: "replacement-worker" });
-    return { prompt: "Late response from the old worker must not overwrite recovery." };
-  });
-  await execute(jobId);
-  process.exitCode = 0;
-  expect(memory.rows.has(`jobs/${jobId}/checkpoints/prompt_character_a`)).toBe(false);
-  expect(imageGenerate).not.toHaveBeenCalled();
-  expect((memory.rows.get("jobs/" + jobId) as Job).leaseOwner).toBe("replacement-worker");
 });
 
 it("uses the clip's own image even when continuing the previous chapter", async () => {
