@@ -135,6 +135,7 @@ export async function runDirector(
       if (j.type === "plan") {
         const validated = validatePlan(parsed, j.snapshot.bible!, !!j.snapshot.project.previousChapter);
         validateChapterPlan(j.snapshot.project, validated);
+        result = validated;
       }
     } catch (e) {
       failure =
@@ -148,7 +149,9 @@ export async function runDirector(
       continue;
     }
     // Objective schema/timing/canon checks above run locally. No model review.
-    return schema.parse(result);
+    return j.type === "plan"
+      ? validatePlan(result, j.snapshot.bible!, !!j.snapshot.project.previousChapter)
+      : schema.parse(result);
   }
   throw new AppError("DIRECTOR_JSON", "No se obtuvo resultado");
 }
