@@ -10,6 +10,8 @@ import { AppError } from "../errors";
 import type { Clip } from "../schemas";
 import type { Job, Snapshot, Target } from "../types";
 import { dialogueProblems, dialogueWarnings, speechDirection, SPEECH_PLAN_DIRECTION, withoutDialogue } from "./speech";
+import { visualTreatment } from "./styles";
+import { renderHair } from "./hair";
 export { compileImagePrompt } from "./core";
 
 const continuousCamera = "ONE CONTINUOUS TAKE for all 8 seconds. No cuts, shot/reverse-shot, montage, transitions, inserts or sudden viewpoint changes. Use only a slow shallow push-in, pull-back or small lateral camera move while keeping EVERY participating character visible and recognizable throughout. Keep faces and clothing in view; nobody exits the frame, crosses behind another person, disappears behind a door or furniture, or becomes fully occluded. If a requested close-up or movement would hide a participant, retain the wider group framing instead. Preserve the initial image identities, hairstyles, clothes, materials and screen positions without transformation. Older shot divisions are timing beats ONLY: replace their camera cuts with continuous movement. This camera rule overrides conflicting framing directions in older plans or saved prompts.";
@@ -45,6 +47,8 @@ export function compileVideoPrompt(s: Snapshot, c: Clip, instructions: string) {
   }).join("\n");
   return [
     "Generate one complete 8-second vertical audiovisual clip with native audio, using the approved image as its initial frame.",
+    visualTreatment(s.project.universeSnapshot.visualStyle),
+    "CANONICAL PARTICIPANT IDENTITIES:\n" + c.characterIds.map(id => { const character = s.bible!.characters.find(x => x.id === id)!; return JSON.stringify({ ...character, hair: renderHair(s.project.id, character) }); }).join("\n"),
     speechDirection(s, c),
     `All ${c.characterIds.length} participating characters (${names}) remain visible and recognizable. Match their exact appearance, clothing, placement, lighting and ${s.project.universeSnapshot.visualStyle} treatment to the initial image. Do not redesign the still image. Keep speaking faces readable in the shared framing; the listener looks toward the visible speaker, never directly into the lens.`,
     vehicle ? "VEHICLE GEOGRAPHY: preserve the approved physical seats and camera viewpoint; never mirror the image. For a camera in the back seat looking forward in a left-hand-drive car, the steering wheel and DRIVER are on the IMAGE LEFT and the front PASSENGER is on the IMAGE RIGHT. Seat roles override generic cast-order screen-left instructions. The initial image, not cast order, identifies each seat." : "Preserve the actual left/right positions from the initial image; a cast-list order is not a command to swap places.",
