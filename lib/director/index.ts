@@ -41,7 +41,7 @@ function vehicleDirection(s: Snapshot, c?: Clip | null) {
   if (!c) return "";
   const location = s.bible?.locations.find(l => l.id === c.locationId);
   const context = [c.goal, ...c.shots.map(sh => sh.action), location?.name, location?.visualPrompt, location?.layout].join(" ");
-  if (!/\\b(?:carro|auto|autom[oó]vil|coche|veh[ií]culo|camioneta|volante|conduc|asiento|parabrisas|estaci[oó]n de servicio|gasolinera|car|vehicle|steering|driver|passenger)\\b/i.test(context)) return "";
+  if (!/\b(?:carro|auto|autom[oó]vil|coche|veh[ií]culo|camioneta|volante|conduc|asiento|parabrisas|estaci[oó]n de servicio|gasolinera|car|vehicle|steering|driver|passenger)\b/i.test(context)) return "";
   return "VEHICLE GEOGRAPHY: If the scene is inside a vehicle, use a left-hand-drive car as in the Americas unless the approved story explicitly sets a right-hand-drive country. For a camera positioned in the back seat looking FORWARD through the windshield, the steering wheel and DRIVER are on the IMAGE LEFT; the front PASSENGER is on the IMAGE RIGHT. The driver alone holds the wheel; the passenger must not appear behind it. A camera looking back from the dashboard reverses their image positions but never moves the physical steering wheel to the passenger side. Identify the driver from the approved action and preserve each named character in that seat across the clip. The steering wheel, dashboard, windows and exterior view must share one coherent direction. Seat roles override generic cast-order screen-left instructions. Never mirror the scene.";
 }
 
@@ -55,7 +55,7 @@ function performanceTimeline(s: Snapshot, c: Clip) {
   return [0, 2, 4, 6].map((start, i) => {
     const end = start + 2;
     const active = c.shots.filter(shot => shot.start < end && shot.end > start);
-    const words = c.dialogue.filter(d => d.start < end && d.end > start)
+    const words = c.dialogue.filter(d => d.start >= start && d.start < end)
       .map(d => `${s.bible!.characters.find(x => x.id === d.characterId)?.name || d.characterId} (${d.start}-${d.end}s, ${d.intention}): «${d.text}»`);
     return `${start}-${end}s: ${phase[i]} Approved overlapping shot direction (if the same shot spans intervals, advance it without restarting it): ${active.map(sh => `[${sh.start}-${sh.end}s; continuous group framing; ${sh.characterIds.map(id => s.bible!.characters.find(x => x.id === id)?.name || id).join(", ")}]: ${sh.action}`).join(" THEN ") || "continue the previous planned framing"}. ${words.length ? `Scheduled speech: ${words.join("; ")}.` : "No scheduled speech: let the action, expression, ambient sound or a motivated still reaction breathe; do not add dialogue."}`;
   }).join("\n");
@@ -76,26 +76,29 @@ export function compileVideoPrompt(s: Snapshot, c: Clip, instructions: string) {
     "EIGHT-SECOND PERFORMANCE MAP (local time, continuous and non-repeating):\n" + performanceTimeline(s, c),
     "Perform only the approved physical action and literal dialogue. If the action finishes early, simply continue the established ordinary motion and natural reaction; never invent a new event to fill time. Do not invent turns around the character's own axis, pacing, repeated hand motions, camera orbit, repeated actions, unrelated gestures or spectacle. Keep the same continuous viewpoint, physical environment and participants. The four intervals above are timing guidance, not permission to add events.",
     c.characterIds.length === 2
-      ? `Film both people in ONE shared physical scene. ${vehicleDirection(s, c) ? "Preserve their approved physical seats." : `Establish ${s.bible!.characters.find(x => x.id === c.characterIds[0])?.name || "the first character"} screen LEFT and ${s.bible!.characters.find(x => x.id === c.characterIds[1])?.name || "the second character"} screen RIGHT.`} Any pointing or accusation reaches the other visible person in the opening exchange. Show reactions within the shared group framing; the listener looks toward the visible speaker, never directly into the lens. Preserve furniture and lighting throughout the take.`
+      ? `Film both people in ONE shared physical scene. ${vehicleDirection(s, c) ? "Preserve their approved physical seats." : "Preserve the spatial relationship already established by the approved initial image; do not invent new screen-left/screen-right assignments."} Any pointing or accusation reaches the other visible person in the opening exchange. Show reactions within the shared group framing; the listener looks toward the visible speaker, never directly into the lens. Preserve furniture and lighting throughout the take.`
       : "",
     vehicleDirection(s, c),
-    "Locked universe, premise and arc: " +
-      JSON.stringify({
-        universe: s.project.universeSnapshot,
-        story: s.project.story?.data,
-      }),
-    "Bible version and present characters: " +
+    "Locked visual/world context: " + JSON.stringify({
+      visualStyle: s.project.universeSnapshot.visualStyle,
+      beings: s.project.universeSnapshot.beings,
+      worldSetting: s.project.worldSetting || "Mundo real actual",
+    }),
+    "Present-character VISUAL identity only; canonical voices are supplied separately above for actual speakers: " +
       JSON.stringify({
         version: s.project.bible?.id,
-        characters: s.bible!.characters.filter((x) =>
-          c.characterIds.includes(x.id),
-        ).map(x => ({ ...x, hair: renderHair(s.project.id, x) })),
+        characters: s.bible!.characters.filter((x) => c.characterIds.includes(x.id)).map(x => ({
+          id: x.id, name: x.name, gender: x.gender, age: x.age, material: x.material,
+          face: x.face, silhouette: x.silhouette, color: x.color, texture: x.texture,
+          hair: renderHair(s.project.id, x), eyes: x.eyes, wardrobe: x.wardrobe,
+          accessories: x.accessories, gestures: x.gestures, lockedTraits: x.lockedTraits,
+        })),
         locations: s.bible!.locations.filter((x) => x.id === c.locationId),
       }),
     "CONTINUITY HANDOFF — this clip begins from the previous clip, not from a fresh scene. Preserve the incoming physical/emotional state and carry any pending nextAction, question, decision or interaction forward before starting unrelated business: " +
       JSON.stringify(prev ? s.observed[prev.id] || c.continuityIn : s.project.previousChapter?.finalState || c.continuityIn),
-    "Local shots, literal dialogue, performance, audio and expected final state: " +
-      JSON.stringify({ ...c, shots: c.shots.map(sh => ({ ...sh, framing: "Continuous group view; smooth movement only; all clip characters remain visible", characterIds: c.characterIds })) }),
+    "Local physical plan, constraints, audio and expected final state. Spoken words are defined ONLY in the canonical speech schedule above and are omitted here to prevent duplication: " +
+      JSON.stringify({ ...c, dialogue: [], shots: c.shots.map(sh => ({ ...sh, dialogue: "", action: withoutDialogue(sh.action, c), framing: "Continuous group view; smooth movement only; all clip characters remain visible", characterIds: c.characterIds })) }),
     instructions,
     continuousCamera,
   ].join("\n\n");
