@@ -509,3 +509,17 @@ it("uses newest successful images for videos and newest clips for montage withou
   const job = await enqueue("test", { ...a, type: "finalize" });
   expect(job.snapshot.manifest?.[0]).toBe("new-video");
 });
+
+it("only exposes locations used by the script and needs no location image to prepare it", async () => {
+  const p = memory.rows.get("projects/test") as Project;
+  const b = structuredClone(p.bible!.data) as import("../lib/schemas").Bible;
+  b.locations.push({ ...b.locations[0], id: "unused", name: "Unused room" });
+  memory.rows.set("projects/test", { ...p, bible: { ...p.bible, data: b } });
+  const room = memory.rows.get("projects/test/targets/location_hall") as Target;
+  memory.rows.set("projects/test/targets/location_unused", { ...room, id: "location_unused", entityId: "unused" });
+  expect((await readSnapshot("test")).targets.filter(t => t.role === "location").map(t => t.entityId)).toEqual(["hall"]);
+  memory.rows.set("projects/test", { ...p, plan: undefined, bible: { ...p.bible, data: b } });
+  expect((await readSnapshot("test")).targets.some(t => t.role === "location")).toBe(false);
+  const job = await enqueue("test", { ...a, type: "plan" });
+  expect(job.type).toBe("plan");
+});

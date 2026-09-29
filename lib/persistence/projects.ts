@@ -6,7 +6,7 @@ import { config } from "../config";
 import { assert } from "../errors";
 import { validateChapterBible, validateChapterPlan } from "../continuity/chapters";
 import { blocksNewJob } from "../job-state";
-import { affected, prerequisites } from "../continuity/rules";
+import { affected, prerequisites, usedLocationIds } from "../continuity/rules";
 import {
   bible,
   plan,
@@ -136,6 +136,7 @@ export async function readSnapshot(
       .sort((a, b) => b.createdAt - a.createdAt || b.id.localeCompare(a.id))[0];
     return { ...target, needsReview: false, ...(latest ? { approvedVersionId: latest.id } : {}) };
   });
+  const usedLocations = usedLocationIds({ plan: p.plan ? plan.parse(p.plan.data) : null } as Snapshot);
   return {
     // Older projects retained the full shortlist after selection. Never pass
     // discarded proposals back to the Director or render them in the editor.
@@ -148,8 +149,9 @@ export async function readSnapshot(
     // Older plans may have saved one image target per camera cut. Only the
     // first shot is the actual initial frame Veo consumes for each clip.
     targets: targets.filter(target =>
-      target.role !== "shot" || !p.plan ||
-      (p.plan.data as Plan).clips?.some(c => c.number === target.clipNumber && c.shots[0]?.id === target.entityId)
+      (target.role !== "location" || usedLocations.has(target.entityId)) &&
+      (target.role !== "shot" || !p.plan ||
+      (p.plan.data as Plan).clips?.some(c => c.number === target.clipNumber && c.shots[0]?.id === target.entityId))
     ),
     assets,
     bible: p.bible ? bible.parse(p.bible.data) : null,

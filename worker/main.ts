@@ -529,9 +529,11 @@ export async function execute(jobId: string, direct = false): Promise<"continue"
       assert(t, "Imagen no encontrada");
       await generate(t);
     } else if (job.type === "images") {
+      const pendingCanonical = job.snapshot.targets.some(t => ["character", "location"].includes(t.role) && !t.approvedVersionId);
       const targets = job.snapshot.targets.filter(
         (t) =>
           t.kind === "image" &&
+          (!pendingCanonical || t.role !== "shot") &&
           !t.approvedVersionId &&
           (t.role !== "shot" || (job.snapshot.project.plan?.approvedAt && job.snapshot.plan?.clips.some(c =>
             c.number === t.clipNumber && c.shots[0]?.id === t.entityId))),
