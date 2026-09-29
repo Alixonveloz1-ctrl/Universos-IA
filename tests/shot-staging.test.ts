@@ -66,10 +66,12 @@ it("maps an eight-second door action and timed dialogue to a continuous four-par
   clip.dialogue[0] = { ...clip.dialogue[0], start: 4, end: 6, text: "¿Es tuya?" };
   const prompt = compileVideoPrompt(s, clip, "");
   for (const window of ["0-2s:", "2-4s:", "4-6s:", "6-8s:"]) expect(prompt).toContain(window);
-  expect(prompt.indexOf("0-2s:")).toBeLessThan(prompt.indexOf("6-8s:"));
-  expect(prompt).toContain("[0-4s; continuous group framing; Alba]: Alba abre la puerta");
-  expect(prompt).toContain("[4-8s; continuous group framing; Alba]: Alba lee la carta");
-  expect(prompt).toContain("Alba (4-6s, Preguntar): «¿Es tuya?»");
+  const visualMap = prompt.indexOf("VISUAL PERFORMANCE MAP:");
+  expect(prompt.indexOf("0-2s:", visualMap)).toBeLessThan(prompt.indexOf("6-8s:", visualMap));
+  expect(prompt).toContain("Action 1, 0-4s: Alba abre la puerta");
+  expect(prompt).toContain("Action 2, 4-8s: Alba lee la carta");
+  expect(prompt).toContain("4-6s — turn 1.");
+  expect(prompt).toContain("Alba says in Español, with the selected Latino accent: ¿Es tuya?");
   expect(prompt).toContain("Do not invent turns around the character's own axis");
 });
 
