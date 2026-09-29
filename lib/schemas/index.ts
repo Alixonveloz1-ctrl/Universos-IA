@@ -231,7 +231,8 @@ export const projectInput = z
   .object({
     universeId: id.optional(),
     beings: short.default("Frutas"),
-    visualStyle: short.default("Cinemático 3D"),
+    visualStyle: short.default("3D Viral Estilizado"),
+    worldSetting: short,
     concept: z.string().trim().max(1000).optional(),
     genre: short,
     subgenre: short,
