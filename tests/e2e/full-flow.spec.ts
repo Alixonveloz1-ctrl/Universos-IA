@@ -122,7 +122,7 @@ test("SIMULATED complete journey: story, canon, eight sequential clips, export a
             const generated = structuredClone(full.assets.find((a) => a.targetId === t.id)!);
             s.assets.push(generated);
             t.approvedVersionId = generated.id;
-            if (t.kind === "video") s.observed[t.id] = { ...full.observed[t.id], versionId: generated.id };
+            if (t.kind === "video") s.observed[t.id] = { ...((full.observed[t.id] || {}) as Record<string, unknown>), versionId: generated.id };
           }
         } else if (input.type === "finalize") {
           expect(
