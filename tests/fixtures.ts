@@ -124,6 +124,7 @@ export const project: Project = {
   title: "Prueba simulada",
   revision: 1,
   stage: "production",
+  worldSetting: "Mundo real actual",
   genre: "Drama",
   subgenre: "Familiar",
   plotType: "Traición",
