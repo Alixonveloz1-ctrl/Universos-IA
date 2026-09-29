@@ -228,7 +228,11 @@ export function snapshot(): Snapshot {
     status: "candidate",
     model: t.kind === "image" ? project.models.image : project.models.video,
     prompt: "test",
-    inputRefs: t.kind === "video" ? ["i" + t.clipNumber] : [],
+    inputRefs: t.kind === "video"
+      ? ["i" + t.clipNumber]
+      : t.role === "shot"
+        ? b.characters.filter(character => q.clips[t.clipNumber! - 1].characterIds.includes(character.id)).map(character => "canonical_" + character.id)
+        : [],
     settings: {},
     storageObject: "universos-ia/test/" + t.approvedVersionId,
     mime: t.kind === "video" ? "video/mp4" : "image/png",
