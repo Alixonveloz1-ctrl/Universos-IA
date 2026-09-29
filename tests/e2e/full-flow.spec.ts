@@ -189,7 +189,7 @@ test("SIMULATED complete journey: story, canon, eight sequential clips, export a
         exact: true,
       })
       .click();
-    await expect(page.getByText("Lista · en uso", { exact: true })).toHaveCount(1);
+    await expect(page.getByText("Lista · en uso", { exact: true })).toHaveCount(2);
     await page.getByRole("button", { name: "Producción", exact: true }).click();
     await page
       .getByRole("button", {
