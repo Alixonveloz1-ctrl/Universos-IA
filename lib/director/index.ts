@@ -34,35 +34,41 @@ export function runDirector(j: Job, beforeCall: (key: string) => Promise<void>, 
 }
 
 export function compileVideoPrompt(s: Snapshot, c: Clip, instructions: string) {
-  const clean = (value: unknown) => withoutDialogue(typeof value === "string" ? value : JSON.stringify(value), c);
-  const prev = s.targets.find(t => t.role === "clip" && t.clipNumber === c.number - 1);
-  const names = c.characterIds.map(id => s.bible!.characters.find(x => x.id === id)?.name || id).join(", ");
-  const location = s.bible?.locations.find(l => l.id === c.locationId);
-  const vehicle = /\b(?:carro|auto|autom[oó]vil|coche|veh[ií]culo|camioneta|volante|conduc|asiento|parabrisas|gasolinera|car|vehicle|steering|driver|passenger)\b/i
-    .test([c.goal, ...c.shots.map(sh => sh.action), location?.name, location?.layout].join(" "));
-  const actions = c.shots.map((sh, i) => `Action ${i + 1}, ${sh.start}-${sh.end}s: ${clean(sh.action)}`).join("\n");
-  const timeline = [0, 2, 4, 6].map(start => {
-    const actionsHere = c.shots.flatMap((sh, i) => sh.start < start + 2 && sh.end > start ? [i + 1] : []);
-    return `${start}-${start + 2}s: advance visual action(s) ${actionsHere.join(", ") || "already established"}; continue preparation, action or its consequence without restarting. Speech follows its own complete turns below, never these visual boundaries.`;
-  }).join("\n");
+  const prev = s.targets.find(
+    (t) => t.role === "clip" && t.clipNumber === c.number - 1,
+  );
   return [
-    "Generate one complete 8-second vertical audiovisual clip with native audio, using the approved image as its initial frame.",
+    "Generate one complete 8-second vertical audiovisual clip, with native audio. One uninterrupted camera take follows the local timing below.",
+    `The ONE approved image for this clip is its initial frame. All ${c.characterIds.length} participating characters (${c.characterIds.map(id => s.bible!.characters.find(x => x.id === id)?.name || id).join(", ")}) must already be visible and recognizable in that opening image. Preserve their exact appearance, wardrobe and positions throughout the continuous camera movement; do not invent, replace or duplicate a character. Generate all later smooth camera moves and reactions inside this video from the timing below; they do not have separate images.`,
     visualTreatment(s.project.universeSnapshot.visualStyle),
-    "CANONICAL PARTICIPANT IDENTITIES:\n" + c.characterIds.map(id => { const character = s.bible!.characters.find(x => x.id === id)!; return JSON.stringify({ ...character, hair: renderHair(s.project.id, character) }); }).join("\n"),
+    "Preserve exact recurring identities and voice descriptions. Speak the approved dialogue literally; do not translate. No unrequested voices. Music, if requested, must not mask dialogue. Do not add an intro or outro to every clip.",
     speechDirection(s, c),
-    `All ${c.characterIds.length} participating characters (${names}) remain visible and recognizable. Match their exact appearance, clothing, placement, lighting and ${s.project.universeSnapshot.visualStyle} treatment to the initial image. Do not redesign the still image. Keep speaking faces readable in the shared framing; the listener looks toward the visible speaker, never directly into the lens.`,
-    vehicle ? "VEHICLE GEOGRAPHY: preserve the approved physical seats and camera viewpoint; never mirror the image. For a camera in the back seat looking forward in a left-hand-drive car, the steering wheel and DRIVER are on the IMAGE LEFT and the front PASSENGER is on the IMAGE RIGHT. Seat roles override generic cast-order screen-left instructions. The initial image, not cast order, identifies each seat." : "Preserve the actual left/right positions from the initial image; a cast-list order is not a command to swap places.",
-    "Visual goal: " + clean(c.goal),
-    "Approved scene constraints (the speech schedule controls all spoken words): " + clean(c.constraints || []),
-    "VISUAL DIRECTION ONLY — action descriptions never authorize extra dialogue. Each action is listed once:\n" + actions,
-    "VISUAL PERFORMANCE MAP:\n" + timeline,
-    "Perform the approved action once, with motivated preparation and reaction throughout the eight seconds. Do not invent turns around the character's own axis, pacing, repeated gestures or filler. Keep the mouths unobstructed while speaking. The speech schedule takes precedence over incidental speech descriptions in old action notes.",
-    "Approved incoming state: " + clean(prev ? s.observed[prev.id] || c.continuityIn : s.project.previousChapter?.finalState || c.continuityIn),
-    "Expected resulting state: " + clean(c.plannedEndState),
-    "Ambient sound: " + clean(c.soundDirection.ambience) + ". Sound effects: " + clean(c.soundDirection.effects) + ". Music direction: " + clean(c.soundDirection.music || "none") + ". All sound is native to Veo. Keep ambience and any instrumental music below the dialogue; no sung words or competing voices.",
-    instructions.trim() ? "Additional scene direction (does not reassign speakers or add words to the speech schedule): " + clean(instructions) : "",
+    "EIGHT-SECOND PERFORMANCE MAP (local time, continuous and non-repeating):\n" + performanceTimeline(s, c),
+    "Direct every second through concrete causal movement, the approved dialogue and motivated reactions. If the main action is brief (for example opening a door), use the surrounding seconds for its natural preparation, the action itself and its immediate consequence. Do not invent turns around the character's own axis, pacing, repeated hand motions, camera orbit, a second opening of the same door, unrelated gestures, empty filler or an abrupt freeze. Keep the same continuous viewpoint and preserve every participant in frame. Keep a continuous spatial and emotional state across all four intervals. The four intervals above are performance instructions, not four new still images or extra video clips.",
+    c.characterIds.length === 2
+      ? `Film both people in ONE shared physical scene. ${vehicleDirection(s, c) ? "Preserve their approved physical seats." : `Establish ${s.bible!.characters.find(x => x.id === c.characterIds[0])?.name || "the first character"} screen LEFT and ${s.bible!.characters.find(x => x.id === c.characterIds[1])?.name || "the second character"} screen RIGHT.`} Any pointing or accusation reaches the other visible person in the opening exchange. Show reactions within the shared group framing; the listener looks toward the visible speaker, never directly into the lens. Preserve furniture and lighting throughout the take.`
+      : "",
+    vehicleDirection(s, c),
+    "Locked universe, premise and arc: " +
+      JSON.stringify({
+        universe: s.project.universeSnapshot,
+        story: s.project.story?.data,
+      }),
+    "Bible version and present characters: " +
+      JSON.stringify({
+        version: s.project.bible?.id,
+        characters: s.bible!.characters.filter((x) =>
+          c.characterIds.includes(x.id),
+        ).map(x => ({ ...x, hair: renderHair(s.project.id, x) })),
+        locations: s.bible!.locations.filter((x) => x.id === c.locationId),
+      }),
+    "Approved observed incoming state: " +
+      JSON.stringify(prev ? s.observed[prev.id] || c.continuityIn : s.project.previousChapter?.finalState || c.continuityIn),
+    "Local shots, literal dialogue, performance, audio and expected final state: " +
+      JSON.stringify({ ...c, shots: c.shots.map(sh => ({ ...sh, framing: "Continuous group view; smooth movement only; all clip characters remain visible", characterIds: c.characterIds })) }),
+    instructions,
     continuousCamera,
-  ].filter(Boolean).join("\n\n");
+  ].join("\n\n");
 }
 export function reviewClipTiming(s: Snapshot, c: Clip) {
   return {
