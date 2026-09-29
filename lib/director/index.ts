@@ -96,9 +96,9 @@ export function compileVideoPrompt(s: Snapshot, c: Clip, instructions: string) {
         locations: s.bible!.locations.filter((x) => x.id === c.locationId),
       }),
     "CONTINUITY HANDOFF — this clip begins from the previous clip, not from a fresh scene. Preserve the incoming physical/emotional state and carry any pending nextAction, question, decision or interaction forward before starting unrelated business: " +
-      JSON.stringify(prev ? s.observed[prev.id] || c.continuityIn : s.project.previousChapter?.finalState || c.continuityIn),
+      withoutDialogue(JSON.stringify(prev ? s.observed[prev.id] || c.continuityIn : s.project.previousChapter?.finalState || c.continuityIn), c),
     "Local physical plan, constraints, audio and expected final state. Spoken words are defined ONLY in the canonical speech schedule above and are omitted here to prevent duplication: " +
-      JSON.stringify({ ...c, dialogue: [], shots: c.shots.map(sh => ({ ...sh, dialogue: "", action: withoutDialogue(sh.action, c), framing: "Continuous group view; smooth movement only; all clip characters remain visible", characterIds: c.characterIds })) }),
+      withoutDialogue(JSON.stringify({ ...c, dialogue: [], shots: c.shots.map(sh => ({ ...sh, dialogue: "", action: withoutDialogue(sh.action, c), framing: "Continuous group view; smooth movement only; all clip characters remain visible", characterIds: c.characterIds })) }), c),
     withoutDialogue(instructions, c),
     continuousCamera,
   ].join("\n\n");
