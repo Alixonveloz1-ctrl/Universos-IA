@@ -130,22 +130,33 @@ export async function readSnapshot(
     read("assets"),
     read("observed"),
   ]);
+  const assets = a.docs.map(d => d.data() as Asset);
+  const targets = t.docs.map(d => d.data() as Target).map(target => {
+    const latest = assets.filter(v => v.targetId === target.id && v.kind === target.kind && v.status !== "rejected")
+      .sort((a, b) => b.createdAt - a.createdAt || b.id.localeCompare(a.id))[0];
+    return { ...target, needsReview: false, ...(latest ? { approvedVersionId: latest.id } : {}) };
+  });
   return {
     // Older projects retained the full shortlist after selection. Never pass
     // discarded proposals back to the Director or render them in the editor.
-    project: p.selectedIdeaId
-      ? { ...p, ideas: p.ideas.filter(i => i.id === p.selectedIdeaId) }
-      : p,
+    project: {
+      ...p,
+      ...(p.selectedIdeaId ? { ideas: p.ideas.filter(i => i.id === p.selectedIdeaId) } : {}),
+      ...Object.fromEntries((["story", "bible", "plan"] as const).flatMap(kind => p[kind]
+        ? [[kind, { ...p[kind], approvedAt: p[kind]!.approvedAt || p[kind]!.createdAt || 1 }]] : [])),
+    },
     // Older plans may have saved one image target per camera cut. Only the
     // first shot is the actual initial frame Veo consumes for each clip.
-    targets: t.docs.map((d) => d.data() as Target).filter(target =>
+    targets: targets.filter(target =>
       target.role !== "shot" || !p.plan ||
       (p.plan.data as Plan).clips?.some(c => c.number === target.clipNumber && c.shots[0]?.id === target.entityId)
     ),
-    assets: a.docs.map((d) => d.data() as Asset),
+    assets,
     bible: p.bible ? bible.parse(p.bible.data) : null,
     plan: p.plan ? plan.parse(p.plan.data) : null,
-    observed: Object.fromEntries(o.docs.map((d) => [d.id, d.data()])),
+    observed: Object.fromEntries(o.docs.filter(d =>
+      d.data().versionId === targets.find(t => t.id === d.id)?.approvedVersionId
+    ).map(d => [d.id, d.data()])) ,
   };
 }
 export async function createProject(
@@ -337,7 +348,7 @@ export async function editProject(
           });
     }
     if (kind) {
-      if (kind === "bible") assert(p.story?.approvedAt, "Aprueba la historia.");
+      if (kind === "bible") assert(p.story, "Genera la historia.");
       if (kind === "plan")
         prerequisites(s, {
           type: "plan",
@@ -357,7 +368,7 @@ export async function editProject(
       // Repeated taps on "Aprobar" should not create more approved copies
       // of an unchanged narrative or invalidate later work.
       const currentNarrative = p[kind];
-      if (change.approve && !change.selectedIdeaId && currentNarrative?.approvedAt &&
+      if (!change.selectedIdeaId && currentNarrative?.approvedAt &&
           JSON.stringify(currentNarrative.data) === JSON.stringify(data)) return p;
       const v: Narrative = {
         id: randomUUID(),
@@ -365,17 +376,15 @@ export async function editProject(
         data,
         sourceRevision: p.revision,
         createdAt: Date.now(),
-        ...(change.approve ? { approvedAt: Date.now() } : {}),
+        approvedAt: Date.now(),
       };
       patch[kind] = v;
       tx.create(projectRef(projectId).collection("narratives").doc(v.id), v);
-      patch.stage = change.approve
-        ? kind === "story"
+      patch.stage = kind === "story"
           ? "bible"
           : kind === "bible"
             ? "references"
-            : "images"
-        : kind;
+            : "images";
       if (kind === "bible") {
         const b = bible.parse(data);
         const desired = [
@@ -667,7 +676,8 @@ export async function createNextChapter(projectId: string, revision: number) {
     assert(completed, "Une primero los ocho clips aprobados de este capítulo.");
     const lastClip = s.assets.find(a => a.id === clips[7].approvedVersionId);
     assert(lastClip?.lastFrameObject, "Falta el fotograma final del capítulo anterior.");
-    const { versionId: _versionId, ...observedEnd } = s.observed[clips[7].id] as Record<string, unknown>;
+    const savedEnd = s.observed[clips[7].id] as { versionId?: string } | undefined;
+    const { versionId: _versionId, ...observedEnd } = (savedEnd?.versionId === lastClip.id ? savedEnd : lastClip.settings.plannedEndState || s.plan!.clips[7].plannedEndState) as Record<string, unknown>;
     void _versionId;
     const finalState = state.parse(observedEnd);
     const now = Date.now(), nextId = randomUUID();

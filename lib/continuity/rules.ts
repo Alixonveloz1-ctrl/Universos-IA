@@ -6,7 +6,6 @@ function approvedImage(s: Snapshot, role: Target["role"], entityId: string) {
   const t = s.targets.find((x) => x.role === role && x.entityId === entityId);
   return (
     t &&
-    !t.needsReview &&
     s.assets.some(
       (a) =>
         a.id === t.approvedVersionId &&
@@ -16,11 +15,11 @@ function approvedImage(s: Snapshot, role: Target["role"], entityId: string) {
   );
 }
 function canonicalReady(s: Snapshot) {
-  assert(s.project.bible?.approvedAt && s.bible, "Aprueba la biblia.");
+  assert(s.project.bible && s.bible, "Genera y guarda la biblia.");
   assert(
     s.bible.characters.every((c) => approvedImage(s, "character", c.id)) &&
       s.bible.locations.every((l) => approvedImage(s, "location", l.id)),
-    "Aprueba las referencias canónicas.",
+    "Genera las imágenes de los personajes y escenarios.",
   );
 }
 export function prerequisites(s: Snapshot, a: Action) {
@@ -38,25 +37,25 @@ export function prerequisites(s: Snapshot, a: Action) {
     );
   if (a.type === "ideas")
     assert(!p.selectedIdeaId, "Ya elegiste una historia. Las otras propuestas están descartadas.");
-  if (a.type === "bible") assert(p.story?.approvedAt, "Aprueba la historia.");
+  if (a.type === "bible") assert(p.story, "Genera y guarda la historia.");
   if (a.type === "plan") {
-    assert(p.bible?.approvedAt, "Aprueba la biblia.");
+    assert(p.bible, "Genera y guarda la biblia.");
     canonicalReady(s);
   }
   if (a.type === "image" || a.type === "images")
-    assert(p.bible?.approvedAt, "Aprueba la biblia.");
+    assert(p.bible, "Genera y guarda la biblia.");
   if (a.type === "image") {
     const t = s.targets.find((t) => t.id === a.targetId);
     assert(t && t.kind === "image", "Imagen no encontrada.");
     imageReferenceIds(s, t);
     if (t.role === "shot") {
-      assert(p.plan?.approvedAt, "Aprueba el guion.");
+      assert(p.plan, "Genera y guarda el guion.");
       canonicalReady(s);
       assert(s.plan?.clips.some(c => c.number === t.clipNumber && c.shots[0]?.id === t.entityId),
         "Cada clip utiliza solo su imagen inicial.");
     }
   }
-  if (a.type === "images" && p.plan?.approvedAt) {
+  if (a.type === "images" && p.plan) {
     canonicalReady(s);
     s.targets
       .filter((t) => t.kind === "image" && !t.approvedVersionId &&
@@ -64,7 +63,7 @@ export function prerequisites(s: Snapshot, a: Action) {
       .forEach((t) => imageReferenceIds(s, t));
   }
   if (a.type === "video") {
-    assert(p.plan?.approvedAt, "Aprueba el guion.");
+    assert(p.plan, "Genera y guarda el guion.");
     canonicalReady(s);
     const t = s.targets.find((t) => t.id === a.targetId);
     assert(t && t.kind === "video", "Clip no encontrado.");
@@ -73,34 +72,14 @@ export function prerequisites(s: Snapshot, a: Action) {
     assert(c, "Clip sin guion");
     assert(
       approvedImage(s, "shot", c.shots[0].id),
-      "Aprueba la imagen inicial de este clip.",
+      "Genera la imagen inicial de este clip.",
     );
-    if (c.characterIds.length > 1) {
-      const opening = s.targets.find(x => x.role === "shot" && x.entityId === c.shots[0].id);
-      const image = s.assets.find(x => x.id === opening?.approvedVersionId);
-      const canonical = c.characterIds.map(id => s.targets.find(x => x.role === "character" && x.entityId === id)?.approvedVersionId);
-      assert(canonical.every(id => id && image?.inputRefs.includes(id)),
-        "La imagen inicial no usó las referencias aprobadas de todos los personajes del clip. Regenera y aprueba esa imagen antes de crear el video.");
-    }
-    if (n > 1) {
-      const prev = s.targets.find(
-        (x) => x.role === "clip" && x.clipNumber === n - 1,
-      );
-      assert(
-        prev?.approvedVersionId && !prev.needsReview,
-        "Aprueba y revisa el clip anterior.",
-      );
-      assert(
-        (s.observed[prev.id] as { versionId?: string } | undefined)
-          ?.versionId === prev.approvedVersionId,
-        "Falta el estado observado del clip anterior.",
-      );
-    }
   }
+
   if (a.type === "finalize") {
     assert(
-      p.story?.approvedAt && p.bible?.approvedAt && p.plan?.approvedAt,
-      "Aprueba historia, biblia y guion antes del montaje.",
+      p.story && p.bible && p.plan,
+      "Faltan la historia, la biblia o el guion.",
     );
     const clips = s.targets
       .filter((t) => t.kind === "video")
@@ -111,16 +90,11 @@ export function prerequisites(s: Snapshot, a: Action) {
           (t, i) =>
             t.clipNumber === i + 1 &&
             t.approvedVersionId &&
-            !t.needsReview &&
-            (s.observed[t.id] as { versionId?: string } | undefined)
-              ?.versionId === t.approvedVersionId,
+            s.assets.some(a => a.id === t.approvedVersionId && a.targetId === t.id && a.kind === "video"),
         ),
-      "Necesitas ocho clips aprobados y sin conflictos.",
+      "Genera los ocho clips antes de unirlos.",
     );
-    assert(
-      !s.targets.some((t) => t.needsReview),
-      "Resuelve las revisiones pendientes.",
-    );
+
   }
 }
 export function affected(

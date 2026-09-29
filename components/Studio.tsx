@@ -1099,7 +1099,7 @@ export default function Studio() {
           {tab === "Final" && (
             <section className="panel">
               <h2>Tu historia completa</h2>
-              <p>Unión de los ocho clips aprobados, con su audio original.</p>
+              <p>Unión de la última versión de cada uno de los ocho clips, con su audio original.</p>
               <button
                 className="primary"
                 disabled={busy || active || !!generationBlock(data, "finalize")}
@@ -1201,9 +1201,7 @@ function NarrativePanel({
             ? "Biblia de continuidad"
             : "Guion completo"}
       </h2>
-      {alreadyApproved && <p role="status">{kind === "story" ? "Historia aprobada. Continúa en Biblia." : kind === "bible" ? "Biblia aprobada." : "Guion aprobado."}</p>}
-      {kind === "story" && !data.project.story?.approvedAt &&
-        <p>Lee la historia aquí. Si te gusta, pulsa «Aprobar historia». Después sigue a «Biblia». No tienes que escribir nada para avanzar.</p>}
+      <p>La última versión guardada se utiliza automáticamente.</p>
       {kind !== "story" && <label>
         Versiones narrativas
         <select
@@ -1217,7 +1215,7 @@ function NarrativePanel({
           {candidates.map((n) => (
             <option key={n.id} value={n.id}>
               {new Date(n.createdAt).toLocaleString("es")}{" "}
-              {n.approvedAt ? "· aprobada" : "· candidata"}
+              {n.id === data.project[kind]?.id ? "· en uso" : "· historial"}
             </option>
           ))}
         </select>
@@ -1258,16 +1256,8 @@ function NarrativePanel({
         </div>
       )}
       <div className="actions">
-        <button disabled={busy} onClick={() => void saveDraft(false)}>
-          Guardar borrador
-        </button>
-        <button
-          className="primary"
-          disabled={busy || alreadyApproved}
-          onClick={() => void saveDraft(true)}
-        >
-          Aprobar{" "}
-          {kind === "bible" ? "biblia" : kind === "plan" ? "guion" : "historia"}
+        <button disabled={busy || alreadyApproved} onClick={() => void saveDraft(true)}>
+          Guardar cambios
         </button>
       </div>
     </section>
@@ -1295,20 +1285,8 @@ function TargetPanel({
   const versions = data.assets
     .filter((v) => v.targetId === t.id)
     .sort((a, b) => b.createdAt - a.createdAt);
-  const [chosen, setChosen] = useState(""),
-    [instructions, setInstructions] = useState(""),
-    [observed, setObserved] = useState<{
-      versionId: string;
-      revision: number;
-      value: unknown;
-    } | null>(null),
-    [note, setNote] = useState("");
-  const v: Asset | undefined =
-    versions.find((x) => x.id === chosen) || versions[0];
-  const selectedApproved = !!v && v.id === t.approvedVersionId;
-  const c = data.plan?.clips[(t.clipNumber || 1) - 1];
-  const observedDraft = observed?.versionId === v?.id ? observed : null;
-  const plannedEndState = v?.settings.plannedEndState ?? c?.plannedEndState;
+  const [instructions, setInstructions] = useState("");
+  const v: Asset | undefined = versions.find(x => x.id === t.approvedVersionId) || versions[0];
   const blocked = generationBlock(data, t.kind, t.id);
   const title =
     t.role === "character"
@@ -1323,33 +1301,13 @@ function TargetPanel({
       <div className="topline">
         <h3>{title}</h3>
         <span className="badge">
-          {t.needsReview
-            ? "Necesita revisión"
-            : t.approvedVersionId
-              ? "Tiene versión aprobada"
-              : "Pendiente"}
+          {v ? "Lista · en uso" : "Pendiente"}
         </span>
       </div>
       {v && (
         <>
           <Media projectId={data.project.id} version={v.id} kind={t.kind} />
-          <label>
-            Versiones
-            <select
-              value={v.id}
-              onChange={(e) => {
-                setChosen(e.target.value);
-                setObserved(null);
-              }}
-            >
-              {versions.map((x) => (
-                <option value={x.id} key={x.id}>
-                  {new Date(x.createdAt).toLocaleString("es")}{" "}
-                  {x.id === t.approvedVersionId ? "· aprobada" : "· candidata"}
-                </option>
-              ))}
-            </select>
-          </label>
+          <p className="muted">Se utiliza automáticamente la última versión generada correctamente.</p>
         </>
       )}
       <details>
@@ -1360,32 +1318,6 @@ function TargetPanel({
           onChange={(e) => setInstructions(e.target.value)}
         />
       </details>
-      {t.kind === "video" && v && (
-        <details>
-          <summary>Continuidad observada</summary>
-          <p className="muted">
-            Revisa el video con sonido. Si coincide, conserva el estado
-            previsto; si cambia algo, registra lo que ocurrió.
-          </p>
-          <Editor
-            value={
-              observedDraft?.value ?? {
-                ...(plannedEndState as object),
-                note: "",
-              }
-            }
-            bible={data.bible}
-            observed
-            onChange={(value) =>
-              setObserved({
-                versionId: v.id,
-                revision: data.project.revision,
-                value,
-              })
-            }
-          />
-        </details>
-      )}
       <div className="actions">
         <button
           disabled={disabled || !!blocked}
@@ -1397,61 +1329,10 @@ function TargetPanel({
           {versions.length ? "Regenerar" : "Generar"}{" "}
           {t.kind === "video" ? "clip" : "imagen"}
         </button>
-        {v && (
-          <button
-            className="primary"
-            disabled={disabled || selectedApproved}
-            onClick={() =>
-              void perform(async () => {
-                await api(
-                  `projects/${data.project.id}/targets/${t.id}/approve`,
-                  "POST",
-                  {
-                    expectedRevision:
-                      observedDraft?.revision ?? data.project.revision,
-                    versionId: v.id,
-                    ...(t.kind === "video"
-                      ? { observed: observedDraft?.value ?? plannedEndState }
-                      : {}),
-                  },
-                );
-                await refresh();
-              })
-            }
-          >
-            {selectedApproved
-              ? (t.kind === "video" ? "Clip aprobado" : "Imagen aprobada")
-              : (t.kind === "video" ? "Revisado · aprobar clip" : "Aprobar imagen")}
-          </button>
-        )}
+
       </div>
       {blocked && <p className="muted">{blocked}</p>}
-      {t.needsReview && (
-        <details>
-          <summary>
-            Confirmar que la versión aprobada sigue siendo válida
-          </summary>
-          <label>
-            Comprobación de continuidad
-            <textarea value={note} onChange={(e) => setNote(e.target.value)} />
-          </label>
-          <button
-            disabled={disabled || !note.trim()}
-            onClick={() =>
-              void perform(async () => {
-                await api(
-                  `projects/${data.project.id}/targets/${t.id}/review`,
-                  "POST",
-                  { expectedRevision: data.project.revision, note },
-                );
-                await refresh();
-              })
-            }
-          >
-            Confirmar revisión
-          </button>
-        </details>
-      )}
+
     </article>
   );
 }

@@ -11,7 +11,7 @@ import { imageLimits } from "../lib/models";
 import { imageReferenceIds } from "../lib/continuity/rules";
 import { config } from "../lib/config";
 import { AppError, assert, safeError, logFailure } from "../lib/errors";
-import { projectRef } from "../lib/persistence/projects";
+import { projectRef, editProject, getProject } from "../lib/persistence/projects";
 import {
   compileImagePrompt,
   compileVideoPrompt,
@@ -518,6 +518,12 @@ export async function execute(jobId: string, direct = false): Promise<"continue"
           ); /* Narrative is a candidate, explicitly accepted in the editor. */
         }
       });
+      if (job.type !== "ideas") {
+        const current = await getProject(job.projectId);
+        await editProject(job.projectId, current.revision, {
+          kind: job.type as Narrative["kind"], data: result, approve: true,
+        });
+      }
     } else if (job.type === "image") {
       const t = job.snapshot.targets.find((t) => t.id === job.targetId);
       assert(t, "Imagen no encontrada");

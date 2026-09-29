@@ -374,14 +374,14 @@ it("REGRESSION a local failure with a live lease cannot start another job", asyn
   await expect(enqueue("test", { ...a, requestId: "bbbbbbbb-bbbb-4bbb-abbb-bbbbbbbbbbbb" })).rejects.toThrow("activo");
 });
 
-it("REGRESSION canonical approval marks only dependent storyboard and video", async () => {
+it("latest canonical reference does not require approving downstream media", async () => {
   const image = memory.rows.get("projects/test/assets/i1") as Asset;
   memory.rows.set("projects/test/assets/i1", { ...image, inputRefs: ["canonical_a"] });
   const canonical = memory.rows.get("projects/test/assets/canonical_a") as Asset;
   memory.rows.set("projects/test/assets/new-canonical", { ...canonical, id: "new-canonical" });
   await approveAsset("test", "character_a", "new-canonical", 1);
-  expect((memory.rows.get("projects/test/targets/shot_s0") as Target).needsReview).toBe(true);
-  expect((memory.rows.get("projects/test/targets/clip_1") as Target).needsReview).toBe(true);
+  expect((await readSnapshot("test")).targets.find(t => t.id === "shot_s0")?.needsReview).toBe(false);
+  expect((await readSnapshot("test")).targets.find(t => t.id === "clip_1")?.needsReview).toBe(false);
   expect((memory.rows.get("projects/test/targets/clip_8") as Target).needsReview).toBe(false);
   expect(memory.rows.has("projects/test/assets/canonical_a")).toBe(true);
 });
@@ -453,11 +453,11 @@ it("requires a current completed export before continuing", async () => {
   await expect(createNextChapter("test", 1)).rejects.toThrow("Une primero");
   expect((memory.rows.get("projects/test") as Project).nextChapterId).toBeUndefined();
 });
-it("refuses a chapter with unresolved clip continuity", async () => {
+it("continues a completed chapter without manual continuity approval", async () => {
   finishedChapter();
   const clip = memory.rows.get("projects/test/targets/clip_8") as Target;
   memory.rows.set("projects/test/targets/clip_8", { ...clip, needsReview: true });
-  await expect(createNextChapter("test", 1)).rejects.toThrow("ocho clips");
+  await expect(createNextChapter("test", 1)).resolves.toHaveProperty("chapterNumber", 2);
 });
 it("keeps the same universe when a continuation chooses its proposal", async () => {
   finishedChapter();
@@ -492,4 +492,20 @@ it("stopping a never-started queued job releases the queue immediately", async (
   const j = await enqueue("test", a);
   await jobControl(j.id, "stop");
   expect((memory.rows.get(`jobs/${j.id}`) as Job).state).toBe("stopped");
+});
+
+it("uses newest successful images for videos and newest clips for montage without approvals", async () => {
+  const s = snapshot();
+  for (const t of s.targets) memory.rows.set(`projects/test/targets/${t.id}`, { ...t, approvedVersionId: undefined, needsReview: true });
+  const opening = s.assets.find(a => a.id === "i2")!;
+  memory.rows.set("projects/test/assets/new-image", { ...opening, id: "new-image", createdAt: opening.createdAt + 100 });
+  memory.rows.set("projects/test/assets/rejected-image", { ...opening, id: "rejected-image", createdAt: opening.createdAt + 200, status: "rejected" });
+  const video = s.assets.find(a => a.id === "v1")!;
+  memory.rows.set("projects/test/assets/new-video", { ...video, id: "new-video", createdAt: video.createdAt + 100 });
+  memory.rows.delete("projects/test/observed/clip_1");
+  const current = await readSnapshot("test");
+  expect(current.targets.find(t => t.id === opening.targetId)?.approvedVersionId).toBe("new-image");
+  expect(current.targets.every(t => !t.needsReview)).toBe(true);
+  const job = await enqueue("test", { ...a, type: "finalize" });
+  expect(job.snapshot.manifest?.[0]).toBe("new-video");
 });

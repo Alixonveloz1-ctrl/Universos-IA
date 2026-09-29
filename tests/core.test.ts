@@ -43,20 +43,21 @@ describe("Deterministic invariants (no Google calls)", () => {
     p.clips[0].characterIds = ["other"];
     expect(() => validatePlan(p, b)).toThrow();
   });
-  it("blocks video until previous clip approval and observed state", () => {
+  it("allows the second video without generating or approving the first", () => {
     const s = snapshot();
     prerequisites(s, action);
     delete s.targets[0].approvedVersionId;
-    expect(() => prerequisites(s, action)).toThrow("anterior");
+    delete s.observed.clip_1;
+    expect(() => prerequisites(s, action)).not.toThrow();
   });
   it("blocks stale revision, missing images and export continuity conflicts", () => {
     const s = snapshot();
     expect(() =>
       prerequisites(s, { ...action, expectedRevision: 0 }),
     ).toThrow();
-    s.targets[3].needsReview = true;
+    delete s.targets[3].approvedVersionId;
     expect(() => prerequisites(s, action)).toThrow();
-    expect(() => prerequisites(s, { ...action, type: "finalize" })).toThrow();
+    expect(() => prerequisites(s, { ...action, type: "finalize" })).not.toThrow();
   });
   it("marks only actual dependencies; does not mutate versions", () => {
     const s = snapshot();
@@ -151,12 +152,12 @@ it("REGRESSION deleting a required target cannot bypass approval guards", () => 
   expect(() => prerequisites(s, action)).toThrow("imagen inicial");
   const canonical = snapshot();
   canonical.targets = canonical.targets.filter((t) => t.role !== "character");
-  expect(() => prerequisites(canonical, action)).toThrow("canónicas");
+  expect(() => prerequisites(canonical, action)).toThrow("personajes");
 });
-it("REGRESSION an observed state from another version cannot authorize the next clip", () => {
+it("an old observed state does not block generating the next clip", () => {
   const s = snapshot();
   s.observed.clip_1 = { ...(s.observed.clip_1 as object), versionId: "old" };
-  expect(() => prerequisites(s, action)).toThrow("observado");
+  expect(() => prerequisites(s, action)).not.toThrow();
 });
 
 it("REGRESSION shot character IDs must also be present in the clip context", () => {

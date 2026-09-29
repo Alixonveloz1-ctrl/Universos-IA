@@ -288,7 +288,7 @@ export function compileVideoPrompt(s: Snapshot, c: Clip, instructions: string) {
         locations: s.bible!.locations.filter((x) => x.id === c.locationId),
       }),
     "Approved observed incoming state: " +
-      JSON.stringify(prev ? s.observed[prev.id] : s.project.previousChapter?.finalState || c.continuityIn),
+      JSON.stringify(prev ? s.observed[prev.id] || c.continuityIn : s.project.previousChapter?.finalState || c.continuityIn),
     "Local shots, literal dialogue, performance, audio and expected final state: " +
       JSON.stringify({ ...c, shots: c.shots.map(sh => ({ ...sh, framing: "Continuous group view; smooth movement only; all clip characters remain visible", characterIds: c.characterIds })) }),
     instructions,
