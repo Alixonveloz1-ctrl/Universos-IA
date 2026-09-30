@@ -17,12 +17,11 @@ function approvedImage(s: Snapshot, role: Target["role"], entityId: string) {
 export function usedLocationIds(s: Snapshot) {
   return new Set(s.plan?.clips.flatMap(c => [c.locationId, ...c.shots.map(sh => sh.locationId)]) || []);
 }
-function canonicalReady(s: Snapshot, includeLocations = true) {
+function canonicalReady(s: Snapshot) {
   assert(s.project.bible && s.bible, "Genera y guarda la biblia.");
   assert(
-    s.bible.characters.every((c) => approvedImage(s, "character", c.id)) &&
-      (!includeLocations || s.bible.locations.filter(l => usedLocationIds(s).has(l.id)).every((l) => approvedImage(s, "location", l.id))),
-    "Genera las imágenes de los personajes y escenarios.",
+    s.bible.characters.every((c) => approvedImage(s, "character", c.id)),
+    "Genera las imágenes de referencia de los personajes.",
   );
 }
 export function prerequisites(s: Snapshot, a: Action) {
@@ -43,7 +42,7 @@ export function prerequisites(s: Snapshot, a: Action) {
   if (a.type === "bible") assert(p.story, "Genera y guarda la historia.");
   if (a.type === "plan") {
     assert(p.bible, "Genera y guarda la biblia.");
-    canonicalReady(s, false);
+    canonicalReady(s);
   }
   if (a.type === "image" || a.type === "images")
     assert(p.bible, "Genera y guarda la biblia.");
