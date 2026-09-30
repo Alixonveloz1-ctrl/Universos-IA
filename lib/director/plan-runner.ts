@@ -18,8 +18,14 @@ export function prepareGeneratedPlan(value: unknown): unknown {
     const match = decoded.trim().match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
     decoded = JSON.parse(match ? match[1] : decoded);
   }
-  const copy: unknown = structuredClone(decoded);
+  let copy: unknown = structuredClone(decoded);
+  // Accept the common harmless wrapper {"plan":{"clips":[...]}} and ignore
+  // explanatory siblings. The durable schema itself is still strict.
+  if (row(copy) && row(copy.plan) && Array.isArray(copy.plan.clips)) copy = structuredClone(copy.plan);
   if (!row(copy) || !Array.isArray(copy.clips)) return copy;
+  // The plan root contains only clips. Providers sometimes append summary,
+  // notes, metadata or other explanatory fields despite the JSON contract.
+  copy = { clips: copy.clips };
   const numberFields = (target: Row, keys: string[]) => {
     for (const key of keys) {
       const value = target[key];
@@ -57,7 +63,67 @@ class PlanIssues extends Error {
 export function validateGeneratedPlan(value: unknown, snapshot: Snapshot): Plan {
   if (!snapshot.bible) throw new PlanIssues([{ path: "bible", code: "missing", message: "Falta la biblia de este trabajo." }]);
   const prepared = prepareGeneratedPlan(value);
-  const parsed = plan.parse(prepared);
+  if (!row(prepared) || !Array.isArray(prepared.clips)) return plan.parse(prepared);
+  const characterIds = new Set(snapshot.bible.characters.map(ch => ch.id));
+  const characterByName = new Map(snapshot.bible.characters.map(ch => [ch.name.trim().toLocaleLowerCase(), ch.id]));
+  const locationIds = new Set(snapshot.bible.locations.map(loc => loc.id));
+  const locationByName = new Map(snapshot.bible.locations.map(loc => [loc.name.trim().toLocaleLowerCase(), loc.id]));
+  const resolveCharacter = (value: unknown) => {
+    if (typeof value !== "string") return value;
+    if (characterIds.has(value)) return value;
+    return characterByName.get(value.trim().toLocaleLowerCase()) || value;
+  };
+  const resolveLocation = (value: unknown) => {
+    if (typeof value !== "string") return value;
+    if (locationIds.has(value)) return value;
+    return locationByName.get(value.trim().toLocaleLowerCase()) || value;
+  };
+  const stateKeys = new Set(["location","note","characters"]);
+  const stateCharacterKeys = new Set(["characterId","posture","emotion","knowledge","heldObjects","wardrobe","damage","lastAction","nextAction"]);
+  const cleanState = (value: unknown) => {
+    if (!row(value)) return value;
+    const state = Object.fromEntries(Object.entries(value).filter(([k]) => stateKeys.has(k))) as Row;
+    if (typeof state.location === "string") state.location = String(resolveLocation(state.location));
+    if (Array.isArray(state.characters)) state.characters = state.characters.map(item => {
+      if (!row(item)) return item;
+      const cleaned = Object.fromEntries(Object.entries(item).filter(([k]) => stateCharacterKeys.has(k))) as Row;
+      cleaned.characterId = resolveCharacter(cleaned.characterId);
+      return cleaned;
+    });
+    return state;
+  };
+  const clipKeys = new Set(["number","durationSeconds","goal","continuityIn","plannedEndState","characterIds","locationId","shots","dialogue","soundDirection","startMode","constraints"]);
+  const shotKeys = new Set(["id","start","end","framing","action","characterIds","locationId","dialogue"]);
+  const dialogueKeys = new Set(["characterId","text","intention","start","end"]);
+  const soundKeys = new Set(["ambience","effects","music"]);
+  const normalized = {
+    clips: prepared.clips.map(rawClip => {
+      if (!row(rawClip)) return rawClip;
+      const clip = Object.fromEntries(Object.entries(rawClip).filter(([k]) => clipKeys.has(k))) as Row;
+      let cast = Array.isArray(clip.characterIds) ? clip.characterIds.map(resolveCharacter) : [];
+      if (Array.isArray(clip.dialogue)) clip.dialogue = clip.dialogue.map(turn => {
+        if (!row(turn)) return turn;
+        const d = Object.fromEntries(Object.entries(turn).filter(([k]) => dialogueKeys.has(k))) as Row;
+        d.characterId = resolveCharacter(d.characterId ?? turn.speaker ?? turn.speakerId ?? turn.character ?? turn.name);
+        if (typeof d.characterId === "string" && characterIds.has(d.characterId) && !cast.includes(d.characterId)) cast.push(d.characterId);
+        return d;
+      });
+      clip.characterIds = cast;
+      clip.locationId = resolveLocation(clip.locationId);
+      clip.continuityIn = cleanState(clip.continuityIn);
+      clip.plannedEndState = cleanState(clip.plannedEndState);
+      if (Array.isArray(clip.shots)) clip.shots = clip.shots.map(rawShot => {
+        if (!row(rawShot)) return rawShot;
+        const sh = Object.fromEntries(Object.entries(rawShot).filter(([k]) => shotKeys.has(k))) as Row;
+        sh.locationId = resolveLocation(sh.locationId);
+        if (Array.isArray(sh.characterIds)) sh.characterIds = sh.characterIds.map(resolveCharacter);
+        return sh;
+      });
+      if (row(clip.soundDirection)) clip.soundDirection = Object.fromEntries(Object.entries(clip.soundDirection).filter(([k]) => soundKeys.has(k)));
+      return clip;
+    }),
+  };
+  const parsed = plan.parse(normalized);
   const chars = new Set(snapshot.bible.characters.map(c => c.id));
   const locations = new Set(snapshot.bible.locations.map(l => l.id));
   const issues: PlanIssue[] = [];
