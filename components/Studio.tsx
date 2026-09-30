@@ -917,57 +917,6 @@ export default function Studio() {
                     </button>
                   )}
               </div>
-              {data.job.state === "needsReview" &&
-                data.job.error?.code !== "PROVIDER_REJECTED" &&
-                !data.job.hasOperation &&
-                data.job.resumable && (
-                  <details>
-                    <summary>Cerrar intento sin respuesta recuperable</summary>
-                    <p>
-                      Primero comprueba la recuperación. El cierre conserva el
-                      historial y no genera nada. El proveedor pudo consumir
-                      créditos o seguir procesando; una nueva generación se
-                      solicita por separado.
-                    </p>
-                    <label>
-                      Resultado de la revisión
-                      <textarea
-                        value={recoveryNote}
-                        onChange={(e) => setRecoveryNote(e.target.value)}
-                      />
-                    </label>
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={acknowledged}
-                        onChange={(e) => setAcknowledged(e.target.checked)}
-                      />
-                      He revisado este intento y entiendo su posible consumo de
-                      créditos.
-                    </label>
-                    <button
-                      disabled={
-                        busy ||
-                        !data.job.reconciledAt ||
-                        !acknowledged ||
-                        !recoveryNote.trim()
-                      }
-                      onClick={() =>
-                        void perform(async () => {
-                          await api(`jobs/${data.job!.id}/close`, "POST", {
-                            note: recoveryNote,
-                            acknowledged,
-                          });
-                          setAcknowledged(false);
-                          setRecoveryNote("");
-                          await refresh(pid);
-                        })
-                      }
-                    >
-                      Cerrar intento conservando el historial
-                    </button>
-                  </details>
-                )}
               {data.job.stopRequested && (
                 <small>
                   Las operaciones ya enviadas pueden continuar y consumir
