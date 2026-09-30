@@ -463,6 +463,25 @@ export default function Studio() {
     }, 5000);
     return () => clearInterval(timer);
   }, [pid]);
+  useEffect(() => {
+    const job = data?.job;
+    if (!pid || !job || job.state !== "needsReview" || !job.resumable || job.hasOperation) return;
+    const phase = job.reconciledAt ? "close" : "resume";
+    const key = phase + ":" + job.id;
+    if (autoRecovery.current.has(key)) return;
+    autoRecovery.current.add(key);
+    void perform(async () => {
+      if (phase === "resume") {
+        await api(`jobs/${job.id}/resume`, "POST", {});
+      } else {
+        await api(`jobs/${job.id}/close`, "POST", {
+          note: "Cierre automático tras comprobar que no existe una respuesta recuperable.",
+          acknowledged: true,
+        });
+      }
+      await refresh(pid);
+    });
+  }, [data?.job?.id, data?.job?.state, data?.job?.reconciledAt, data?.job?.resumable, data?.job?.hasOperation, pid, refresh]);
   const patch = async (change: unknown) => {
     await api("projects/" + pid, "PATCH", {
       expectedRevision: data!.project.revision,
