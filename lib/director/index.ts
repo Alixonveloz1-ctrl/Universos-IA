@@ -83,6 +83,9 @@ export function compileVideoPrompt(s: Snapshot, c: Clip, instructions: string) {
     "Generate one complete 8-second vertical audiovisual clip, with native audio. One uninterrupted camera take follows the local timing below.",
     `The ONE approved image for this clip is its initial frame. All ${c.characterIds.length} participating characters (${c.characterIds.map(id => s.bible!.characters.find(x => x.id === id)?.name || id).join(", ")}) must already be visible and recognizable in that opening image. Preserve their exact appearance, wardrobe and positions throughout the continuous camera movement; do not invent, replace or duplicate a character. Generate all later smooth camera moves and reactions inside this video from the timing below; they do not have separate images.`,
     visualTreatment(s.project.universeSnapshot.visualStyle),
+    ["Frutas", "Verduras", "Diamantes y minerales", "Objetos", "Insectos"].includes(s.project.universeSnapshot.beings)
+      ? `CHARACTER DESIGN LOCK FOR VIDEO: ${s.project.characterDesign || "Humanoide"}. Preserve exactly the head architecture visible in the approved initial image and canonical character identity. Humanoide means fully humanoid head/face/hair. Cabeza de especie/material means a normal-scale complete recognizable species/material head on the attractive proportionate humanoid body, with expressive integrated face and the approved full hairstyle. Never switch between these modes during animation and never enlarge the head into a mascot/chibi proportion.`
+      : "",
     "Preserve exact recurring identities and voice descriptions. Speak the approved dialogue literally; do not translate. No unrequested voices. Music, if requested, must not mask dialogue. Do not add an intro or outro to every clip.",
     speechDirection(s, c),
     "STRICT SCRIPT FIDELITY: Veo renders ONLY the events literally scheduled in this clip. It must not invent a climax, complication, surprise, spectacle, hazard, damage, transformation, weather event or environmental change to make the eight seconds more interesting. If the scheduled action is ordinary (for example driving and talking), keep it ordinary for the entire clip. Never add lightning, electricity, magic, energy beams, explosions, fire, smoke, sparks, supernatural light, earthquakes, cracked pavement, crashes, vehicle deformation/disassembly, flying debris, broken objects or sudden destruction unless that exact event is explicitly written in this clip's approved action/effects. Empty time is filled only by continuing the existing ordinary motion, natural breathing, eyelines and subtle reactions.",
@@ -102,6 +105,7 @@ export function compileVideoPrompt(s: Snapshot, c: Clip, instructions: string) {
       visualStyle: s.project.universeSnapshot.visualStyle,
       beings: s.project.universeSnapshot.beings,
       worldSetting: s.project.worldSetting || "Mundo real actual",
+      characterDesign: s.project.characterDesign || "Humanoide",
     }),
     "Present-character VISUAL identity only; canonical voices are supplied separately above for actual speakers: " +
       JSON.stringify({
