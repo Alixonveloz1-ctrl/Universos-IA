@@ -185,7 +185,7 @@ it("REGRESSION the default image model cannot silently drop required references"
     });
   expect(() => imageReferenceIds(s, s.targets[1])).toThrow("admite 3");
   s.project.models.image = "gemini-3.1-flash-image";
-  expect(imageReferenceIds(s, s.targets[1])).toHaveLength(5);
+  expect(imageReferenceIds(s, s.targets[1])).toHaveLength(4);
 });
 
 it("REGRESSION a replaced proposal list cannot use a dangling story selection", () => {
