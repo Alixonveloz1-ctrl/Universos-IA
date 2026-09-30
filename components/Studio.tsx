@@ -393,6 +393,7 @@ export default function Studio() {
   const [selection, setSelection] = useState({
     concept: "",
     beings: "Frutas",
+    characterDesign: "Humanoide" as "Humanoide" | "Cabeza de especie/material",
     visualStyle: "3D Viral Estilizado",
     worldSetting: "Mundo real actual",
     genre: "Drama",
@@ -653,7 +654,8 @@ export default function Studio() {
               />
             </label>
             <div className="grid">
-              {field("Tipo de seres", selection.beings, (v) => setSelection({ ...selection, beings: v }), beings)}
+              {field("Tipo de seres", selection.beings, (v) => setSelection({ ...selection, beings: v, characterDesign: ["Frutas", "Verduras", "Diamantes y minerales", "Objetos", "Insectos"].includes(v) ? selection.characterDesign : "Humanoide" }), beings)}
+              {["Frutas", "Verduras", "Diamantes y minerales", "Objetos", "Insectos"].includes(selection.beings) && field("Diseño del personaje", selection.characterDesign, (v) => setSelection({ ...selection, characterDesign: v as "Humanoide" | "Cabeza de especie/material" }), ["Humanoide", "Cabeza de especie/material"], { Humanoide: "100% humanoide", "Cabeza de especie/material": "Cabeza de especie/material" })}
               {field("Estilo visual", selection.visualStyle, (v) => setSelection({ ...selection, visualStyle: v }), styles)}
               {field("Mundo / ambientación", selection.worldSetting, (v) => setSelection({ ...selection, worldSetting: v }), worlds)}
             </div>
