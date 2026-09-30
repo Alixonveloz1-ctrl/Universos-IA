@@ -186,7 +186,8 @@ export function imageReferenceIds(s: Snapshot, target: Target) {
   // generated target back into the image model. A malformed result (extra
   // limb, plastic surface, wrong species) would otherwise become a visual
   // instruction and can be reproduced nearly identically on every retry.
-  // Shot generation still uses the approved cast/location references.
+  // Shot generation uses approved CAST references only. Location continuity is
+  // textual so the image model can solve characters + architecture together.
   const refs = selected.flatMap((t) =>
     t.approvedVersionId ? [t.approvedVersionId] : [],
   );
