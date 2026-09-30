@@ -420,18 +420,13 @@ export async function editProject(
             : "images";
       if (kind === "bible") {
         const b = bible.parse(data);
-        const desired = [
-          ...b.characters.map((c) => ({
-            id: "character_" + c.id,
-            role: "character" as const,
-            entityId: c.id,
-          })),
-          ...b.locations.map((l) => ({
-            id: "location_" + l.id,
-            role: "location" as const,
-            entityId: l.id,
-          })),
-        ];
+        // Only characters have canonical image references. Locations remain
+        // textual Bible data and are rendered together with the cast per shot.
+        const desired = b.characters.map((c) => ({
+          id: "character_" + c.id,
+          role: "character" as const,
+          entityId: c.id,
+        }));
         for (const t of desired) {
           const old = s.targets.find((x) => x.id === t.id);
           tx.set(projectRef(projectId).collection("targets").doc(t.id), {
