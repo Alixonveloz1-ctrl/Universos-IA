@@ -881,11 +881,12 @@ export default function Studio() {
                     completed: "Generación terminada",
                     failed: "El trabajo falló",
                     stopped: "Detenido",
-                    needsReview: data.job.error?.code === "PROVIDER_REJECTED" ? "Google rechazó esta solicitud" : "Respuesta incierta · requiere revisión",
+                    needsReview: data.job.error?.code === "PROVIDER_REJECTED" ? "Google rechazó esta solicitud" : "Recuperando automáticamente",
                   }[data.job.state]
                 }
               </strong>
-              {data.job.error && <p role="alert">{data.job.error.message}</p>}
+              {data.job.error && data.job.state !== "needsReview" && <p role="alert">{data.job.error.message}</p>}
+              {data.job.state === "needsReview" && <p>La aplicación está comprobando y cerrando automáticamente el intento anterior antes de continuar.</p>}
               {data.job.state === "queued" && !data.job.error && <p>{data.job.hasOperation ? "Google ya recibió el video. Esperando el resultado para procesarlo." : data.job.backend === "direct" ? "Preparando el siguiente paso de la generación." : "Preparando el procesamiento de archivos de video."}</p>}
               <div className="actions">
                 {data.job.type === "ideas" && data.job.error?.code === "CONTINUITY" && data.job.resumable && (
