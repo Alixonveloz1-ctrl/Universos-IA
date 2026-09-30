@@ -134,7 +134,7 @@ export function affected(
     if (video?.approvedVersionId && initial?.id === target.id) result.add(video.id);
   }
   // Canonical references affect the initial image and videos that consume it.
-  if (target.role === "character" || target.role === "location") {
+  if (target.role === "character") {
     for (const shot of targets.filter((t) => t.role === "shot" && result.has(t.id))) {
       const video = targets.find((t) => t.role === "clip" && t.clipNumber === shot.clipNumber);
       if (video?.approvedVersionId) result.add(video.id);
@@ -152,7 +152,7 @@ export function affected(
 // A previously approved character anchors rendering, never another identity.
 // Use approval evidence, not an unreviewed generation that may be a collage.
 export function characterStyleReference(s: Snapshot, target: Target) {
-  if (target.role !== "character" && target.role !== "location") return undefined;
+  if (target.role !== "character") return undefined;
   return s.targets
     .filter(t => t.role === "character" && t.id !== target.id && !t.needsReview && t.approvedVersionId)
     .flatMap(t => {
