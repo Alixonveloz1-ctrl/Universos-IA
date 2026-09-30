@@ -184,7 +184,12 @@ export function imageReferenceIds(s: Snapshot, target: Target) {
           ...castIds.map(id => s.targets.find(t => t.role === "character" && t.entityId === id)).filter((t): t is Target => !!t),
           ...(castIds.length < limit ? s.targets.filter(t => t.role === "location" && t.entityId === shot?.locationId) : []),
         ]
-      : s.targets.filter((t) => t.id === target.id);
+      : [];
+  // Canonical character/location regeneration must NOT feed the previous
+  // generated target back into the image model. A malformed result (extra
+  // limb, plastic surface, wrong species) would otherwise become a visual
+  // instruction and can be reproduced nearly identically on every retry.
+  // Shot generation still uses the approved cast/location references.
   const refs = selected.flatMap((t) =>
     t.approvedVersionId ? [t.approvedVersionId] : [],
   );
