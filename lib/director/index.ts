@@ -61,6 +61,20 @@ function performanceTimeline(s: Snapshot, c: Clip) {
   }).join("\n");
 }
 
+function safeVideoText(value: unknown): unknown {
+  if (typeof value === "string") {
+    return value
+      .replace(/\b(sangre|sangriento|sangrienta|ensangrentad[oa]s?)\b/gi, "evidencia visible no gráfica")
+      .replace(/\b(linchamiento|linchar|linchado|linchada)\b/gi, "confrontación pública amenazante")
+      .replace(/\b(herida abierta|heridas abiertas|herida|herido|herida grave)\b/gi, "consecuencia física no gráfica")
+      .replace(/\b(matar|asesinar|asesinato|muerte violenta)\b/gi, "amenaza grave");
+  }
+  if (Array.isArray(value)) return value.map(safeVideoText);
+  if (value && typeof value === "object")
+    return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, safeVideoText(v)]));
+  return value;
+}
+
 export function compileVideoPrompt(s: Snapshot, c: Clip, instructions: string) {
   const prev = s.targets.find(
     (t) => t.role === "clip" && t.clipNumber === c.number - 1,
@@ -101,9 +115,9 @@ export function compileVideoPrompt(s: Snapshot, c: Clip, instructions: string) {
         locations: s.bible!.locations.filter((x) => x.id === c.locationId),
       }),
     "CONTINUITY HANDOFF — this clip begins from the previous clip, not from a fresh scene. Preserve the incoming physical/emotional state and carry any pending nextAction, question, decision or interaction forward before starting unrelated business: " +
-      withoutDialogue(JSON.stringify(prev ? s.observed[prev.id] || c.continuityIn : s.project.previousChapter?.finalState || c.continuityIn), c),
+      withoutDialogue(JSON.stringify(safeVideoText(prev ? s.observed[prev.id] || c.continuityIn : s.project.previousChapter?.finalState || c.continuityIn)), c),
     "Local physical plan, constraints, audio and expected final state. Spoken words are defined ONLY in the canonical speech schedule above and are omitted here to prevent duplication: " +
-      withoutDialogue(JSON.stringify({ ...c, dialogue: [], shots: c.shots.map(sh => ({ ...sh, dialogue: "", action: withoutDialogue(sh.action, c), framing: "Continuous group view; smooth movement only; all clip characters remain visible", characterIds: c.characterIds })) }), c),
+      withoutDialogue(JSON.stringify(safeVideoText({ ...c, dialogue: [], shots: c.shots.map(sh => ({ ...sh, dialogue: "", action: withoutDialogue(sh.action, c), framing: "Continuous group view; smooth movement only; all clip characters remain visible", characterIds: c.characterIds })) })), c),
     withoutDialogue(instructions, c),
     continuousCamera,
   ].join("\n\n");
