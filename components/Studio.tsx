@@ -379,6 +379,7 @@ export default function Studio() {
   const busyRef = useRef(false);
   const [recoveryNote, setRecoveryNote] = useState("");
   const showRecoveredStory = useRef<string | null>(null);
+  const autoRecovery = useRef<Set<string>>(new Set());
   const [acknowledged, setAcknowledged] = useState(false);
   const [session, setSession] = useState(false),
     [checked, setChecked] = useState(false),
