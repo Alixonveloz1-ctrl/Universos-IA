@@ -209,6 +209,20 @@ export async function runDirector(
   }
   throw new AppError("DIRECTOR_JSON", "No se obtuvo resultado");
 }
+function safeStillText(value: unknown): unknown {
+  if (typeof value === "string") {
+    return value
+      .replace(/\b(sangre|sangriento|sangrienta|ensangrentad[oa]s?)\b/gi, "señal visual no gráfica")
+      .replace(/\b(linchamiento|linchar|linchado|linchada)\b/gi, "confrontación pública intensa")
+      .replace(/\b(herida|heridas|herido|herida abierta|corte profundo)\b/gi, "consecuencia física no gráfica")
+      .replace(/\b(matar|asesinar|asesinato|muerte violenta)\b/gi, "amenaza o consecuencia grave no gráfica");
+  }
+  if (Array.isArray(value)) return value.map(safeStillText);
+  if (value && typeof value === "object")
+    return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, safeStillText(v)]));
+  return value;
+}
+
 export function compileImagePrompt(
   s: Snapshot,
   t: Target,
@@ -311,12 +325,12 @@ export function compileImagePrompt(
       } } : {}),
     } : t.role === "shot" ? {
       style: s.project.universeSnapshot.visualStyle,
-      shot: entity,
-      location: b.locations.find(l => l.id === currentShot?.locationId),
+      shot: safeStillText(entity),
+      location: safeStillText(b.locations.find(l => l.id === currentShot?.locationId)),
       participants: (shotClip?.characterIds || []).map(id => b.characters.find(c => c.id === id)).filter(Boolean),
-      clipAction: shotClip?.goal,
-      continuityIn: shotClip?.continuityIn,
-      previousChapter: s.project.previousChapter?.finalState || null,
+      clipAction: safeStillText(shotClip?.goal),
+      continuityIn: safeStillText(shotClip?.continuityIn),
+      previousChapter: safeStillText(s.project.previousChapter?.finalState || null),
     } : {
       style: s.project.universeSnapshot.visualStyle,
       world: s.project.universeSnapshot,
