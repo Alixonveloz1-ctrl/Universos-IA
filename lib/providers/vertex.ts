@@ -127,18 +127,52 @@ export async function imageGenerate(
     imageRequest(prompt, refs),
     true,
   );
-  const part = r.candidates?.[0]?.content?.parts?.find(
+  const candidate = r.candidates?.[0];
+  const part = candidate?.content?.parts?.find(
     (p: { inlineData?: unknown }) => p.inlineData,
   )?.inlineData;
-  if (
-    !part?.data ||
-    !["image/png", "image/jpeg", "image/webp"].includes(part.mimeType)
-  )
+  if (!part?.data || !["image/png", "image/jpeg", "image/webp"].includes(part.mimeType)) {
+    const finishReason = String(candidate?.finishReason || "");
+    const promptBlock = String(r.promptFeedback?.blockReason || "");
+    const finishMessage = String(candidate?.finishMessage || r.promptFeedback?.blockReasonMessage || "");
+    const safetyRatings = Array.isArray(candidate?.safetyRatings) ? candidate.safetyRatings : [];
+    const blockedRatings = safetyRatings.filter((rating: { blocked?: boolean }) => rating?.blocked);
+    console.warn("[image-no-output]", JSON.stringify({
+      model: id,
+      finishReason: finishReason || null,
+      promptBlock: promptBlock || null,
+      finishMessage: finishMessage || null,
+      blockedRatings,
+      hasCandidate: !!candidate,
+      partTypes: Array.isArray(candidate?.content?.parts)
+        ? candidate.content.parts.map((p: { inlineData?: { mimeType?: string }; text?: string }) => ({
+            mime: p.inlineData?.mimeType || null,
+            hasText: !!p.text,
+          }))
+        : [],
+    }));
+    const safety = ["SAFETY","IMAGE_SAFETY","PROHIBITED_CONTENT","IMAGE_PROHIBITED_CONTENT","BLOCKLIST","MODEL_ARMOR"].some(reason =>
+      finishReason.includes(reason) || promptBlock.includes(reason)
+    ) || blockedRatings.length > 0;
+    const noImage = finishReason.includes("NO_IMAGE") || finishReason.includes("IMAGE_OTHER");
+    if (safety)
+      throw new AppError(
+        "PROVIDER_SAFETY",
+        `Google bloqueó esta generación por sus filtros de contenido${finishReason ? ` (${finishReason})` : ""}. Revisa las instrucciones de esta imagen o intenta regenerarla.`,
+        422,
+      );
+    if (noImage)
+      throw new AppError(
+        "PROVIDER_NO_IMAGE",
+        `Google procesó la solicitud pero no produjo una imagen${finishReason ? ` (${finishReason})` : ""}. Puedes reintentar sin regenerar el guion.`,
+        502,
+      );
     throw new AppError(
-      "PROVIDER_BLOCKED",
-      "El modelo no devolvió una imagen compatible.",
+      "PROVIDER_NO_IMAGE",
+      "Google respondió correctamente, pero no incluyó una imagen ni informó un bloqueo de seguridad identificable. Puedes reintentar sin regenerar el guion.",
       502,
     );
+  }
   return {
     bytes: Buffer.from(part.data, "base64"),
     mime: part.mimeType as string,
