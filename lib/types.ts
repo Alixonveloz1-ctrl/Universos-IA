@@ -67,6 +67,7 @@ export interface Project {
   universeId: string;
   automaticUniverse?: boolean;
   concept?: string;
+  characterDesign?: "Humanoide" | "Cabeza de especie/material";
   chapterNumber?: number;
   rootProjectId?: string;
   nextChapterId?: string;
