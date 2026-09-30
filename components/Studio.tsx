@@ -1057,9 +1057,9 @@ export default function Studio() {
               <div className="actions">
                 <button
                   disabled={busy || active || !!generationBlock(data, "plan")}
-                  onClick={() => void perform(() => generate("plan"))}
+                  onClick={() => void perform(() => generate("plan", undefined, data.plan ? "REGENERACIÓN COMPLETA SOLICITADA: crea una versión NUEVA del guion de 64 segundos desde la historia y Biblia aprobadas. No reutilices ni parafrasees el diálogo del plan anterior. Mantén los hechos y arco aprobados, pero reescribe todos los parlamentos con diálogo natural, expresivo, coloquial y subtexto lógico; los secretos, ambiciones y estrategias internas no se dicen en voz alta salvo revelación explícita." : ""))}
                 >
-                  Preparar guion de 64 segundos
+                  {data.plan ? "Regenerar guion de 64 segundos" : "Preparar guion de 64 segundos"}
                 </button>
                 <button
                   disabled={busy || active || !!generationBlock(data, "images")}
