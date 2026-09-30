@@ -90,7 +90,7 @@ export function speechDirection(s: Snapshot, c: Clip) {
     const speaker = s.bible?.characters.find(x => x.id === d.characterId);
     const listeners = cast.filter(x => x.id !== d.characterId).map(x => `${x.name} [speaker_${x.id}]`).join(", ");
     schedule.push(
-      `${d.start}-${d.end}s — turn ${i + 1}. ${speaker?.name || d.characterId} [speaker_${d.characterId}] is the ONLY audible speaker and the ONLY mouth articulating speech. Delivery intention: ${withoutDialogue(d.intention, c)}. ${listeners ? `${listeners} listen silently, with relaxed mouths; they do not mouth or repeat this line.` : ""}\n${speaker?.name || d.characterId} says in ${s.project.language}, with the selected ${s.project.accent} accent: ${d.text}`,
+      `${d.start}-${d.end}s — turn ${i + 1}. ${speaker?.name || d.characterId} [speaker_${d.characterId}] is the ONLY audible speaker and the ONLY mouth articulating speech. Delivery intention: ${withoutDialogue(d.intention, c)}. ${listeners ? `${listeners} listen silently, with relaxed mouths; they do not mouth or repeat this line.` : ""}\n${speaker?.name || d.characterId} says the ENTIRE line, including any opening name/vocative, in ${s.project.language}, with the selected ${s.project.accent} accent. The first audible phoneme is already this speaker: ${d.text}`,
     );
     previousEnd = Math.max(previousEnd, d.end);
   }
