@@ -71,7 +71,7 @@ export async function buildBible(j: Job, prompt: string,
   for (const entry of list.locations) {
     const prior = previousBible?.locations.find(l => l.id === entry.id);
     locations.push(prior || await part(`location_${entry.id}`, location.extend({ id: z.literal(entry.id), name: z.literal(entry.name) }),
-      `Completa SOLO la ficha del escenario ${JSON.stringify(entry)}. Contexto: ${JSON.stringify(list)}.`));
+      `Completa SOLO la ficha del escenario ${JSON.stringify(entry)}. Contexto: ${JSON.stringify(list)}. Diseña el lugar como un SET FÍSICO CANÓNICO para animación, no como concept art decorativo. layout debe describir una única planta espacial coherente y navegable; entrances debe identificar entradas/salidas reales integradas en paredes o límites físicos, con posición relativa clara; persistentObjects debe contener solo objetos que mantendrán posición estable. visualPrompt debe pedir UNA sola vista continua desde un ángulo útil que permita comprender puerta(s), escritorio/muebles, ventanas, circulación y zonas donde los personajes pueden entrar, caminar, sentarse e interactuar. Prohibidos collage, cutaway, dollhouse, fachada dentro de la habitación, puertas miniatura/flotantes/decorativas, panel inferior, segunda vista, arquitectura imposible o elementos que bloqueen las entradas. Una puerta debe ser de tamaño humano, pertenecer físicamente a una pared y tener espacio libre para abrir/pasar. El escenario debe ser reproducible después en imágenes y video.`));
   }
   // Earlier chapter entities remain immutable even when absent from this episode.
   for (const c of previousBible?.characters || []) if (!characters.some(x => x.id === c.id)) characters.push(c);
