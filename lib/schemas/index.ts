@@ -231,6 +231,7 @@ export const projectInput = z
   .object({
     universeId: id.optional(),
     beings: short.default("Frutas"),
+    characterDesign: z.enum(["Humanoide", "Cabeza de especie/material"]).default("Humanoide"),
     visualStyle: short.default("3D Viral Estilizado"),
     worldSetting: short,
     concept: z.string().trim().max(1000).optional(),
