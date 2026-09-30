@@ -18,7 +18,7 @@ it("anchors an accusation and reaction to two characters in one room", () => {
   const refs = imageReferenceIds(s, target);
   expect(refs).toContain("canonical_a");
   expect(refs).toContain("canonical_mateo");
-  expect(refs).toContain("canonical_hall");
+  expect(refs).not.toContain("canonical_hall");
   const opening = compileImagePrompt(s, target, "");
   expect(opening).toContain("show ALL 2 named characters (Acusador, Mateo)");
   expect(opening).toContain("character: Mateo");
