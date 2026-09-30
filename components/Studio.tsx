@@ -1036,7 +1036,7 @@ export default function Studio() {
               >
                 Generar personajes pendientes
               </button>
-              <p className="muted">Solo se generan referencias visuales de personajes. Los escenarios permanecen descritos en texto y se integran al crear cada imagen de clip.</p>
+              <p className="muted">Las referencias visuales son únicamente de personajes. Los escenarios se describen en la Biblia y se integran por texto al crear cada imagen de clip.</p>
               {data.targets
                 .filter((t) => t.role === "character")
                 .map((t) => (
