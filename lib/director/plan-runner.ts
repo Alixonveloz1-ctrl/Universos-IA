@@ -22,10 +22,11 @@ export function prepareGeneratedPlan(value: unknown): unknown {
   // Accept the common harmless wrapper {"plan":{"clips":[...]}} and ignore
   // explanatory siblings. The durable schema itself is still strict.
   if (row(copy) && row(copy.plan) && Array.isArray(copy.plan.clips)) copy = structuredClone(copy.plan);
-  if (!row(copy) || !Array.isArray(planCopy.clips)) return copy;
+  if (!row(copy) || !Array.isArray(copy.clips)) return copy;
   // The plan root contains only clips. Providers sometimes append summary,
   // notes, metadata or other explanatory fields despite the JSON contract.
-  const planCopy: Row = { clips: planCopy.clips };
+  const clips: unknown[] = copy.clips;
+  const planCopy: Row & { clips: unknown[] } = { clips };
   const numberFields = (target: Row, keys: string[]) => {
     for (const key of keys) {
       const value = target[key];
