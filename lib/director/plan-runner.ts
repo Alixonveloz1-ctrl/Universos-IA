@@ -22,18 +22,18 @@ export function prepareGeneratedPlan(value: unknown): unknown {
   // Accept the common harmless wrapper {"plan":{"clips":[...]}} and ignore
   // explanatory siblings. The durable schema itself is still strict.
   if (row(copy) && row(copy.plan) && Array.isArray(copy.plan.clips)) copy = structuredClone(copy.plan);
-  if (!row(copy) || !Array.isArray(copy.clips)) return copy;
+  if (!row(copy) || !Array.isArray(planCopy.clips)) return copy;
   // The plan root contains only clips. Providers sometimes append summary,
   // notes, metadata or other explanatory fields despite the JSON contract.
-  copy = { clips: copy.clips };
+  const planCopy: Row = { clips: planCopy.clips };
   const numberFields = (target: Row, keys: string[]) => {
     for (const key of keys) {
       const value = target[key];
       if (typeof value === "string" && /^\d+(?:\.\d+)?$/.test(value.trim())) target[key] = Number(value);
     }
   };
-  for (let i = 0; i < copy.clips.length; i++) {
-    const clip: unknown = copy.clips[i];
+  for (let i = 0; i < planCopy.clips.length; i++) {
+    const clip: unknown = planCopy.clips[i];
     if (!row(clip)) continue;
     numberFields(clip, ["number", "durationSeconds"]);
     if (Array.isArray(clip.dialogue)) {
@@ -48,12 +48,12 @@ export function prepareGeneratedPlan(value: unknown): unknown {
         if (shot.dialogue === undefined && Array.isArray(clip.dialogue)) shot.dialogue = "";
       }
     }
-    const previous: unknown = i > 0 ? copy.clips[i - 1] : null;
+    const previous: unknown = i > 0 ? planCopy.clips[i - 1] : null;
     if (row(previous) && row(previous.plannedEndState)) {
       clip.continuityIn = structuredClone(previous.plannedEndState);
     }
   }
-  return copy;
+  return planCopy;
 }
 
 class PlanIssues extends Error {
