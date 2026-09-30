@@ -66,7 +66,7 @@ export function model(id: string, kind?: string) {
 }
 export const DEFAULT_MODELS = {
   text: "gemini-3-flash-preview",
-  image: "gemini-2.5-flash-image",
+  image: "gemini-3.1-flash-image",
   video: "veo-3.1-lite-generate-001",
 };
 export function defaults() {
