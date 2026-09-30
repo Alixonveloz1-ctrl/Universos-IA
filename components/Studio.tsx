@@ -1034,11 +1034,11 @@ export default function Studio() {
                 disabled={busy || active || !!generationBlock(data, "images")}
                 onClick={() => void perform(() => generate("images"))}
               >
-                {data.plan ? "Generar referencias pendientes" : "Generar personajes pendientes"}
+                Generar personajes pendientes
               </button>
-              {!data.plan && <p className="muted">Los escenarios se generarán después del guion, únicamente si aparecen en la historia.</p>}
+              <p className="muted">Solo se generan referencias visuales de personajes. Los escenarios permanecen descritos en texto y se integran al crear cada imagen de clip.</p>
               {data.targets
-                .filter((t) => t.role === "character" || t.role === "location")
+                .filter((t) => t.role === "character")
                 .map((t) => (
                   <TargetPanel
                     key={t.id}
