@@ -241,6 +241,9 @@ export async function enqueue(projectId: string, a: Action) {
     // The actual image/video bytes remain in Cloud Storage, and the full asset
     // documents remain in the project's assets collection. Never copy huge
     // historical prompts/reports into every job snapshot.
+    // Location cards are TEXT-ONLY. Remove any legacy location image targets
+    // from the job snapshot so they cannot be generated or used as references.
+    s.targets = s.targets.filter(t => t.role !== "location");
     const approved = s.assets.filter((x) =>
       s.targets.some((t) => t.approvedVersionId === x.id),
     );
