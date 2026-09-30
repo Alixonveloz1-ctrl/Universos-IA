@@ -101,7 +101,7 @@ export function validateGeneratedPlan(value: unknown, snapshot: Snapshot): Plan 
     clips: prepared.clips.map(rawClip => {
       if (!row(rawClip)) return rawClip;
       const clip = Object.fromEntries(Object.entries(rawClip).filter(([k]) => clipKeys.has(k))) as Row;
-      let cast = Array.isArray(clip.characterIds) ? clip.characterIds.map(resolveCharacter) : [];
+      const cast = Array.isArray(clip.characterIds) ? clip.characterIds.map(resolveCharacter) : [];
       if (Array.isArray(clip.dialogue)) clip.dialogue = clip.dialogue.map(turn => {
         if (!row(turn)) return turn;
         const d = Object.fromEntries(Object.entries(turn).filter(([k]) => dialogueKeys.has(k))) as Row;
