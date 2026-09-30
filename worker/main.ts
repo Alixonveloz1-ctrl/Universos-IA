@@ -274,7 +274,22 @@ export async function execute(jobId: string, direct = false): Promise<"continue"
           console.info("[character-reference]", JSON.stringify({ jobId: job.id, targetId: t.id, referenceId: editorial?.id || null, attached: !!editorial, referenceCount: refs.length, promptVersion: 2 }));
         }
         await beforeCall(key);
-        result = await imageGenerate(s.project.models.image, prompt, refs);
+        try {
+          result = await imageGenerate(s.project.models.image, prompt, refs);
+        } catch (error) {
+          const e = error as { code?: string };
+          if (e?.code !== "PROVIDER_SAFETY" || t.role !== "shot") throw error;
+          // One automatic safe-composition retry: keep identity, setting and
+          // continuity, but request a neutral opening frame. This does not
+          // rewrite the story or dialogue and avoids making the user manually
+          // diagnose provider safety filtering.
+          const safePrompt = [
+            prompt,
+            "PROVIDER SAFETY RETRY: create a policy-safe opening frame only. All depicted people are adults. Keep the same named adult characters, identity references, wardrobe family, location and visual style, but stage a neutral non-contact moment immediately before the scheduled action. No nudity, sexual act, intimate touching, fetish framing, graphic violence, injury, active weapon use, drugs, or dangerous act. Use normal standing/sitting/walking, conversational eye contact and ordinary cinematic framing. Do not remove characters or change the story; only make this still frame visually safe.",
+          ].join("\n\n");
+          await beforeCall(key + "_safety_retry");
+          result = await imageGenerate(s.project.models.image, safePrompt, refs);
+        }
       }
       const metadata = await sharp(result.bytes).metadata();
       assert(
