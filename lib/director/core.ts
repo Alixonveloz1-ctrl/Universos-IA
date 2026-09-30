@@ -83,6 +83,50 @@ export function narrativePrompt(j: Job, repair?: string) {
     repair ? `Corrige únicamente los errores concretos del borrador sin cambiar hechos aprobados ni introducir nuevas acciones: ${repair}` : "",
   ].join("\n\n");
 }
+function normalizePlanDraft(value: unknown, bibleData: z.infer<typeof bible>) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const raw = value as Record<string, unknown>;
+  // Gemini sometimes wraps the requested object in {"plan": {...}} or adds
+  // explanatory top-level keys even though the schema asks for {clips:[...]}.
+  const candidate = raw.plan && typeof raw.plan === "object" && !Array.isArray(raw.plan)
+    ? raw.plan as Record<string, unknown>
+    : raw;
+  if (!Array.isArray(candidate.clips)) return candidate;
+  const validIds = new Set(bibleData.characters.map(ch => ch.id));
+  const nameToId = new Map(bibleData.characters.map(ch => [ch.name.trim().toLocaleLowerCase(), ch.id]));
+  const resolveSpeaker = (input: unknown) => {
+    if (typeof input !== "string") return "";
+    if (validIds.has(input)) return input;
+    return nameToId.get(input.trim().toLocaleLowerCase()) || input;
+  };
+  return {
+    clips: candidate.clips.map((rawClip: unknown) => {
+      if (!rawClip || typeof rawClip !== "object" || Array.isArray(rawClip)) return rawClip;
+      const clip = rawClip as Record<string, unknown>;
+      const allowed = new Set(["number","durationSeconds","goal","continuityIn","plannedEndState","characterIds","locationId","shots","dialogue","soundDirection","startMode","constraints"]);
+      const cleaned = Object.fromEntries(Object.entries(clip).filter(([key]) => allowed.has(key)));
+      const clipCharacterIds = Array.isArray(cleaned.characterIds)
+        ? cleaned.characterIds.map(resolveSpeaker)
+        : [];
+      const dialogue = Array.isArray(cleaned.dialogue)
+        ? cleaned.dialogue.map((entry: unknown) => {
+            if (!entry || typeof entry !== "object" || Array.isArray(entry)) return entry;
+            const d = entry as Record<string, unknown>;
+            const characterId = resolveSpeaker(d.characterId ?? d.speaker ?? d.speakerId ?? d.character ?? d.name);
+            return {
+              characterId,
+              text: d.text,
+              intention: d.intention,
+              start: d.start,
+              end: d.end,
+            };
+          })
+        : cleaned.dialogue;
+      return { ...cleaned, characterIds: clipCharacterIds, dialogue };
+    }),
+  };
+}
+
 export async function runDirector(
   j: Job,
   beforeCall: (key: string) => Promise<void>,
@@ -133,6 +177,7 @@ export async function runDirector(
       await checkpoint(key, result);
     }
     try {
+      if (j.type === "plan") result = normalizePlanDraft(result, j.snapshot.bible!);
       const parsed = schema.parse(result);
       if (j.type === "plan") {
         const validated = validatePlan(parsed, j.snapshot.bible!, !!j.snapshot.project.previousChapter);
