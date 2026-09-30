@@ -180,10 +180,7 @@ export function imageReferenceIds(s: Snapshot, target: Target) {
     "MODEL_REFERENCES");
   const selected =
     target.role === "shot"
-      ? [
-          ...castIds.map(id => s.targets.find(t => t.role === "character" && t.entityId === id)).filter((t): t is Target => !!t),
-          ...(castIds.length < limit ? s.targets.filter(t => t.role === "location" && t.entityId === shot?.locationId) : []),
-        ]
+      ? castIds.map(id => s.targets.find(t => t.role === "character" && t.entityId === id)).filter((t): t is Target => !!t)
       : [];
   // Canonical character/location regeneration must NOT feed the previous
   // generated target back into the image model. A malformed result (extra
