@@ -57,7 +57,7 @@ function performanceTimeline(s: Snapshot, c: Clip) {
     const active = c.shots.filter(shot => shot.start < end && shot.end > start);
     const words = c.dialogue.filter(d => d.start >= start && d.start < end)
       .map(d => `${s.bible!.characters.find(x => x.id === d.characterId)?.name || d.characterId} has a speech turn scheduled separately at ${d.start}-${d.end}s; follow the canonical speech schedule without repeating its words here`);
-    return `${start}-${end}s: ${phase[i]} Approved overlapping shot direction (if the same shot spans intervals, advance it without restarting it): ${active.map(sh => `[${sh.start}-${sh.end}s; continuous group framing; ${sh.characterIds.map(id => s.bible!.characters.find(x => x.id === id)?.name || id).join(", ")}]: ${withoutDialogue(sh.action, c)}`).join(" THEN ") || "continue the previous planned framing"}. ${words.length ? `Scheduled speech: ${words.join("; ")}.` : "No scheduled speech: let the action, expression, ambient sound or a motivated still reaction breathe; do not add dialogue."}`;
+    return `${start}-${end}s: ${phase[i]} Approved overlapping shot direction (if the same shot spans intervals, advance it without restarting it): ${active.map(sh => `[${sh.start}-${sh.end}s; continuous group framing; ${sh.characterIds.map(id => s.bible!.characters.find(x => x.id === id)?.name || id).join(", ")}]: ${safeVideoText(withoutDialogue(sh.action, c))}`).join(" THEN ") || "continue the previous planned framing"}. ${words.length ? `Scheduled speech: ${words.join("; ")}.` : "No scheduled speech: let the action, expression, ambient sound or a motivated still reaction breathe; do not add dialogue."}`;
   }).join("\n");
 }
 
@@ -90,7 +90,7 @@ export function compileVideoPrompt(s: Snapshot, c: Clip, instructions: string) {
     `GENRE REALITY LOCK: selected genre="${s.project.genre}", subgenre="${s.project.subgenre}", world="${s.project.worldSetting || "Mundo real actual"}". Visual style (including Cinemático Épico) controls cinematography/render quality ONLY; it NEVER adds fantasy physics or spectacle. Unless the selected genre/world or this exact approved clip explicitly requires supernatural phenomena, keep reality grounded: NO lightning bolts, electrical arcs, magical rays, energy streaks, supernatural flashes, glowing cracks, aura, sparks, shockwaves or fantasy weather. Mafia, romance, drama, comedy, crime and contemporary stories remain physically ordinary.`,
     "LIGHTING IS NOT AN EVENT: lamps, neon, headlights, sunlight, reflections, rim light, practical lights and cinematic highlights remain stable illumination attached to their real sources. NEVER animate a light source into a lightning bolt, beam, ray, electrical discharge, magical streak or falling flash. A bright line in the initial image stays a normal light/reflection; it does not travel, strike, pulse, explode or interact with characters. Preserve the opening image's lighting character through all 8 seconds.",
     "VISUAL PERFORMANCE MAP: EIGHT SECONDS (local time, continuous and non-repeating):\n" +
-      c.shots.map((sh, i) => `Action ${i + 1}, ${sh.start}-${sh.end}s: ${withoutDialogue(sh.action, c)}`).join("\n") +
+      c.shots.map((sh, i) => `Action ${i + 1}, ${sh.start}-${sh.end}s: ${safeVideoText(withoutDialogue(sh.action, c))}`).join("\n") +
       "\n" + performanceTimeline(s, c),
     "Perform only the approved physical action and literal dialogue. If the action finishes early, simply continue the established ordinary motion and natural reaction; never invent a new event to fill time. Do not invent turns around the character's own axis, pacing, repeated hand motions, camera orbit, repeated actions, unrelated gestures or spectacle. Keep the same continuous viewpoint, physical environment and participants. The four intervals above are timing guidance, not permission to add events.",
     "FIGURATIVE LANGUAGE IS NOT PHYSICAL ACTION: spoken dialogue may contain metaphor, sarcasm, irony, idioms, teasing, exaggeration, threats, comparisons or figures of speech. Interpret those lines for emotional performance and subtext ONLY; never materialize their literal words as an unscripted visual event. Example: «eres alérgico a la justicia» means the person avoids/resists justice; it does NOT mean allergy symptoms, sneezing, coughing, rash, medicine or illness. Likewise figurative fire, ice, electricity, explosions, death, hunger, animals, storms, etc. do not become physical effects unless the approved ACTION/EFFECTS explicitly schedules them. Dialogue text alone never authorizes a new prop, symptom, transformation, weather event or visual effect.",
@@ -112,13 +112,13 @@ export function compileVideoPrompt(s: Snapshot, c: Clip, instructions: string) {
           hair: renderHair(s.project.id, x), eyes: x.eyes, wardrobe: x.wardrobe,
           accessories: x.accessories, gestures: x.gestures, lockedTraits: x.lockedTraits,
         })),
-        locations: s.bible!.locations.filter((x) => x.id === c.locationId),
+        locations: safeVideoText(s.bible!.locations.filter((x) => x.id === c.locationId)),
       }),
     "CONTINUITY HANDOFF — this clip begins from the previous clip, not from a fresh scene. Preserve the incoming physical/emotional state and carry any pending nextAction, question, decision or interaction forward before starting unrelated business: " +
       withoutDialogue(JSON.stringify(safeVideoText(prev ? s.observed[prev.id] || c.continuityIn : s.project.previousChapter?.finalState || c.continuityIn)), c),
     "Local physical plan, constraints, audio and expected final state. Spoken words are defined ONLY in the canonical speech schedule above and are omitted here to prevent duplication: " +
       withoutDialogue(JSON.stringify(safeVideoText({ ...c, dialogue: [], shots: c.shots.map(sh => ({ ...sh, dialogue: "", action: withoutDialogue(sh.action, c), framing: "Continuous group view; smooth movement only; all clip characters remain visible", characterIds: c.characterIds })) })), c),
-    withoutDialogue(instructions, c),
+    withoutDialogue(String(safeVideoText(instructions)), c),
     continuousCamera,
   ].join("\n\n");
 }
