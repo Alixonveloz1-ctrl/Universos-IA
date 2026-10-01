@@ -63,7 +63,7 @@ export function videoRequest(
             }),
       },
     ],
-    parameters: { ...VIDEO, storageUri },
+    parameters: { ...VIDEO, personGeneration: "allow_adult", storageUri },
   };
 }
 export async function textGenerate(
