@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { db, mediaResponse } from "@/lib/persistence/google";
+import { db, mediaResponse, privateObject, objectPath } from "@/lib/persistence/google";
 import {
   createProject,
   deleteUniverse,
@@ -20,6 +20,8 @@ import { action, id, projectInput } from "@/lib/schemas";
 import { diagnoseQueuedJob } from "@/lib/jobs";
 import { launch } from "@/lib/direct-dispatch";
 import { model, MODELS, defaults } from "@/lib/models";
+import { startVideo, pollVideo, type ImageRef } from "@/lib/providers/vertex";
+import { randomUUID } from "node:crypto";
 import { AppError, safeError, assert, logFailure } from "@/lib/errors";
 import {
   genres,
@@ -268,6 +270,49 @@ async function handler(
         if (new URL(req.url).searchParams.get("raw") === "1")
           return await mediaResponse(asset.storageObject, req.headers.get("range"));
         return response({ url: `/api/projects/${pid}/media/${paths[3]}?raw=1` });
+      }
+    }
+    if (paths[0] === "direct-video") {
+      if (req.method === "POST" && paths.length === 1) {
+        const form = await req.formData();
+        const image = form.get("image");
+        const prompt = String(form.get("prompt") || "").trim();
+        const modelId = String(form.get("model") || "");
+        assert(image instanceof File && image.size > 0 && image.size <= 12 * 1024 * 1024, "Sube una imagen válida de hasta 12 MB.");
+        assert(["image/png","image/jpeg","image/webp"].includes(image.type), "La imagen debe ser PNG, JPG o WEBP.");
+        assert(prompt.length > 0 && prompt.length <= 12000, "El prompt debe tener entre 1 y 12000 caracteres.");
+        model(modelId, "video");
+        const idv = randomUUID();
+        const inputObject = objectPath("direct-video", idv, "input." + (image.type === "image/png" ? "png" : image.type === "image/webp" ? "webp" : "jpg"));
+        await privateObject(inputObject).save(Buffer.from(await image.arrayBuffer()), { resumable: false, metadata: { contentType: image.type } });
+        const ref: ImageRef = { bytesBase64Encoded: Buffer.from(await image.arrayBuffer()).toString("base64"), mimeType: image.type };
+        const outputPrefix = objectPath("direct-video", idv, "provider") + "/";
+        const operation = await startVideo(modelId, prompt, [ref], `gs://${process.env.GCS_BUCKET || process.env.BUCKET_NAME}/${outputPrefix}`);
+        await db().doc(`directVideos/${idv}`).set({ id: idv, model: modelId, prompt, inputObject, outputPrefix, operation, state: "waiting", createdAt: Date.now() });
+        return response({ id: idv, state: "waiting" }, 202);
+      }
+      if (req.method === "GET" && paths.length === 2) {
+        const ref = db().doc(`directVideos/${paths[1]}`);
+        const saved = (await ref.get()).data();
+        assert(saved, "Video directo no encontrado.");
+        if (saved.state === "completed") return response({ id: saved.id, state: "completed", url: `/api/direct-video/${saved.id}/media` });
+        const result = await pollVideo(saved.model, saved.operation);
+        if (!result.done) return response({ id: saved.id, state: "waiting" });
+        if (result.error) {
+          const message = String(result.error.message || "Google no pudo generar el video.").slice(0,700);
+          await ref.update({ state: "failed", error: message });
+          return response({ id: saved.id, state: "failed", error: message });
+        }
+        const uri = result.response?.videos?.[0]?.gcsUri;
+        assert(typeof uri === "string" && uri.includes(saved.outputPrefix), "Google devolvió un video fuera del destino esperado.");
+        const storageObject = uri.slice(uri.indexOf("/", 5) + 1);
+        await ref.update({ state: "completed", storageObject, completedAt: Date.now() });
+        return response({ id: saved.id, state: "completed", url: `/api/direct-video/${saved.id}/media` });
+      }
+      if (req.method === "GET" && paths.length === 3 && paths[2] === "media") {
+        const saved = (await db().doc(`directVideos/${paths[1]}`).get()).data();
+        assert(saved?.storageObject, "Video todavía no disponible.");
+        return mediaResponse(saved.storageObject, req.headers.get("range"));
       }
     }
     if (paths[0] === "jobs" && paths.length >= 2) {
