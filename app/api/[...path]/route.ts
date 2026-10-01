@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { db, mediaResponse, privateObject, objectPath } from "@/lib/persistence/google";
+import { config } from "@/lib/config";
 import {
   createProject,
   deleteUniverse,
@@ -287,7 +288,7 @@ async function handler(
         await privateObject(inputObject).save(Buffer.from(await image.arrayBuffer()), { resumable: false, metadata: { contentType: image.type } });
         const ref: ImageRef = { bytesBase64Encoded: Buffer.from(await image.arrayBuffer()).toString("base64"), mimeType: image.type };
         const outputPrefix = objectPath("direct-video", idv, "provider") + "/";
-        const operation = await startVideo(modelId, prompt, [ref], `gs://${process.env.GCS_BUCKET || process.env.BUCKET_NAME}/${outputPrefix}`);
+        const operation = await startVideo(modelId, prompt, [ref], `gs://${config().bucket}/${outputPrefix}`);
         await db().doc(`directVideos/${idv}`).set({ id: idv, model: modelId, prompt, inputObject, outputPrefix, operation, state: "waiting", createdAt: Date.now() });
         return response({ id: idv, state: "waiting" }, 202);
       }
