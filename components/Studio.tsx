@@ -390,7 +390,12 @@ export default function Studio() {
       { id: string; title: string; stage: string; universeId?: string; universeName?: string; chapterNumber?: number }[]
     >([]),
     [data, setData] = useState<Data | null>(null),
-    [tab, setTab] = useState("Historia");
+    [tab, setTab] = useState("Historia"),
+    [directMode, setDirectMode] = useState(false),
+    [directImage, setDirectImage] = useState<File | null>(null),
+    [directPrompt, setDirectPrompt] = useState(""),
+    [directModel, setDirectModel] = useState("veo-3.1-fast-generate-001"),
+    [directVideo, setDirectVideo] = useState<{ id: string; state: string; url?: string; error?: string } | null>(null);
   const [selection, setSelection] = useState({
     concept: "",
     beings: "Frutas",
@@ -454,6 +459,13 @@ export default function Studio() {
     panel?.scrollIntoView({ behavior: "smooth", block: "start" });
     showRecoveredStory.current = null;
   }, [data, tab]);
+  useEffect(() => {
+    if (!directVideo?.id || directVideo.url || directVideo.state === "failed") return;
+    const timer = setInterval(() => {
+      api("direct-video/" + directVideo.id).then(setDirectVideo).catch((e) => setError(e.message));
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [directVideo?.id, directVideo?.url, directVideo?.state]);
   useEffect(() => {
     if (!pid) return;
     const timer = setInterval(() => {
@@ -596,7 +608,8 @@ export default function Studio() {
           </span>
         </div>
         <div className="actions">
-          <button onClick={() => setData(null)}>Mis proyectos</button>
+          <button onClick={() => { setData(null); setDirectMode(false); }}>Mis proyectos</button>
+          <button onClick={() => { setData(null); setDirectMode(true); }}>Video directo</button>
           <button
             onClick={() =>
               void perform(async () => {
@@ -615,7 +628,43 @@ export default function Studio() {
           {error}
         </div>
       )}
-      {!data ? (
+      {directMode ? (
+        <section className="panel">
+          <h2>Video directo</h2>
+          <label>
+            Generador de video
+            <select value={directModel} onChange={(e) => setDirectModel(e.target.value)}>
+              {Object.entries(MODELS).filter(([, m]) => m.kind === "video").map(([id, m]) => <option key={id} value={id}>{m.name}</option>)}
+            </select>
+          </label>
+          <label>
+            Imagen inicial
+            <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => setDirectImage(e.target.files?.[0] || null)} />
+          </label>
+          <label>
+            Prompt
+            <textarea rows={12} maxLength={12000} value={directPrompt} onChange={(e) => setDirectPrompt(e.target.value)} placeholder="Escribe o pega aquí el prompt completo del video." />
+          </label>
+          <button className="primary wide" disabled={busy || !directImage || !directPrompt.trim()} onClick={() => void perform(async () => {
+            const form = new FormData();
+            form.set("image", directImage!);
+            form.set("prompt", directPrompt);
+            form.set("model", directModel);
+            const res = await fetch("/api/direct-video", { method: "POST", body: form });
+            const out = await res.json();
+            if (!res.ok) throw new Error(out.error?.message || "No se pudo iniciar el video.");
+            setDirectVideo(out);
+          })}>{directVideo?.url ? "Regenerar" : "Generar video"}</button>
+          {directVideo && !directVideo.url && <p className="muted">{directVideo.state === "failed" ? directVideo.error : "Generando video…"}</p>}
+          {directVideo?.url && <>
+            <video className="media" src={directVideo.url} controls playsInline preload="metadata" />
+            <div className="actions">
+              <a href={directVideo.url} download="video.mp4">Descargar MP4</a>
+              <button disabled={busy} onClick={() => { setDirectVideo(null); }}>Regenerar</button>
+            </div>
+          </>}
+        </section>
+      ) : !data ? (
         <>
           <section className="hero">
             <Image
