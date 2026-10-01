@@ -285,8 +285,20 @@ async function handler(
         model(modelId, "video");
         const idv = randomUUID();
         const inputObject = objectPath("direct-video", idv, "input." + (image.type === "image/png" ? "png" : image.type === "image/webp" ? "webp" : "jpg"));
-        await privateObject(inputObject).save(Buffer.from(await image.arrayBuffer()), { resumable: false, metadata: { contentType: image.type } });
-        const ref: ImageRef = { bytesBase64Encoded: Buffer.from(await image.arrayBuffer()).toString("base64"), mimeType: image.type };
+        const imageBytes = Buffer.from(await image.arrayBuffer());
+        const token = await (await import("@/lib/persistence/google")).googleAuth().getAccessToken();
+        const upload = new URL(`https://storage.googleapis.com/upload/storage/v1/b/${config().bucket}/o`);
+        upload.searchParams.set("uploadType", "media");
+        upload.searchParams.set("name", inputObject);
+        upload.searchParams.set("ifGenerationMatch", "0");
+        const uploaded = await fetch(upload, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": image.type },
+          body: new Uint8Array(imageBytes),
+          signal: AbortSignal.timeout(60000),
+        });
+        assert(uploaded.ok, `No se pudo guardar la imagen inicial (Google ${uploaded.status}).`, "STORAGE_UPLOAD");
+        const ref: ImageRef = { bytesBase64Encoded: imageBytes.toString("base64"), mimeType: image.type };
         const outputPrefix = objectPath("direct-video", idv, "provider") + "/";
         const operation = await startVideo(modelId, prompt, [ref], `gs://${config().bucket}/${outputPrefix}`);
         await db().doc(`directVideos/${idv}`).set({ id: idv, model: modelId, prompt, inputObject, outputPrefix, operation, state: "waiting", createdAt: Date.now() });
