@@ -441,3 +441,109 @@ summary {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.universe-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.universe-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: #0b1423;
+}
+.universe-open {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+}
+.project-thumb {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  background: linear-gradient(135deg, #1c2940, #25173c);
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+  font-size: 2rem;
+}
+.project-thumb img {
+  object-fit: cover;
+}
+.universe-copy {
+  display: grid;
+  gap: 5px;
+  padding: 14px 44px 16px 14px;
+}
+.universe-copy strong {
+  font-size: 1.05rem;
+  line-height: 1.2;
+}
+.universe-copy small {
+  line-height: 1.35;
+}
+.universe-menu {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  margin: 0;
+}
+.universe-menu summary {
+  list-style: none;
+  padding: 8px 10px;
+  border-radius: 10px;
+  color: #d9c7ff;
+  background: #172238e8;
+  line-height: 1;
+}
+.universe-menu summary::-webkit-details-marker {
+  display: none;
+}
+.universe-menu[open] {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  z-index: 4;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #0d1627f7;
+}
+.universe-menu[open] summary {
+  width: fit-content;
+  margin-left: auto;
+}
+.universe-menu > div {
+  display: grid;
+  gap: 7px;
+  margin-top: 6px;
+}
+.universe-menu button {
+  width: 100%;
+}
+.universe-menu .danger {
+  border-color: #7d3c4d;
+  color: #ffd5dd;
+}
+@media (max-width: 640px) {
+  .universe-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+  .universe-copy {
+    padding: 11px 38px 13px 11px;
+  }
+  .universe-copy strong {
+    font-size: 0.95rem;
+  }
+  .universe-copy small {
+    font-size: 0.75rem;
+  }
+}
