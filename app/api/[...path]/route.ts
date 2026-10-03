@@ -120,23 +120,41 @@ async function handler(
     if (paths[0] === "universes" && req.method !== "GET")
       throw new AppError("METHOD", "Cada universo pertenece a una historia; continúa desde su último capítulo.", 405);
     if (route === "projects") {
-      if (req.method === "GET")
-        return response(
-          (
-            await db()
-              .collection("projects")
-              .where("owner", "==", "personal")
-              .get()
-          ).docs.map((d) => ({
-            id: d.id,
-            title: d.data().title,
-            universeId: d.data().universeId || d.id,
-            universeName: d.data().universeSnapshot?.name || d.data().title,
-            chapterNumber: d.data().chapterNumber || 1,
-            stage: d.data().stage,
-            updatedAt: d.data().updatedAt,
-          })),
+      if (req.method === "GET") {
+        const docs = (
+          await db()
+            .collection("projects")
+            .where("owner", "==", "personal")
+            .get()
+        ).docs;
+        const items = await Promise.all(
+          docs.map(async (d) => {
+            const data = d.data();
+            const assets = (
+              await d.ref.collection("assets").get()
+            ).docs
+              .map((a) => a.data())
+              .filter((a) => a.kind === "image" && a.status !== "rejected")
+              .sort(
+                (a, b) =>
+                  (a.createdAt || 0) - (b.createdAt || 0) ||
+                  String(a.id || "").localeCompare(String(b.id || "")),
+              );
+            return {
+              id: d.id,
+              title: data.title,
+              universeId: data.universeId || d.id,
+              universeName: data.universeSnapshot?.name || data.title,
+              chapterNumber: data.chapterNumber || 1,
+              stage: data.stage,
+              createdAt: data.createdAt || 0,
+              updatedAt: data.updatedAt,
+              thumbnailVersionId: assets[0]?.id || null,
+            };
+          }),
         );
+        return response(items);
+      }
       if (req.method === "POST") {
         const p = projectInput.parse(await body(req));
         assert(
