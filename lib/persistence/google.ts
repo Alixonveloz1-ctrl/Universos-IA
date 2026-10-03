@@ -91,28 +91,45 @@ export async function googlePost(url: string, body: unknown, paid = false, timeo
   const token = await googleAuth().getAccessToken();
   console.info("google_request", { operation: label, authenticationMs: Date.now() - started });
   let res: Response;
-  try {
-    res = await fetch(url, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-  } catch (error) {
-    const cause = error as { name?: string; cause?: { code?: string } };
-    console.error("google_transport_failed", { operation: label, elapsedMs: Date.now() - started, timeoutMs, name: cause?.name, cause: cause?.cause?.code });
-    throw new AppError(
-      paid ? "AMBIGUOUS" : "PROVIDER_NETWORK",
-      paid
-        ? "El proveedor pudo aceptar la solicitud. No se generará otra automáticamente."
-        : "No se pudo consultar al proveedor.",
-      502,
-    );
+  const payload = JSON.stringify(body);
+  // A 429 is an explicit rejection: Google did not accept a paid generation,
+  // so retrying the SAME request is safe. Keep retries serial and bounded to
+  // avoid stacking calls or silently changing the selected model.
+  const max429Attempts = 4;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      res = await fetch(url, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          // Explicitly keep Gemini requests on standard shared PayGo. This
+          // header is ignored by services/models where it is not applicable.
+          "X-Vertex-AI-LLM-Request-Type": "shared",
+        },
+        body: payload,
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+    } catch (error) {
+      const cause = error as { name?: string; cause?: { code?: string } };
+      console.error("google_transport_failed", { operation: label, elapsedMs: Date.now() - started, timeoutMs, name: cause?.name, cause: cause?.cause?.code });
+      throw new AppError(
+        paid ? "AMBIGUOUS" : "PROVIDER_NETWORK",
+        paid
+          ? "El proveedor pudo aceptar la solicitud. No se generará otra automáticamente."
+          : "No se pudo consultar al proveedor.",
+        502,
+      );
+    }
+    console.info("google_response", { operation: label, status: res.status, elapsedMs: Date.now() - started, attempt: attempt + 1 });
+    if (res.status !== 429 || attempt >= max429Attempts - 1) break;
+    const retryAfter = Number(res.headers.get("retry-after"));
+    const delayMs = Number.isFinite(retryAfter) && retryAfter > 0
+      ? Math.min(retryAfter * 1000, 30000)
+      : Math.min(1500 * 2 ** attempt, 12000);
+    console.warn("google_429_retry", { operation: label, attempt: attempt + 1, delayMs });
+    await new Promise(resolve => setTimeout(resolve, delayMs));
   }
-  console.info("google_response", { operation: label, status: res.status, elapsedMs: Date.now() - started });
   if (!res.ok) {
     // Google's JSON error message identifies invalid models and parameters.
     // Never include request bodies or authentication headers in job errors.
@@ -129,7 +146,9 @@ export async function googlePost(url: string, body: unknown, paid = false, timeo
             : "PROVIDER_REJECTED";
     throw new AppError(
       code,
-      `Google respondió ${res.status}. ${detail || (code === "AMBIGUOUS" ? "Reconciliar antes de repetir." : "Revisa acceso, cuota o parámetros del modelo.")}`,
+      res.status === 429
+        ? `Google no tuvo capacidad disponible después de ${max429Attempts} intentos automáticos con el mismo modelo. ${detail}`.trim()
+        : `Google respondió ${res.status}. ${detail || (code === "AMBIGUOUS" ? "Reconciliar antes de repetir." : "Revisa acceso, cuota o parámetros del modelo.")}`,
       502,
     );
   }
