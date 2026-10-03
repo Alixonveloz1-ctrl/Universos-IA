@@ -375,6 +375,37 @@ function Media({
     </>
   );
 }
+function ProjectThumbnail({
+  projectId,
+  version,
+  title,
+}: {
+  projectId: string;
+  version?: string | null;
+  title: string;
+}) {
+  const [url, setUrl] = useState("");
+  useEffect(() => {
+    let active = true;
+    if (!version) {
+      setUrl("");
+      return () => { active = false; };
+    }
+    api(`projects/${projectId}/media/${version}`)
+      .then((r) => { if (active) setUrl(r.url); })
+      .catch(() => { if (active) setUrl(""); });
+    return () => { active = false; };
+  }, [projectId, version]);
+  return (
+    <div className="project-thumb">
+      {url ? (
+        <Image unoptimized fill sizes="(max-width: 640px) 50vw, 320px" src={url} alt={title} />
+      ) : (
+        <span aria-hidden="true">✦</span>
+      )}
+    </div>
+  );
+}
 export default function Studio() {
   const busyRef = useRef(false);
   const [recoveryNote, setRecoveryNote] = useState("");
@@ -387,7 +418,7 @@ export default function Studio() {
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [projects, setProjects] = useState<
-      { id: string; title: string; stage: string; universeId?: string; universeName?: string; chapterNumber?: number }[]
+      { id: string; title: string; stage: string; universeId?: string; universeName?: string; chapterNumber?: number; createdAt?: number; updatedAt?: number; thumbnailVersionId?: string | null }[]
     >([]),
     [data, setData] = useState<Data | null>(null),
     [tab, setTab] = useState("Historia"),
@@ -828,24 +859,58 @@ export default function Studio() {
             </button>
           </section>
           <h2>Mis universos</h2>
-          <div className="cards">
-            {Array.from(new Set(projects.map(p => p.universeId || p.id))).map(universeId => {
-              const chapters = projects.filter(p => (p.universeId || p.id) === universeId).sort((a, b) => (a.chapterNumber || 1) - (b.chapterNumber || 1));
-              return <section className="card" key={universeId}>
-                <h3>{chapters[0].universeName || chapters[0].title}</h3>
-                {chapters.map(p => <button key={p.id} onClick={() => void perform(async () => { await refresh(p.id); setTab("Historia"); })}>
-                  Capítulo {p.chapterNumber || 1} · {p.title}
-                </button>)}
-                <button disabled={busy} onClick={() => {
-                  if (!window.confirm(`¿Borrar por completo «${chapters[0].universeName || chapters[0].title}»? Se eliminarán sus ${chapters.length} capítulo(s), videos, imágenes y trabajos. No se puede deshacer.`)) return;
-                  void perform(async () => {
-                    await api(`projects/${chapters[0].id}`, "DELETE");
-                    setData(null);
-                    await refresh();
-                  });
-                }}>Borrar universo</button>
-              </section>;
-            })}
+          <div className="universe-grid">
+            {Array.from(new Set(projects.map(p => p.universeId || p.id)))
+              .map(universeId => {
+                const chapters = projects
+                  .filter(p => (p.universeId || p.id) === universeId)
+                  .sort((a, b) => (a.chapterNumber || 1) - (b.chapterNumber || 1));
+                return {
+                  universeId,
+                  chapters,
+                  createdAt: Math.min(...chapters.map(p => p.createdAt || p.updatedAt || 0)),
+                  thumbnail: chapters.find(p => p.thumbnailVersionId) || chapters[0],
+                };
+              })
+              .sort((a, b) => b.createdAt - a.createdAt)
+              .map(({ universeId, chapters, thumbnail }) => {
+                const latest = chapters[chapters.length - 1];
+                const name = chapters[0].universeName || chapters[0].title;
+                return <section className="universe-card" key={universeId}>
+                  <button
+                    className="universe-open"
+                    onClick={() => void perform(async () => { await refresh(latest.id); setTab("Historia"); })}
+                  >
+                    <ProjectThumbnail
+                      projectId={thumbnail.id}
+                      version={thumbnail.thumbnailVersionId}
+                      title={name}
+                    />
+                    <span className="universe-copy">
+                      <strong>{name}</strong>
+                      <small>Capítulo {latest.chapterNumber || 1} · {latest.title}</small>
+                    </span>
+                  </button>
+                  <details className="universe-menu">
+                    <summary aria-label={`Opciones de ${name}`}>•••</summary>
+                    <div>
+                      {chapters.length > 1 && chapters.map(p => (
+                        <button key={p.id} onClick={() => void perform(async () => { await refresh(p.id); setTab("Historia"); })}>
+                          Abrir capítulo {p.chapterNumber || 1}
+                        </button>
+                      ))}
+                      <button className="danger" disabled={busy} onClick={() => {
+                        if (!window.confirm(`¿Borrar por completo «${name}»? Se eliminarán sus ${chapters.length} capítulo(s), videos, imágenes y trabajos. No se puede deshacer.`)) return;
+                        void perform(async () => {
+                          await api(`projects/${chapters[0].id}`, "DELETE");
+                          setData(null);
+                          await refresh();
+                        });
+                      }}>Borrar universo</button>
+                    </div>
+                  </details>
+                </section>;
+              })}
           </div>
           {!projects.length && (
             <p className="empty">Tus historias aparecerán aquí.</p>
