@@ -190,7 +190,11 @@ export function imageReferenceIds(s: Snapshot, target: Target) {
   const refs = selected.flatMap((t) =>
     t.approvedVersionId ? [t.approvedVersionId] : [],
   );
-  const styleRef = characterStyleReference(s, target);
+  // For story shots, the selected characters' CURRENT approved images are the
+  // complete visual authority. Do not add another cast member as a style
+  // reference: that extra image can compete with an edited character identity
+  // or wardrobe and makes it look as if an older reference is still in use.
+  const styleRef = target.role === "character" ? characterStyleReference(s, target) : undefined;
   if (styleRef && refs.length < limit && !refs.includes(styleRef.id)) refs.push(styleRef.id);
   assert(
     refs.length <= limit,
