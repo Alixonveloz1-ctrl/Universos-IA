@@ -420,15 +420,34 @@ export async function execute(jobId: string, direct = false): Promise<"continue"
           "Veo sigue procesando. Reanudar consultará la misma operación.",
           503,
         );
+      const providerPrefix = objectPath(job.projectId, versionId, "provider") + "/";
+      const bucketPrefix = `gs://${config().bucket}/`;
+      const expected = bucketPrefix + providerPrefix;
       const uri = recoveredObject
-        ? `gs://${config().bucket}/${recoveredObject}`
+        ? bucketPrefix + recoveredObject
         : response.videos?.[0]?.gcsUri;
-      const expected = `gs://${config().bucket}/${objectPath(job.projectId, versionId, "provider")}/`;
-      assert(
-        typeof uri === "string" && uri.startsWith(expected),
-        "Veo devolvió un archivo fuera de su destino",
-      );
-      object = uri.slice(`gs://${config().bucket}/`.length);
+      if (typeof uri === "string" && uri.startsWith(expected)) {
+        object = uri.slice(bucketPrefix.length);
+      } else {
+        // Veo may return a canonicalized/different GCS URI even though the
+        // requested storageUri was our private attempt prefix. Never trust or
+        // read that foreign URI. Reconcile against OUR bucket destination,
+        // which is the source of truth and cannot charge another generation.
+        const reconciledObject = await recoverVideo(job.projectId, versionId);
+        if (!reconciledObject) {
+          await checkpoint("providerReturnedUri", typeof uri === "string" ? {
+            outsideExpectedPrefix: true,
+            // Store no bucket/object path from an unexpected provider URI.
+            observedAt: Date.now(),
+          } : { missing: true, observedAt: Date.now() });
+          throw new AppError(
+            "OPERATION_PENDING",
+            "Veo terminó la operación, pero el MP4 todavía no aparece en el destino solicitado. Reanudar volverá a comprobar el mismo resultado sin generar otro video.",
+            503,
+          );
+        }
+        object = reconciledObject;
+      }
       if (!recoveredObject) await checkpoint("videoObject", object);
       const file = path.join(dir, "clip.mp4");
       await privateObject(object).download({ destination: file });
