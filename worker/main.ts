@@ -431,7 +431,10 @@ export async function execute(jobId: string, direct = false): Promise<"continue"
         response?.generatedVideos?.[0]?.video?.uri ||
         response?.generatedVideos?.[0]?.video?.gcsUri ||
         response?.videos?.[0]?.gcsUri ||
-        response?.videos?.[0]?.uri;
+        response?.videos?.[0]?.uri ||
+        // Some Vertex REST responses nest the typed GenerateVideoResponse.
+        response?.response?.generatedVideos?.[0]?.video?.uri ||
+        response?.response?.videos?.[0]?.gcsUri;
       const uri = recoveredObject
         ? bucketPrefix + recoveredObject
         : providerUri;
