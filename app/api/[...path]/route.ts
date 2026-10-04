@@ -14,6 +14,7 @@ import {
   resolveReview,
   jobControl,
   closeAmbiguousJob,
+  abandonWaitingVideoJob,
   projectRef,
 } from "@/lib/persistence/projects";
 import { login, originCheck, requireSession, sessionCookie } from "@/lib/auth";
@@ -368,6 +369,8 @@ async function handler(
           error: j.error || null,
           heartbeat: j.heartbeat,
         });
+      if (req.method === "POST" && paths.length === 3 && paths[2] === "abandon-video")
+        return response(await abandonWaitingVideoJob(j.id));
       if (req.method === "POST" && paths.length === 3 && paths[2] === "close") {
         const b = z
           .object({
