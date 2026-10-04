@@ -203,7 +203,28 @@ export async function pollVideo(id: string, name: string) {
     name.startsWith(base) && !name.includes(".."),
     "Operación ajena al modelo o proyecto.",
   );
-  return googlePost(endpoint(id, "fetchPredictOperation"), {
+  const raw = await googlePost(endpoint(id, "fetchPredictOperation"), {
     operationName: name,
   });
+  // REST fetchPredictOperation returns legacy GenerateVideoResponse
+  // (response.videos[].gcsUri). The Gen AI SDK exposes the same result as
+  // generatedVideos[].video.uri. Normalize both here so every caller sees one
+  // stable shape and no worker has to guess the transport representation.
+  const response = raw?.response;
+  const uri =
+    response?.generatedVideos?.[0]?.video?.uri ||
+    response?.generatedVideos?.[0]?.video?.gcsUri ||
+    response?.videos?.[0]?.gcsUri ||
+    response?.videos?.[0]?.uri;
+  return {
+    ...raw,
+    ...(response && uri
+      ? {
+          response: {
+            ...response,
+            generatedVideos: [{ video: { uri, mimeType: "video/mp4" } }],
+          },
+        }
+      : {}),
+  };
 }
