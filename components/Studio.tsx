@@ -1030,6 +1030,20 @@ export default function Studio() {
                     Detener nuevas solicitudes
                   </button>
                 )}
+                {data.job.type === "video" && data.job.state === "waiting" && (
+                  <button
+                    disabled={busy}
+                    onClick={() => {
+                      if (!window.confirm("Cerrar este intento de video y permitir una generación nueva? La operación anterior no se volverá a consultar y, si Google ya la procesó, pudo haber consumido créditos.")) return;
+                      void perform(async () => {
+                        await api(`jobs/${data.job!.id}/abandon-video`, "POST", {});
+                        await refresh(pid);
+                      });
+                    }}
+                  >
+                    Cerrar este intento y generar otro video
+                  </button>
+                )}
                 {data.job.state !== "completed" &&
                   !data.job.closedAt &&
                   data.job.resumable &&
