@@ -423,9 +423,18 @@ export async function execute(jobId: string, direct = false): Promise<"continue"
       const providerPrefix = objectPath(job.projectId, versionId, "provider") + "/";
       const bucketPrefix = `gs://${config().bucket}/`;
       const expected = bucketPrefix + providerPrefix;
+      // Vertex/Veo response shapes differ between API generations.
+      // Current Veo returns generatedVideos[].video.uri; older responses may
+      // expose videos[].gcsUri. Accept both, while still enforcing our private
+      // requested GCS prefix below.
+      const providerUri =
+        response?.generatedVideos?.[0]?.video?.uri ||
+        response?.generatedVideos?.[0]?.video?.gcsUri ||
+        response?.videos?.[0]?.gcsUri ||
+        response?.videos?.[0]?.uri;
       const uri = recoveredObject
         ? bucketPrefix + recoveredObject
-        : response.videos?.[0]?.gcsUri;
+        : providerUri;
       if (typeof uri === "string" && uri.startsWith(expected)) {
         object = uri.slice(bucketPrefix.length);
       } else {
