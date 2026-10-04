@@ -450,8 +450,22 @@ export async function editProject(
           tx.delete(projectRef(projectId).collection("targets").doc(t.id));
       }
       if (kind === "plan") {
-        const q = plan.parse(data),
-          desired: Target[] = q.clips.flatMap((c) => [
+        const q = plan.parse(data);
+        // A character needs a reusable image reference only when that character
+        // is visually present in at least one produced clip. Voice-only,
+        // phone-only, text-message, remembered or merely mentioned characters
+        // remain valid Bible/narrative entities but do not consume an image.
+        const visualCharacterIds = new Set(
+          q.clips.flatMap(clip => [
+            ...clip.characterIds,
+            ...clip.shots.flatMap(shot => shot.characterIds),
+          ]),
+        );
+        for (const target of s.targets.filter(t => t.role === "character")) {
+          if (!visualCharacterIds.has(target.entityId))
+            tx.delete(projectRef(projectId).collection("targets").doc(target.id));
+        }
+        const desired: Target[] = q.clips.flatMap((c) => [
             {
               id: "clip_" + c.number,
               kind: "video" as const,
