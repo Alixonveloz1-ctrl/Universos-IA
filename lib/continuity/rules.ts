@@ -17,11 +17,20 @@ function approvedImage(s: Snapshot, role: Target["role"], entityId: string) {
 export function usedLocationIds(s: Snapshot) {
   return new Set(s.plan?.clips.flatMap(c => [c.locationId, ...c.shots.map(sh => sh.locationId)]) || []);
 }
+function visualCharacterIds(s: Snapshot) {
+  return new Set(
+    s.plan?.clips.flatMap(c => [
+      ...c.characterIds,
+      ...c.shots.flatMap(sh => sh.characterIds),
+    ]) || [],
+  );
+}
 function canonicalReady(s: Snapshot) {
   assert(s.project.bible && s.bible, "Genera y guarda la biblia.");
+  const required = s.plan ? visualCharacterIds(s) : new Set(s.bible.characters.map(c => c.id));
   assert(
-    s.bible.characters.every((c) => approvedImage(s, "character", c.id)),
-    "Genera las imágenes de referencia de los personajes.",
+    [...required].every(characterId => approvedImage(s, "character", characterId)),
+    "Genera las imágenes de referencia de los personajes que aparecen visualmente.",
   );
 }
 export function prerequisites(s: Snapshot, a: Action) {
