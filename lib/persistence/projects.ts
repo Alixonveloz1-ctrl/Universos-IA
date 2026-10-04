@@ -676,6 +676,40 @@ export async function jobControl(id: string, operation: "stop" | "resume") {
   });
 }
 
+export async function abandonWaitingVideoJob(id: string) {
+  return db().runTransaction(async (tx) => {
+    const ref = db().doc(`jobs/${id}`);
+    const j = (await tx.get(ref)).data() as Job | undefined;
+    assert(j?.type === "video", "Este trabajo no es un video.");
+    assert(j.state === "waiting", "Este trabajo no está esperando recuperación.");
+    assert(!(j.leaseUntil > Date.now()), "El ejecutor sigue activo.");
+    assert(typeof j.checkpoint?.operation === "string" && !j.checkpoint?.videoObject,
+      "Este intento no tiene una operación de Veo pendiente de recuperación.");
+    const pRef = projectRef(j.projectId);
+    const p = (await tx.get(pRef)).data() as Project;
+    assert(p?.activeJobId === id, "Este intento ya no es el trabajo activo.");
+    const checkpoint = {
+      ...j.checkpoint,
+      abandonedAt: Date.now(),
+      abandonedOperation: j.checkpoint.operation,
+      operation: null,
+      pendingCall: null,
+      submitted: false,
+    };
+    tx.update(ref, {
+      state: "failed",
+      stopRequested: true,
+      checkpoint,
+      error: {
+        code: "RECOVERY_ABANDONED",
+        message: "Intento anterior cerrado por el usuario. Puedes generar un video nuevo.",
+      },
+    });
+    tx.update(pRef, { activeJobId: null, updatedAt: Date.now() });
+    return { id, state: "failed" as const };
+  });
+}
+
 export async function closeAmbiguousJob(
   id: string,
   note: string,
