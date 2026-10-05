@@ -4,7 +4,7 @@ type Selection = { genre: string; subgenre: string; plotType: string; worldSetti
 
 function worldLock(world = "Mundo real actual") {
   const locks: Record<string, string> = {
-    "Mundo real actual": "Presente real reconocible. Usa casas, apartamentos, barrios, carreteras, oficinas, tiendas, restaurantes, playas, parques u otros lugares actuales que la historia necesite. Arquitectura, ropa, vehículos, teléfonos y señalización contemporáneos normales. PROHIBIDO convertir por defecto el presente en megaciudad futurista: sin estética cyberpunk, sin rascacielos de ciencia ficción, sin hologramas y sin neón decorativo dominante. De noche usa farolas, lámparas, escaparates y luces urbanas normales.",
+    "Mundo real actual": "Presente real reconocible: presente contemporáneo cotidiano. Usa casas, apartamentos, barrios, carreteras, oficinas, tiendas, restaurantes, playas, parques u otros lugares actuales que la historia necesite. Arquitectura, ropa, vehículos, teléfonos y señalización contemporáneos normales. PROHIBIDO convertir por defecto el presente en megaciudad futurista: sin estética cyberpunk, sin rascacielos de ciencia ficción, sin hologramas y sin neón decorativo dominante. De noche usa farolas, lámparas, escaparates y luces urbanas normales.",
     "Ciudad moderna": "Ciudad contemporánea real, no futurista: edificios, calles, tráfico, comercios y transporte actuales. No cyberpunk, no hologramas, no megaciudad futurista y no neón dominante salvo que una localización concreta lo requiera de forma natural.",
     "Pueblo contemporáneo": "Pueblo actual reconocible: calles pequeñas, viviendas, comercios locales y entorno cotidiano. No metrópolis, no skyline futurista, no cyberpunk y no neón decorativo dominante.",
     "Vida cotidiana": "Entornos cotidianos actuales y plausibles: hogar, trabajo, estudio, compras, cafetería, parque, calle o transporte según la historia. No convertirlo en metrópolis futurista ni añadir neón porque sí.",
@@ -34,6 +34,7 @@ export function settingDirection(selection: Selection) {
       `Selección exacta del usuario: «${selectedWorld}».`,
       worldLock(selectedWorld),
       base,
+      selection.plotType === "Herencia" && !historical && !speculative ? "Una herencia familiar actual usa bienes, documentos y conflictos de parentesco del presente, sin reinos ni tecnología especulativa." : "",
       "FIDELIDAD VISUAL: cada localización de la Biblia y cada toma debe pertenecer claramente a este mundo. El Director no puede reemplazarlo por su ambientación favorita. No usar metrópolis, skyline futurista, cuevas de cristal, carteles luminosos o iluminación neón como decoración genérica cuando no pertenezcan al mundo seleccionado.",
       "LUZ: el estilo visual controla la técnica y calidad de iluminación, NO el tipo de mundo. Cinemático, 3D Viral, Anime o tono oscuro no significan neón. Usa luz natural, solar, lunar, doméstica, práctica o ambiental coherente con el lugar; reserva el neón para Cyberpunk o para una fuente que la historia pida explícitamente.",
       "Mantén esta selección desde las ideas hasta historia, Biblia, localizaciones, guion, imágenes y video.",

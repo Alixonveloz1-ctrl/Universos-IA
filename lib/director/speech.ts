@@ -35,20 +35,14 @@ export function dialogueProblems(s: Snapshot, c: Clip): string[] {
       problems.push(`Clip ${c.number}: el hablante ${d.characterId} no corresponde a un personaje presente.`);
     if (!d.text.trim() || !Number.isFinite(d.start) || !Number.isFinite(d.end) || d.start < 0 || d.end > 8 || d.end <= d.start)
       problems.push(`Clip ${c.number}: revisa el texto y los tiempos de la intervención ${i + 1}.`);
+    if (i > 0 && d.start < turns[i - 1].end - 0.001)
+      problems.push(`Clip ${c.number}: turnos de diálogo superpuestos.`);
   }
   return problems;
 }
 
 function normalizedSpeechTurns(c: Clip) {
-  const turns = [...c.dialogue].sort((a, b) => a.start - b.start);
-  let cursor = 0;
-  return turns.map((turn, index) => {
-    const remaining = turns.length - index - 1;
-    const start = Math.max(turn.start, cursor);
-    const end = Math.max(start + 0.1, Math.min(8 - remaining * 0.1, turn.end));
-    cursor = end;
-    return { ...turn, start, end };
-  });
+  return [...c.dialogue].sort((a, b) => a.start - b.start);
 }
 
 // Old plans sometimes repeat literal dialogue in action or shot fields. Keep

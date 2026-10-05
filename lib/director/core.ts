@@ -227,7 +227,7 @@ function safeStillText(value: unknown): unknown {
 function characterDesignDirection(beings: string, design?: string) {
   const eligible = ["Frutas", "Verduras", "Diamantes y minerales", "Objetos", "Insectos"].includes(beings);
   if (!eligible || design !== "Cabeza de especie/material")
-    return "CHARACTER DESIGN LOCK: 100% HUMANOID HEAD. Keep a fully humanoid skull, face and hairstyle. Express the selected species/material through the body's surface, color, texture and appropriate subtle traits only; do not reshape the head into the species/material.";
+    return "CHARACTER DESIGN LOCK: 100% HUMANOID HEAD. Keep a fully humanoid head and face, skull and hairstyle. Express the selected species/material through the body's surface, color, texture and appropriate subtle traits only; do not reshape the head into the species/material.";
   return "CHARACTER DESIGN LOCK: SPECIES/MATERIAL HEAD. Keep an attractive, adult, fully humanoid and proportionate body, but make the HEAD itself a complete, immediately recognizable form of the character's specific species/material (fruit, vegetable, gemstone/mineral, object or insect). The head remains normal adult scale relative to the body: never giant, chibi or mascot-like. Integrate expressive eyes, brows, nose where anatomically/design-appropriate, mouth/lips and ears where appropriate into that head. Preserve the character's full approved humanoid hairstyle as a prominent beautiful hairstyle attached naturally to/around the species head; species details do not replace the hair. Adapt this same design choice to the selected visual style—Anime 2D, 3D Viral, Cinemático Épico or Realista—without changing the choice.";
 }
 

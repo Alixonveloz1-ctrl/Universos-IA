@@ -71,7 +71,9 @@ it("maps an eight-second door action and timed dialogue to a continuous four-par
   expect(prompt).toContain("Action 1, 0-4s: Alba abre la puerta");
   expect(prompt).toContain("Action 2, 4-8s: Alba lee la carta");
   expect(prompt).toContain("4-6s — turn 1.");
-  expect(prompt).toContain("Alba says in Español, with the selected Latino accent: ¿Es tuya?");
+  expect(prompt).toContain("Alba says the ENTIRE line");
+  expect(prompt).toContain("in Español, with the selected Latino accent");
+  expect(prompt).toContain("¿Es tuya?");
   expect(prompt).toContain("Do not invent turns around the character's own axis");
 });
 

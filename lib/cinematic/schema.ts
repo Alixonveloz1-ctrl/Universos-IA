@@ -129,6 +129,9 @@ export function validateCinematicPlan(value: unknown, total: 30 | 60 | 90) {
   if (plan.segments.length !== expected.length)
     throw new Error(`Se requieren ${expected.length} bloques técnicos para ${total} segundos.`);
   const characterIds = new Set(plan.characters.map(c => c.id));
+  if (characterIds.size !== plan.characters.length)
+    throw new Error("Hay IDs de personaje duplicados.");
+  const close = (a: number, b: number) => Math.abs(a - b) < 0.001;
   const shotIds = new Set<string>();
   for (let i = 0; i < plan.segments.length; i++) {
     const segment = plan.segments[i];
@@ -136,7 +139,7 @@ export function validateCinematicPlan(value: unknown, total: 30 | 60 | 90) {
       throw new Error(`El bloque ${i + 1} debe durar ${expected[i]} segundos.`);
     if (segment.characterIds.some(id => !characterIds.has(id)))
       throw new Error(`El bloque ${segment.number} usa un personaje fuera de la biblia.`);
-    if (segment.shots[0].start !== 0 || segment.shots.at(-1)!.end !== segment.durationSeconds)
+    if (!close(segment.shots[0].start, 0) || !close(segment.shots.at(-1)!.end, segment.durationSeconds))
       throw new Error(`Las tomas del bloque ${segment.number} deben cubrir toda su duración.`);
     for (let j = 0; j < segment.shots.length; j++) {
       const shot = segment.shots[j];
@@ -144,7 +147,7 @@ export function validateCinematicPlan(value: unknown, total: 30 | 60 | 90) {
       shotIds.add(shot.id);
       if (shot.end > segment.durationSeconds)
         throw new Error(`Una toma excede el bloque ${segment.number}.`);
-      if (j > 0 && shot.start !== segment.shots[j - 1].end)
+      if (j > 0 && !close(shot.start, segment.shots[j - 1].end))
         throw new Error(`Las tomas del bloque ${segment.number} tienen huecos o solapamientos.`);
       if (shot.characterIds.some(id => !segment.characterIds.includes(id)))
         throw new Error(`Una toma del bloque ${segment.number} usa un personaje no presente.`);
@@ -153,9 +156,16 @@ export function validateCinematicPlan(value: unknown, total: 30 | 60 | 90) {
       if (j > 0 && shot.transition === "start")
         throw new Error(`Las tomas posteriores del bloque ${segment.number} necesitan un corte.`);
     }
-    for (const turn of segment.dialogue) {
+    const dialogue = [...segment.dialogue].sort((a, b) => a.start - b.start);
+    for (let j = 0; j < dialogue.length; j++) {
+      const turn = dialogue[j];
       if (!segment.characterIds.includes(turn.characterId) || turn.end > segment.durationSeconds)
         throw new Error(`El diálogo del bloque ${segment.number} no coincide con su reparto o duración.`);
+      if (j && turn.start < dialogue[j - 1].end - 0.001)
+        throw new Error(`El diálogo del bloque ${segment.number} se solapa.`);
+      if (segment.shots.some(shot => turn.start < shot.end - 0.001 && turn.end > shot.start + 0.001 &&
+        !shot.characterIds.includes(turn.characterId)))
+        throw new Error(`El hablante del bloque ${segment.number} no aparece en su toma.`);
     }
     if (i > 0) {
       const prev = plan.segments[i - 1];

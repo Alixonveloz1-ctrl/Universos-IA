@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { bucket } from "@/lib/persistence/google";
 import {
   db,
   googleAuth,
@@ -12,7 +13,7 @@ import {
 import { config, required } from "@/lib/config";
 import { AppError, assert, safeError } from "@/lib/errors";
 import { originCheck, requireSession } from "@/lib/auth";
-import { imageLimits, model, MODELS, defaults } from "@/lib/models";
+import { imageLimits, model } from "@/lib/models";
 import {
   imageGenerate,
   pollVideo,
@@ -23,7 +24,6 @@ import {
   cinematicId,
   cinematicProjectInput,
   validateCinematicPlan,
-  type CinematicPlan,
 } from "@/lib/cinematic/schema";
 import {
   compileCinematicCharacterPrompt,
@@ -35,6 +35,7 @@ import type {
   CinematicAsset,
   CinematicFinalizeJob,
   CinematicProject,
+  CinematicPlanRun,
 } from "@/lib/cinematic/types";
 
 export const runtime = "nodejs";
@@ -43,6 +44,49 @@ export const dynamic = "force-dynamic";
 
 const json = (data: unknown, status = 200) =>
   Response.json(data, { status, headers: { "Cache-Control": "no-store" } });
+const revision = (p: CinematicProject) => p.revision || 0;
+const planRevision = (p: CinematicProject) => p.planRevision || 0;
+
+function requestId(value: unknown) {
+  return z.string().uuid().parse(value);
+}
+
+async function reserveGeneration(project: CinematicProject, id: string, asset: CinematicAsset) {
+  const ref = projectRef(project.id);
+  const doc = ref.collection("assets").doc(id);
+  return db().runTransaction(async tx => {
+    const [snapshot, existing] = await Promise.all([tx.get(ref), tx.get(doc)]);
+    if (existing.exists) return existing.data() as CinematicAsset;
+    const current = snapshot.data() as CinematicProject | undefined;
+    assert(current && !current.deleting && revision(current) === revision(project) && planRevision(current) === planRevision(project),
+      "La producción cambió. Actualiza antes de generar.");
+    assert(!current.activeGenerationId, "Hay una generación sin resolver. Consulta su estado antes de iniciar otra.");
+    tx.create(doc, asset);
+    tx.update(ref, { activeGenerationId: id, updatedAt: Date.now() });
+    return null;
+  });
+}
+
+async function finishGeneration(projectId: string, id: string, changes: Partial<CinematicAsset>, keepLock = false) {
+  const ref = projectRef(projectId);
+  await db().runTransaction(async tx => {
+    const snap = await tx.get(ref);
+    const current = snap.data() as CinematicProject | undefined;
+    const doc = ref.collection("assets").doc(id);
+    tx.update(doc, changes);
+    if (!keepLock && current?.activeGenerationId === id)
+      tx.update(ref, { activeGenerationId: null, updatedAt: Date.now() });
+  });
+}
+
+async function failGeneration(projectId: string, id: string, error: unknown) {
+  const safe = safeError(error);
+  await finishGeneration(projectId, id, {
+    state: safe.code === "AMBIGUOUS" ? "uncertain" : "failed",
+    error: safe.message,
+  }, safe.code === "AMBIGUOUS");
+  // Ambiguous requests retain a lock: no silent second paid call.
+}
 
 async function requestJson(req: Request) {
   if (!req.headers.get("content-type")?.startsWith("application/json"))
@@ -116,12 +160,9 @@ async function saveImageCandidate(
   inputRefs: string[],
   characterId?: string,
   segmentNumber?: number,
+  assetId?: string,
 ) {
-  const result = await imageGenerate(project.models.image, prompt, refs);
-  const assetId = randomUUID();
-  const ext = imageExtension(result.mime);
-  const storageObject = objectPath("cinematic", project.id, `${role}-${characterId || segmentNumber || "asset"}-${assetId}.${ext}`);
-  await uploadBytes(storageObject, result.bytes, result.mime);
+  assert(assetId, "Falta el identificador de intento.");
   const asset: CinematicAsset = {
     id: assetId,
     projectId: project.id,
@@ -130,14 +171,29 @@ async function saveImageCandidate(
     model: project.models.image,
     prompt,
     inputRefs,
-    state: "candidate",
-    storageObject,
+    state: "submitting",
+    planRevision: planRevision(project),
     createdAt: Date.now(),
     ...(characterId ? { characterId } : {}),
     ...(segmentNumber ? { segmentNumber } : {}),
   };
-  await projectRef(project.id).collection("assets").doc(assetId).set(asset);
-  return asset;
+  const existing = await reserveGeneration(project, assetId, asset);
+  if (existing) {
+    assert(existing.role === role && existing.characterId === characterId && existing.segmentNumber === segmentNumber,
+      "El identificador de intento pertenece a otra generación.");
+    return existing;
+  }
+  try {
+    const result = await imageGenerate(project.models.image, prompt, refs);
+    const ext = imageExtension(result.mime);
+    const storageObject = objectPath("cinematic", project.id, `${role}-${characterId || segmentNumber || "asset"}-${assetId}.${ext}`);
+    await uploadBytes(storageObject, result.bytes, result.mime);
+    await finishGeneration(project.id, assetId, { state: "candidate", storageObject });
+    return { ...asset, state: "candidate", storageObject };
+  } catch (error) {
+    await failGeneration(project.id, assetId, error);
+    throw error;
+  }
 }
 
 async function dispatchFinalize(job: CinematicFinalizeJob) {
@@ -161,12 +217,16 @@ async function dispatchFinalize(job: CinematicFinalizeJob) {
         timeout: "3600s",
       },
     },
+    true, // A transport error or 5xx can occur after Cloud Run accepted the job.
   );
+  if (typeof run.name !== "string" || !run.name)
+    throw new AppError("AMBIGUOUS", "Cloud Run pudo aceptar el trabajo sin devolver su operación.", 502);
   const executionName = typeof run.metadata?.name === "string" &&
     run.metadata.name.startsWith(`${resource}/executions/`) ? run.metadata.name : undefined;
   await db().doc(`cinematicJobs/${job.id}`).update({
     ...(executionName ? { executionName } : {}),
     operationName: run.name,
+    dispatchState: "accepted",
     updatedAt: Date.now(),
   });
 }
@@ -203,6 +263,8 @@ async function handler(req: Request, context: { params: Promise<{ path?: string[
           approvedCharacters: {},
           approvedImages: {},
           approvedVideos: {},
+          revision: 0,
+          planRevision: 0,
           final: null,
           createdAt: now,
           updatedAt: now,
@@ -216,56 +278,163 @@ async function handler(req: Request, context: { params: Promise<{ path?: string[
     const pid = cinematicId.parse(parts[0]);
     const { ref, project } = await readProject(pid);
 
+    if (parts.length === 4 && parts[1] === "generations" && parts[3] === "resolve" && req.method === "POST") {
+      const id = cinematicId.parse(parts[2]);
+      assert((await requestJson(req)).acknowledge === true, "Confirma la revisión del intento antes de liberarlo.");
+      const assetRef = ref.collection("assets").doc(id);
+      const runRef = ref.collection("planRuns").doc(id);
+      const asset = (await assetRef.get()).data() as CinematicAsset | undefined;
+      const run = (await runRef.get()).data() as CinematicPlanRun | undefined;
+      assert(project.activeGenerationId === id && (asset || run), "No hay un intento activo con ese ID.");
+      const attempt = asset || run!;
+      assert(["uncertain", "submitting"].includes(attempt.state), "El intento ya terminó.");
+      if (asset) {
+        const prefix = asset.kind === "video" ? asset.outputPrefix! :
+          objectPath("cinematic", pid, `${asset.role}-${asset.characterId || asset.segmentNumber || "asset"}-${id}.`);
+        const [files] = await bucket().getFiles({ prefix });
+        assert(files.length <= 1, "Hay varios archivos en este intento; revísalos antes de continuar.");
+        const completed = files.find(f => asset.kind === "video" ? f.name.endsWith(".mp4") : /\.(png|jpe?g|webp)$/.test(f.name));
+        if (completed) {
+          await db().runTransaction(async tx => {
+            const [currentDoc, assetDoc] = await Promise.all([tx.get(ref), tx.get(assetRef)]);
+            const current = currentDoc.data() as CinematicProject;
+            const attempt = assetDoc.data() as CinematicAsset;
+            assert(current.activeGenerationId === id && ["uncertain", "submitting"].includes(attempt.state), "El intento ya cambió.");
+            tx.update(assetRef, { state: asset.kind === "video" ? "completed" : "candidate",
+              storageObject: completed.name, error: null });
+            tx.update(ref, { activeGenerationId: null, updatedAt: Date.now() });
+          });
+          return json({ state: asset.kind === "video" ? "completed" : "candidate" });
+        }
+      }
+      const waitMs = asset?.kind === "video" ? 24 * 60 * 60 * 1000 : 6 * 60 * 1000;
+      assert(Date.now() - attempt.createdAt > waitMs,
+        "Este intento aún puede estar procesándose. Espera antes de liberarlo.");
+      await db().runTransaction(async tx => {
+        const [currentDoc, attemptDoc] = await Promise.all([tx.get(ref), tx.get(asset ? assetRef : runRef)]);
+        const current = currentDoc.data() as CinematicProject;
+        const fresh = attemptDoc.data() as CinematicAsset | CinematicPlanRun;
+        assert(current.activeGenerationId === id && ["uncertain", "submitting"].includes(fresh.state), "El intento ya cambió.");
+        tx.update(asset ? assetRef : runRef, { state: "failed", error: "Intento incierto cerrado tras revisión explícita." });
+        tx.update(ref, { activeGenerationId: null, updatedAt: Date.now() });
+      });
+      return json({ state: "failed" });
+    }
+
     if (parts.length === 1) {
       if (req.method === "PATCH") {
         const change = z.object({ models: cinematicProjectInput.shape.models }).strict().parse(await requestJson(req));
         for (const kind of ["text", "image", "video"] as const) model(change.models[kind], kind);
-        await ref.update({ models: change.models, updatedAt: Date.now() });
+        await db().runTransaction(async tx => {
+          const current = (await tx.get(ref)).data() as CinematicProject;
+          assert(!current.deleting && !current.activeGenerationId, "Hay una generación pendiente.");
+          tx.update(ref, { models: change.models, updatedAt: Date.now() });
+        });
         return json({ ok: true });
       }
       if (req.method === "GET") {
         const assets = (await ref.collection("assets").get()).docs
           .map(d => d.data() as CinematicAsset)
           .sort((a, b) => a.createdAt - b.createdAt);
-        const finalizeJob = project.activeFinalizeJobId
-          ? (await db().doc(`cinematicJobs/${project.activeFinalizeJobId}`).get()).data() || null
+        const finalizeJob = (project.activeFinalizeJobId || project.lastFinalizeJobId)
+          ? (await db().doc(`cinematicJobs/${project.activeFinalizeJobId || project.lastFinalizeJobId}`).get()).data() as CinematicFinalizeJob || null
           : null;
-        return json({ project, assets, finalizeJob });
+        const generation = project.activeGenerationId
+          ? (await ref.collection("assets").doc(project.activeGenerationId).get()).data() ||
+            (await ref.collection("planRuns").doc(project.activeGenerationId).get()).data() || null
+          : null;
+        const recoverableFinalize = !!finalizeJob && ["queued", "running"].includes(finalizeJob.state) &&
+          Date.now() - (finalizeJob.dispatchAttemptAt || finalizeJob.createdAt) > 70 * 60 * 1000 &&
+          (finalizeJob.leaseUntil || 0) < Date.now();
+        return json({ project, assets, finalizeJob, generation, recoverableFinalize });
       }
       if (req.method === "DELETE") {
-        const assets = (await ref.collection("assets").get()).docs.map(d => d.data() as CinematicAsset);
-        for (const asset of assets) if (asset.storageObject) await privateObject(asset.storageObject).delete({ ignoreNotFound: true });
-        if (project.final?.storageObject) await privateObject(project.final.storageObject).delete({ ignoreNotFound: true });
+        await db().runTransaction(async tx => {
+          const [projectDoc, assetDocs] = await Promise.all([tx.get(ref), tx.get(ref.collection("assets"))]);
+          const current = projectDoc.data() as CinematicProject;
+          assert(!current.activeGenerationId && !current.activeFinalizeJobId,
+            "Espera o resuelve las generaciones y el ensamblado activos antes de borrar.");
+          assert(!assetDocs.docs.some(d => ["waiting", "submitting", "uncertain"].includes((d.data() as CinematicAsset).state)),
+            "Espera o resuelve los videos pendientes antes de borrar.");
+          tx.update(ref, { deleting: true });
+        });
+        const prefix = `${config().prefix}/cinematic/${pid}/`;
+        const [objects] = await bucket().getFiles({ prefix });
+        for (const object of objects) await object.delete({ ignoreNotFound: true });
+        const jobs = await db().collection("cinematicJobs").where("projectId", "==", pid).get();
+        for (const job of jobs.docs) await job.ref.delete();
         await db().recursiveDelete(ref);
         return json({ ok: true });
       }
     }
 
     if (parts.length === 2 && parts[1] === "plan" && req.method === "POST") {
-      const plan = await generateCinematicPlan(project);
-      await ref.update({
-        title: plan.title,
-        plan,
-        approvedCharacters: {},
-        approvedImages: {},
-        approvedVideos: {},
-        final: null,
-        updatedAt: Date.now(),
+      const id = requestId((await requestJson(req)).requestId);
+      const runRef = ref.collection("planRuns").doc(id);
+      const existing = await db().runTransaction(async tx => {
+        const [currentDoc, runDoc] = await Promise.all([tx.get(ref), tx.get(runRef)]);
+        if (runDoc.exists) return runDoc.data() as CinematicPlanRun;
+        const current = currentDoc.data() as CinematicProject;
+        assert(!current.deleting && !current.activeGenerationId && revision(current) === revision(project),
+          "Hay otra generación activa o el proyecto cambió.");
+        tx.create(runRef, { id, state: "submitting", baseRevision: revision(current), model: current.models.text, createdAt: Date.now() } satisfies CinematicPlanRun);
+        tx.update(ref, { activeGenerationId: id });
+        return null;
       });
-      return json(plan);
+      if (existing) {
+        if (existing.state === "failed") throw new AppError("RUN_FAILED", existing.error || "El intento anterior falló.", 409);
+        const current = (await ref.get()).data() as CinematicProject;
+        return json({ run: existing, plan: existing.state === "completed" ? current.plan : null }, 202);
+      }
+      try {
+        const plan = await generateCinematicPlan(project);
+        await db().runTransaction(async tx => {
+          const current = (await tx.get(ref)).data() as CinematicProject;
+          assert(current.activeGenerationId === id && revision(current) === revision(project),
+            "El proyecto cambió durante la generación del plan.");
+          tx.update(ref, {
+            title: plan.title, plan, approvedCharacters: {}, approvedImages: {}, approvedVideos: {},
+            final: null, revision: revision(current) + 1, planRevision: planRevision(current) + 1,
+            activeGenerationId: null, updatedAt: Date.now(),
+          });
+          tx.update(runRef, { state: "completed" });
+        });
+        return json(plan);
+      } catch (error) {
+        const safe = safeError(error);
+        await db().runTransaction(async tx => {
+          const current = (await tx.get(ref)).data() as CinematicProject;
+          tx.update(runRef, { state: safe.code === "AMBIGUOUS" ? "uncertain" : "failed", error: safe.message });
+          if (safe.code !== "AMBIGUOUS" && current.activeGenerationId === id)
+            tx.update(ref, { activeGenerationId: null });
+        });
+        throw error;
+      }
     }
 
     if (parts.length === 4 && parts[1] === "characters" && parts[3] === "image" && req.method === "POST") {
+      const id = requestId((await requestJson(req)).requestId);
+      const prior = (await ref.collection("assets").doc(id).get()).data() as CinematicAsset | undefined;
+      if (prior) {
+        assert(prior.role === "character" && prior.characterId === parts[2], "El intento pertenece a otra generación.");
+        return json(prior, 202);
+      }
       const characterId = cinematicId.parse(parts[2]);
       assert(project.plan, "Genera primero el plan cinematográfico.");
       const character = project.plan.characters.find(c => c.id === characterId);
       assert(character, "Personaje no encontrado.");
       const prompt = compileCinematicCharacterPrompt(project.plan, character);
-      const asset = await saveImageCandidate(project, "character", prompt, [], [], characterId);
+      const asset = await saveImageCandidate(project, "character", prompt, [], [], characterId, undefined, id);
       return json(asset, 201);
     }
 
     if (parts.length === 4 && parts[1] === "segments" && parts[3] === "image" && req.method === "POST") {
+      const id = requestId((await requestJson(req)).requestId);
+      const prior = (await ref.collection("assets").doc(id).get()).data() as CinematicAsset | undefined;
+      if (prior) {
+        assert(prior.role === "segment-image" && prior.segmentNumber === Number(parts[2]), "El intento pertenece a otra generación.");
+        return json(prior, 202);
+      }
       assert(project.plan, "Genera primero el plan cinematográfico.");
       const number = Number(parts[2]);
       const segment = project.plan.segments.find(s => s.number === number);
@@ -277,11 +446,17 @@ async function handler(req: Request, context: { params: Promise<{ path?: string[
         `Este bloque necesita ${refIds.length} referencias y el generador de imagen seleccionado admite ${limits.maxReferenceImages}. Cambia manualmente de generador o reduce el reparto del bloque.`);
       const refs = await assetRefs(project, refIds);
       const prompt = compileCinematicOpeningImagePrompt(project.plan, segment);
-      const asset = await saveImageCandidate(project, "segment-image", prompt, refs, refIds, undefined, number);
+      const asset = await saveImageCandidate(project, "segment-image", prompt, refs, refIds, undefined, number, id);
       return json(asset, 201);
     }
 
     if (parts.length === 4 && parts[1] === "segments" && parts[3] === "video" && req.method === "POST") {
+      const assetId = requestId((await requestJson(req)).requestId);
+      const prior = (await ref.collection("assets").doc(assetId).get()).data() as CinematicAsset | undefined;
+      if (prior) {
+        assert(prior.role === "segment-video" && prior.segmentNumber === Number(parts[2]), "El intento pertenece a otra generación.");
+        return json(prior, 202);
+      }
       assert(project.plan, "Genera primero el plan cinematográfico.");
       const number = Number(parts[2]);
       const segment = project.plan.segments.find(s => s.number === number);
@@ -295,19 +470,8 @@ async function handler(req: Request, context: { params: Promise<{ path?: string[
         bytesBase64Encoded: bytes.toString("base64"),
         mimeType: imageAsset.storageObject.endsWith(".png") ? "image/png" : imageAsset.storageObject.endsWith(".webp") ? "image/webp" : "image/jpeg",
       };
-      const assetId = randomUUID();
       const outputPrefix = objectPath("cinematic", project.id, `segment-video-${number}-${assetId}-provider`) + "/";
       const prompt = compileCinematicVideoPrompt(project.plan, segment, project.language, project.accent);
-      const operation = await startVideo(
-        project.models.video,
-        [
-          "SOURCE CONTEXT: The supplied starting image and all described people are original fictional AI-generated adult characters for this private production. Preserve their fictional identities without inferring real-world identity.",
-          prompt,
-        ].join("\n\n"),
-        [imageRef],
-        `gs://${config().bucket}/${outputPrefix}`,
-        segment.durationSeconds,
-      );
       const asset: CinematicAsset = {
         id: assetId,
         projectId: project.id,
@@ -316,20 +480,42 @@ async function handler(req: Request, context: { params: Promise<{ path?: string[
         model: project.models.video,
         prompt,
         inputRefs: [imageId],
-        state: "waiting",
-        operation,
+        state: "submitting",
+        planRevision: planRevision(project),
         outputPrefix,
         segmentNumber: number,
         createdAt: Date.now(),
       };
-      await ref.collection("assets").doc(assetId).set(asset);
-      return json(asset, 202);
+      const existing = await reserveGeneration(project, assetId, asset);
+      if (existing) {
+        assert(existing.role === "segment-video" && existing.segmentNumber === number,
+          "El intento pertenece a otra generación.");
+        return json(existing, 202);
+      }
+      try {
+        const operation = await startVideo(
+          project.models.video,
+          [
+            "SOURCE CONTEXT: The supplied starting image and all described people are original fictional AI-generated adult characters for this private production. Preserve their fictional identities without inferring real-world identity.",
+            prompt,
+          ].join("\n\n"),
+          [imageRef],
+          `gs://${config().bucket}/${outputPrefix}`,
+          segment.durationSeconds,
+        );
+        await finishGeneration(project.id, assetId, { state: "waiting", operation });
+        return json({ ...asset, state: "waiting", operation }, 202);
+      } catch (error) {
+        await failGeneration(project.id, assetId, error);
+        throw error;
+      }
     }
 
     if (parts.length === 3 && parts[1] === "videos" && req.method === "GET") {
       const { doc, asset } = await readAsset(pid, parts[2]);
       assert(asset.kind === "video" && asset.role === "segment-video", "Activo de video inválido.");
       if (asset.state === "completed" || asset.state === "failed") return json(asset);
+      if (asset.state === "submitting" || asset.state === "uncertain") return json(asset);
       assert(asset.operation && asset.outputPrefix, "La operación de Veo no está registrada.");
       const result = await pollVideo(asset.model, asset.operation);
       if (!result.done) return json(asset);
@@ -341,7 +527,10 @@ async function handler(req: Request, context: { params: Promise<{ path?: string[
       const uri = result.response?.generatedVideos?.[0]?.video?.uri ||
         result.response?.videos?.[0]?.gcsUri;
       const expected = `gs://${config().bucket}/${asset.outputPrefix}`;
-      assert(typeof uri === "string" && uri.startsWith(expected), "Google devolvió un video fuera del destino esperado.");
+      if (typeof uri !== "string" || !uri.startsWith(expected) || !uri.endsWith(".mp4")) {
+        await doc.update({ state: "failed", error: "Google finalizó sin un MP4 válido en el destino esperado." });
+        return json({ ...asset, state: "failed", error: "Google finalizó sin un MP4 válido en el destino esperado." });
+      }
       const storageObject = uri.slice(`gs://${config().bucket}/`.length);
       await doc.update({ state: "completed", storageObject });
       return json({ ...asset, state: "completed", storageObject });
@@ -351,30 +540,39 @@ async function handler(req: Request, context: { params: Promise<{ path?: string[
       const assetId = cinematicId.parse(parts[2]);
       const { asset } = await readAsset(pid, assetId);
       assert(asset.state === "candidate" || asset.state === "completed", "El activo todavía no puede aprobarse.");
-      const approvedCharacters = { ...project.approvedCharacters };
-      const approvedImages = { ...project.approvedImages };
-      const approvedVideos = { ...project.approvedVideos };
-      if (asset.role === "character") {
-        assert(asset.characterId && project.plan, "Referencia de personaje inválida.");
-        approvedCharacters[asset.characterId] = asset.id;
-        for (const segment of project.plan.segments.filter(s => s.characterIds.includes(asset.characterId!))) {
-          delete approvedImages[String(segment.number)];
+      await db().runTransaction(async tx => {
+        const current = (await tx.get(ref)).data() as CinematicProject;
+        assert(!current.deleting && current.plan && (asset.planRevision || 0) === planRevision(current),
+          "Este activo pertenece a un plan anterior. Genera uno nuevo.");
+        const approvedCharacters = { ...current.approvedCharacters };
+        const approvedImages = { ...current.approvedImages };
+        const approvedVideos = { ...current.approvedVideos };
+        if (asset.role === "character" && current.approvedCharacters[asset.characterId || ""] === asset.id ||
+            asset.role === "segment-image" && current.approvedImages[String(asset.segmentNumber)] === asset.id ||
+            asset.role === "segment-video" && current.approvedVideos[String(asset.segmentNumber)] === asset.id) return;
+        if (asset.role === "character") {
+          assert(asset.characterId && current.plan.characters.some(c => c.id === asset.characterId), "Referencia de personaje inválida.");
+          approvedCharacters[asset.characterId] = asset.id;
+          for (const segment of current.plan.segments.filter(s => s.characterIds.includes(asset.characterId!))) {
+            delete approvedImages[String(segment.number)];
+            delete approvedVideos[String(segment.number)];
+          }
+        } else if (asset.role === "segment-image") {
+          const segment = current.plan.segments.find(s => s.number === asset.segmentNumber);
+          assert(segment, "Imagen de bloque inválida.");
+          assert(asset.inputRefs.length === segment.characterIds.length &&
+            segment.characterIds.every((id, i) => asset.inputRefs[i] === current.approvedCharacters[id]),
+            "Las referencias del bloque cambiaron. Genera una imagen nueva.");
+          approvedImages[String(segment.number)] = asset.id;
           delete approvedVideos[String(segment.number)];
+        } else {
+          assert(current.plan.segments.some(s => s.number === asset.segmentNumber), "Video de bloque inválido.");
+          assert(asset.inputRefs[0] === approvedImages[String(asset.segmentNumber)] && asset.inputRefs.length === 1,
+            "La imagen inicial cambió. Genera un video nuevo.");
+          approvedVideos[String(asset.segmentNumber)] = asset.id;
         }
-      } else if (asset.role === "segment-image") {
-        assert(asset.segmentNumber, "Imagen de bloque inválida.");
-        approvedImages[String(asset.segmentNumber)] = asset.id;
-        delete approvedVideos[String(asset.segmentNumber)];
-      } else {
-        assert(asset.segmentNumber, "Video de bloque inválido.");
-        approvedVideos[String(asset.segmentNumber)] = asset.id;
-      }
-      await ref.update({
-        approvedCharacters,
-        approvedImages,
-        approvedVideos,
-        final: null,
-        updatedAt: Date.now(),
+        tx.update(ref, { approvedCharacters, approvedImages, approvedVideos,
+          revision: revision(current) + 1, final: null, updatedAt: Date.now() });
       });
       return json({ ok: true });
     }
@@ -382,37 +580,82 @@ async function handler(req: Request, context: { params: Promise<{ path?: string[
     if (parts.length === 2 && parts[1] === "finalize" && req.method === "POST") {
       assert(project.plan, "Falta el plan cinematográfico.");
       validateCinematicPlan(project.plan, project.durationSeconds);
-      for (const segment of project.plan.segments) {
-        const videoId = project.approvedVideos[String(segment.number)];
-        assert(videoId, `Aprueba el video del bloque ${segment.number} antes de ensamblar.`);
-        const asset = (await ref.collection("assets").doc(videoId).get()).data() as CinematicAsset | undefined;
-        assert(asset?.state === "completed" && asset.storageObject, `El video aprobado del bloque ${segment.number} no está disponible.`);
-      }
-      if (project.activeFinalizeJobId) {
-        const active = (await db().doc(`cinematicJobs/${project.activeFinalizeJobId}`).get()).data() as CinematicFinalizeJob | undefined;
-        if (active && ["queued", "running"].includes(active.state))
-          throw new AppError("ACTIVE_JOB", "Ya hay un ensamblado cinematográfico en ejecución.", 409);
-      }
       const jobId = randomUUID();
       const now = Date.now();
-      const job: CinematicFinalizeJob = {
-        id: jobId,
-        projectId: project.id,
-        state: "queued",
-        error: null,
-        createdAt: now,
-        updatedAt: now,
-      };
-      await db().doc(`cinematicJobs/${jobId}`).create(job);
-      await ref.update({ activeFinalizeJobId: jobId, updatedAt: now });
+      const jobRef = db().doc(`cinematicJobs/${jobId}`);
+      const job = await db().runTransaction(async tx => {
+        const current = (await tx.get(ref)).data() as CinematicProject;
+        assert(!current.deleting && !current.activeFinalizeJobId && !current.activeGenerationId,
+          "Hay un ensamblado o una generación en curso.");
+        assert(current.plan && planRevision(current) === planRevision(project), "El plan cambió.");
+        const plan = validateCinematicPlan(current.plan, current.durationSeconds);
+        const ids = plan.segments.map(s => current.approvedVideos[String(s.number)]);
+        assert(ids.every(Boolean), "Aprueba todos los videos antes de ensamblar.");
+        const snapshots = await Promise.all(ids.map(id => tx.get(ref.collection("assets").doc(id))));
+        const segments = plan.segments.map((s, i) => {
+          const asset = snapshots[i].data() as CinematicAsset | undefined;
+          assert(asset?.state === "completed" && asset.role === "segment-video" && asset.segmentNumber === s.number &&
+            asset.storageObject && (asset.planRevision || 0) === planRevision(current) &&
+            asset.inputRefs[0] === current.approvedImages[String(s.number)],
+            `El video aprobado del bloque ${s.number} no está vigente.`);
+          return { number: s.number, assetId: asset.id, storageObject: asset.storageObject, durationSeconds: s.durationSeconds };
+        });
+        const created: CinematicFinalizeJob = {
+          id: jobId, projectId: pid, state: "queued", dispatchState: "pending", dispatchAttemptAt: now,
+          revision: revision(current), planRevision: planRevision(current),
+          durationSeconds: current.durationSeconds, segments, error: null, createdAt: now, updatedAt: now,
+        };
+        tx.create(jobRef, created);
+        tx.update(ref, { activeFinalizeJobId: jobId, lastFinalizeJobId: jobId, updatedAt: now });
+        return created;
+      });
       try {
         await dispatchFinalize(job);
       } catch (error) {
         const safe = safeError(error);
-        await db().doc(`cinematicJobs/${jobId}`).update({ state: "failed", error: safe, updatedAt: Date.now() });
+        const definite = ["WORKER_ACCESS", "WORKER_UPDATE", "PROVIDER_REJECTED", "PROVIDER_AUTH", "QUOTA"].includes(safe.code);
+        await db().runTransaction(async tx => {
+          const current = (await tx.get(ref)).data() as CinematicProject;
+          tx.update(jobRef, { dispatchState: definite ? "failed" : "uncertain",
+            ...(definite ? { state: "failed" } : {}), error: safe, updatedAt: Date.now() });
+          if (definite && current.activeFinalizeJobId === jobId)
+            tx.update(ref, { activeFinalizeJobId: null });
+        });
         throw error;
       }
       return json(job, 202);
+    }
+
+    if (parts.length === 4 && parts[1] === "finalize" && parts[3] === "recover" && req.method === "POST") {
+      assert((await requestJson(req)).acknowledge === true, "Confirma la revisión antes de reenviar el ensamblado.");
+      const jobId = cinematicId.parse(parts[2]);
+      const jobRef = db().doc(`cinematicJobs/${jobId}`);
+      const job = await db().runTransaction(async tx => {
+        const [projectDoc, jobDoc] = await Promise.all([tx.get(ref), tx.get(jobRef)]);
+        const current = projectDoc.data() as CinematicProject;
+        const old = jobDoc.data() as CinematicFinalizeJob | undefined;
+        assert(old?.projectId === pid && current.activeFinalizeJobId === jobId &&
+          ["queued", "running"].includes(old.state), "El trabajo ya no está pendiente.");
+        assert(Date.now() - (old.dispatchAttemptAt || old.createdAt) > 70 * 60 * 1000 &&
+          (old.leaseUntil || 0) < Date.now(), "La ejecución anterior todavía puede estar activa.");
+        tx.update(jobRef, { state: "queued", leaseOwner: null, dispatchState: "pending",
+          dispatchAttemptAt: Date.now(), updatedAt: Date.now() });
+        return old;
+      });
+      try { await dispatchFinalize(job); }
+      catch (error) {
+        const safe = safeError(error);
+        const definite = ["WORKER_ACCESS", "WORKER_UPDATE", "PROVIDER_REJECTED", "PROVIDER_AUTH", "QUOTA"].includes(safe.code);
+        await db().runTransaction(async tx => {
+          const current = (await tx.get(ref)).data() as CinematicProject;
+          tx.update(jobRef, { dispatchState: definite ? "failed" : "uncertain",
+            ...(definite ? { state: "failed" } : {}), error: safe, updatedAt: Date.now() });
+          if (definite && current.activeFinalizeJobId === jobId)
+            tx.update(ref, { activeFinalizeJobId: null });
+        });
+        throw error;
+      }
+      return json({ state: "queued", jobId }, 202);
     }
 
     if (parts.length === 3 && parts[1] === "media" && req.method === "GET") {
@@ -428,6 +671,8 @@ async function handler(req: Request, context: { params: Promise<{ path?: string[
 
     throw new AppError("NOT_FOUND", "Ruta cinematográfica no encontrada.", 404);
   } catch (error) {
+    if (error instanceof z.ZodError)
+      return json({ error: { code: "VALIDATION", message: error.issues[0]?.message || "Datos inválidos." } }, 400);
     const safe = safeError(error);
     const status = error instanceof AppError ? error.status : 500;
     return json({ error: safe }, status);

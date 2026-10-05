@@ -1,5 +1,9 @@
 # Auditoría de implementación en desarrollo
 
+## Corrección de alcance — 5 de octubre de 2026
+
+La tabla histórica de abajo refleja el estado y las pruebas de septiembre y no certifica el estado actual. El montaje del flujo de 64 segundos usa copia de streams solo cuando los ocho clips comparten códecs, dimensiones y tiempos; normaliza los incompatibles y valida su resultado. El flujo Cinemático siempre normaliza y valida audio, video y continuidad temporal. Las verificaciones locales y simuladas no acreditan generación real con Google, despliegue en Vercel ni reproducción física en móvil.
+
 ## Publicación y preparación de despliegue — 27 de septiembre de 2026
 
 Esta sección sustituye los bloqueos históricos de publicación que figuran más abajo. **El código ya está publicado en main; Vercel y Google Cloud siguen pendientes de instalación y prueba real.**
