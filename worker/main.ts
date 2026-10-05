@@ -438,23 +438,33 @@ export async function execute(jobId: string, direct = false): Promise<"continue"
       const uri = recoveredObject
         ? bucketPrefix + recoveredObject
         : providerUri;
-      if (typeof uri === "string" && uri.startsWith(expected)) {
-        object = uri.slice(bucketPrefix.length);
+      if (typeof uri === "string" && uri.startsWith(bucketPrefix) && !uri.includes("..")) {
+        // The completed Veo operation is authoritative for this exact paid
+        // request. Accept the MP4 Google says it generated even if Google chose
+        // a different object name/prefix than outputGcsUri. The bucket itself
+        // remains a hard trust boundary: never read another bucket or URL.
+        const candidateObject = uri.slice(bucketPrefix.length);
+        const candidateFile = privateObject(candidateObject);
+        const [exists] = await candidateFile.exists();
+        if (!exists)
+          throw new AppError(
+            "OPERATION_PENDING",
+            "Veo terminó el video, pero Google todavía no permite leer el MP4 devuelto. Reanudar comprobará el mismo archivo sin generar otro video.",
+            503,
+          );
+        object = candidateObject;
       } else {
-        // Veo may return a canonicalized/different GCS URI even though the
-        // requested storageUri was our private attempt prefix. Never trust or
-        // read that foreign URI. Reconcile against OUR bucket destination,
-        // which is the source of truth and cannot charge another generation.
+        // If the response omitted a usable URI, fall back to the exact private
+        // destination requested for this attempt.
         const reconciledObject = await recoverVideo(job.projectId, versionId);
         if (!reconciledObject) {
           await checkpoint("providerReturnedUri", typeof uri === "string" ? {
-            outsideExpectedPrefix: true,
-            // Store no bucket/object path from an unexpected provider URI.
+            unusableUri: true,
             observedAt: Date.now(),
           } : { missing: true, observedAt: Date.now() });
           throw new AppError(
             "OPERATION_PENDING",
-            "Veo terminó la operación, pero el MP4 todavía no aparece en el destino solicitado. Reanudar volverá a comprobar el mismo resultado sin generar otro video.",
+            "Veo terminó la operación, pero todavía no devolvió un MP4 legible. Reanudar comprobará el mismo resultado sin generar otro video.",
             503,
           );
         }
