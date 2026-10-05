@@ -47,7 +47,7 @@ export default function CinematicStudio() {
   const [durationSeconds, setDurationSeconds] = useState<30 | 60 | 90>(30);
   const [language, setLanguage] = useState("Español");
   const [accent, setAccent] = useState("Latinoamericano");
-  const [models, setModels] = useState({ ...DEFAULT_MODELS });
+  const [models, setModels] = useState<{ text: string; image: string; video: string }>({ ...DEFAULT_MODELS });
 
   const loadList = useCallback(async () => {
     setItems(await cinematicApi());
