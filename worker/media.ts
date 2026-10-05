@@ -123,109 +123,87 @@ function signature(p: Probe) {
 }
 export async function assemble(dir: string, files: string[]) {
   assert(files.length === 8, "Se requieren ocho archivos.");
-  let reports: Probe[];
-  try {
-    reports = await Promise.all(files.map(probe));
-    reports.forEach((r) => validateMedia(r, 8));
-  } catch (e) {
-    if (e instanceof AppError) throw e;
-    throw new AppError("ASSEMBLY_INPUT", `No se pudo leer uno de los ocho clips para el ensamblaje: ${String((e as Error)?.message || e).split("\n")[0].slice(0, 500)}`, 422);
-  }
-  let normalized = false;
-  let inputs = files;
-  if (!reports.every((r) => signature(r) === signature(reports[0]))) {
-    normalized = true;
-    inputs = [];
-    for (let i = 0; i < files.length; i++) {
+  // Final assembly is a mechanical export of eight USER-APPROVED clips.
+  // Do not re-apply the strict per-generation validator here. Veo outputs may
+  // differ slightly in duration, timestamps, codecs or audio layout while
+  // remaining perfectly usable. Normalize every approved clip to one stable
+  // technical format, then concatenate in the supplied 1..8 order.
+  const reports: Probe[] = [];
+  const normalizedFiles: string[] = [];
+  for (let i = 0; i < files.length; i++) {
+    try {
+      const sourceReport = await probe(files[i]);
+      const hasVideo = sourceReport.streams.some(s => s.codec_type === "video");
+      const hasAudio = sourceReport.streams.some(s => s.codec_type === "audio");
+      assert(hasVideo, `El clip ${i + 1} no contiene video.`);
+      reports.push(sourceReport);
       const output = path.join(dir, `normalized-${i}.mp4`);
-      try {
-        await exec(
-          "ffmpeg",
-          [
-            "-v",
-            "error",
-            "-y",
-            "-i",
-            files[i],
-            "-map",
-            "0:v:0",
-            "-map",
-            "0:a:0",
-            "-c:v",
-            "libx264",
-            "-pix_fmt",
-            "yuv420p",
-            "-vf",
-            "scale=720:1280,fps=24",
-            "-c:a",
-            "aac",
-            "-ar",
-            "48000",
-            "-ac",
-            "2",
-            output,
-          ],
-          { timeout: 300000 },
-        );
-      } catch (e) {
-        const err = e as { stderr?: string; message?: string };
-        throw new AppError("ASSEMBLY_NORMALIZE", `No se pudo normalizar el clip ${i + 1}: ${String(err.stderr || err.message || e).split("\n").filter(Boolean).slice(-1)[0]?.slice(0, 500) || "FFmpeg falló"}`, 422);
+      const args = [
+        "-v", "error", "-y", "-i", files[i],
+        "-map", "0:v:0",
+        ...(hasAudio ? ["-map", "0:a:0"] : []),
+        "-c:v", "libx264", "-pix_fmt", "yuv420p",
+        "-vf", "scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2,fps=24",
+        "-c:a", "aac", "-ar", "48000", "-ac", "2",
+        "-af", "aresample=async=1:first_pts=0",
+        "-t", "8",
+        "-movflags", "+faststart",
+        output,
+      ];
+      // Approved clips should normally contain native audio. If an old clip
+      // does not, add silence rather than making the entire approved chapter
+      // impossible to export.
+      if (!hasAudio) {
+        args.splice(6, 0, "-f", "lavfi", "-t", "8", "-i", "anullsrc=r=48000:cl=stereo");
+        const mapIndex = args.indexOf("-c:v");
+        args.splice(mapIndex, 0, "-map", "1:a:0");
       }
-      validateMedia(await probe(output), 8);
-      inputs.push(output);
+      await exec("ffmpeg", args, { timeout: 300000 });
+      normalizedFiles.push(output);
+    } catch (e) {
+      if (e instanceof AppError) throw e;
+      const err = e as { stderr?: string; message?: string };
+      throw new AppError("ASSEMBLY_NORMALIZE", `No se pudo preparar el clip aprobado ${i + 1}: ${String(err.stderr || err.message || e).split("\n").filter(Boolean).slice(-1)[0]?.slice(0, 500) || "FFmpeg falló"}`, 422);
     }
   }
   const manifest = path.join(dir, "clips.ffconcat");
   await writeFile(
     manifest,
     "ffconcat version 1.0\n" +
-      inputs
-        .map((f) => {
-          const n = path.basename(f);
-          assert(/^[a-zA-Z0-9_.-]+$/.test(n), "Nombre de archivo inválido");
-          return `file '${n}'`;
-        })
-        .join("\n"),
+      normalizedFiles.map((f) => `file '${path.basename(f)}'`).join("\n"),
   );
   const output = path.join(dir, "final.mp4");
   try {
-    await exec(
-      "ffmpeg",
-      [
-        "-v",
-        "error",
-        "-y",
-        "-f",
-        "concat",
-        "-safe",
-        "1",
-        "-i",
-        manifest,
-        "-map",
-        "0:v:0",
-        "-map",
-        "0:a:0",
-        "-c",
-        "copy",
-        "-movflags",
-        "+faststart",
-        output,
-      ],
-      { timeout: 300000 },
-    );
+    await exec("ffmpeg", [
+      "-v", "error", "-y",
+      "-f", "concat", "-safe", "1", "-i", manifest,
+      "-map", "0:v:0", "-map", "0:a:0",
+      "-c", "copy", "-movflags", "+faststart", output,
+    ], { timeout: 300000 });
   } catch (e) {
     const err = e as { stderr?: string; message?: string };
-    throw new AppError("ASSEMBLY_FFMPEG", `FFmpeg no pudo unir los ocho clips: ${String(err.stderr || err.message || e).split("\n").filter(Boolean).slice(-1)[0]?.slice(0, 500) || "error desconocido"}`, 422);
+    throw new AppError("ASSEMBLY_FFMPEG", `No se pudieron unir los ocho clips aprobados: ${String(err.stderr || err.message || e).split("\n").filter(Boolean).slice(-1)[0]?.slice(0, 500) || "FFmpeg falló"}`, 422);
   }
-  const report = validateMedia(await probe(output), 64);
-  const timeline = await validateTimeline(output, report.toleranceSeconds);
+  const finalProbe = await probe(output);
+  const video = finalProbe.streams.find(s => s.codec_type === "video");
+  const audio = finalProbe.streams.find(s => s.codec_type === "audio");
+  assert(video && audio, "La exportación final no contiene video y audio.");
   return {
     output,
     report: {
-      ...report,
-      normalized,
-      timeline,
-      clips: reports.map((r) => validateMedia(r, 8)),
+      duration: Number(finalProbe.format.duration),
+      width: video.width,
+      height: video.height,
+      audioCodec: audio.codec_name,
+      videoCodec: video.codec_name,
+      normalized: true,
+      order: [1,2,3,4,5,6,7,8],
+      clips: reports.map((r, i) => ({
+        clip: i + 1,
+        sourceDuration: Number(r.format.duration),
+        videoCodec: r.streams.find(s => s.codec_type === "video")?.codec_name,
+        audioCodec: r.streams.find(s => s.codec_type === "audio")?.codec_name || null,
+      })),
     },
   };
 }
