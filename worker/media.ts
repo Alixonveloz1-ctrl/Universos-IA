@@ -123,64 +123,69 @@ function signature(p: Probe) {
 }
 export async function assemble(dir: string, files: string[]) {
   assert(files.length === 8, "Se requieren ocho archivos.");
-  // Final assembly is a mechanical export of eight USER-APPROVED clips.
-  // Do not re-apply the strict per-generation validator here. Veo outputs may
-  // differ slightly in duration, timestamps, codecs or audio layout while
-  // remaining perfectly usable. Normalize every approved clip to one stable
-  // technical format, then concatenate in the supplied 1..8 order.
   const reports: Probe[] = [];
-  const normalizedFiles: string[] = [];
   for (let i = 0; i < files.length; i++) {
     try {
-      const sourceReport = await probe(files[i]);
-      const hasVideo = sourceReport.streams.some(s => s.codec_type === "video");
-      const hasAudio = sourceReport.streams.some(s => s.codec_type === "audio");
-      assert(hasVideo, `El clip ${i + 1} no contiene video.`);
-      assert(hasAudio, `El clip ${i + 1} no contiene audio. Revisa ese clip antes de unir el capítulo.`, "MISSING_AUDIO");
-      reports.push(sourceReport);
-      const output = path.join(dir, `normalized-${i}.mp4`);
-      const args = [
-        "-v", "error", "-y", "-i", files[i],
-        "-map", "0:v:0",
-        "-map", "0:a:0",
-        "-c:v", "libx264", "-pix_fmt", "yuv420p",
-        "-vf", "scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2,fps=24",
-        "-c:a", "aac", "-ar", "48000", "-ac", "2",
-        "-af", "aresample=async=1:first_pts=0",
-        "-t", "8",
-        "-movflags", "+faststart",
-        output,
-      ];
-      await exec("ffmpeg", args, { timeout: 300000 });
-      normalizedFiles.push(output);
+      const report = await probe(files[i]);
+      assert(report.streams.some(s => s.codec_type === "video"), `El clip ${i + 1} no contiene video.`);
+      assert(report.streams.some(s => s.codec_type === "audio"), `El clip ${i + 1} no contiene audio. Revisa ese clip antes de unir el capítulo.`, "MISSING_AUDIO");
+      reports.push(report);
     } catch (e) {
       if (e instanceof AppError) throw e;
-      const err = e as { stderr?: string; message?: string };
-      throw new AppError("ASSEMBLY_NORMALIZE", `No se pudo preparar el clip aprobado ${i + 1}: ${String(err.stderr || err.message || e).split("\n").filter(Boolean).slice(-1)[0]?.slice(0, 500) || "FFmpeg falló"}`, 422);
+      throw new AppError("ASSEMBLY_INPUT", `No se pudo leer el clip aprobado ${i + 1}: ${String((e as Error)?.message || e).split("\n")[0].slice(0, 500)}`, 422);
     }
   }
-  const manifest = path.join(dir, "clips.ffconcat");
-  await writeFile(
-    manifest,
-    "ffconcat version 1.0\n" +
-      normalizedFiles.map((f) => `file '${path.basename(f)}'`).join("\n"),
-  );
+
+  // One FFmpeg pass: decode all eight approved clips, normalize only transport
+  // properties, concatenate in strict 1..8 order, and encode one final MP4.
+  // This avoids fragile intermediate files and concat-demuxer codec/timestamp
+  // assumptions while preserving every clip's original audible content.
+  const filters: string[] = [];
+  for (let i = 0; i < files.length; i++) {
+    filters.push(
+      `[${i}:v:0]scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2,fps=24,setsar=1,setpts=PTS-STARTPTS[v${i}]`,
+      `[${i}:a:0]aresample=48000:async=1:first_pts=0,aformat=sample_rates=48000:channel_layouts=stereo,asetpts=PTS-STARTPTS[a${i}]`,
+    );
+  }
+  const concatInputs = files.map((_, i) => `[v${i}][a${i}]`).join("");
+  filters.push(`${concatInputs}concat=n=8:v=1:a=1[outv][outa]`);
+
   const output = path.join(dir, "final.mp4");
+  const args = [
+    "-v", "error", "-y",
+    ...files.flatMap(file => ["-i", file]),
+    "-filter_complex", filters.join(";"),
+    "-map", "[outv]",
+    "-map", "[outa]",
+    "-c:v", "libx264",
+    "-pix_fmt", "yuv420p",
+    "-c:a", "aac",
+    "-ar", "48000",
+    "-ac", "2",
+    "-movflags", "+faststart",
+    output,
+  ];
   try {
-    await exec("ffmpeg", [
-      "-v", "error", "-y",
-      "-f", "concat", "-safe", "1", "-i", manifest,
-      "-map", "0:v:0", "-map", "0:a:0",
-      "-c", "copy", "-movflags", "+faststart", output,
-    ], { timeout: 300000 });
+    await exec("ffmpeg", args, { timeout: 600000, maxBuffer: 8 * 1024 * 1024 });
   } catch (e) {
     const err = e as { stderr?: string; message?: string };
-    throw new AppError("ASSEMBLY_FFMPEG", `No se pudieron unir los ocho clips aprobados: ${String(err.stderr || err.message || e).split("\n").filter(Boolean).slice(-1)[0]?.slice(0, 500) || "FFmpeg falló"}`, 422);
+    throw new AppError(
+      "ASSEMBLY_FFMPEG",
+      `FFmpeg no pudo unir los ocho clips aprobados: ${String(err.stderr || err.message || e).split("\n").filter(Boolean).slice(-1)[0]?.slice(0, 700) || "error desconocido"}`,
+      422,
+    );
   }
-  const finalProbe = await probe(output);
+
+  let finalProbe: Probe;
+  try {
+    finalProbe = await probe(output);
+  } catch (e) {
+    throw new AppError("ASSEMBLY_OUTPUT", `El MP4 final se creó pero no pudo verificarse: ${String((e as Error)?.message || e).split("\n")[0].slice(0, 500)}`, 422);
+  }
   const video = finalProbe.streams.find(s => s.codec_type === "video");
   const audio = finalProbe.streams.find(s => s.codec_type === "audio");
   assert(video && audio, "La exportación final no contiene video y audio.");
+
   return {
     output,
     report: {
@@ -190,7 +195,8 @@ export async function assemble(dir: string, files: string[]) {
       audioCodec: audio.codec_name,
       videoCodec: video.codec_name,
       normalized: true,
-      order: [1,2,3,4,5,6,7,8],
+      assembly: "single-pass-concat-filter",
+      order: [1, 2, 3, 4, 5, 6, 7, 8],
       clips: reports.map((r, i) => ({
         clip: i + 1,
         sourceDuration: Number(r.format.duration),
@@ -200,6 +206,7 @@ export async function assemble(dir: string, files: string[]) {
     },
   };
 }
+
 export async function lastFrame(file: string, out: string) {
   const p = await probe(file);
   const frames = Number(
