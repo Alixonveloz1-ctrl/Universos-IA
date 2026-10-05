@@ -49,6 +49,7 @@ export async function generateCinematicPlan(input: CinematicProjectInput) {
       planPrompt(input, repair),
       z.toJSONSchema(cinematicPlan),
       32768,
+      130000, // Two repair attempts must fit inside the 300-second web function.
     );
     try {
       return validateCinematicPlan(result, input.durationSeconds);

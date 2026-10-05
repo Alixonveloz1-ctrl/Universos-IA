@@ -217,7 +217,10 @@ async function dispatchFinalize(job: CinematicFinalizeJob) {
         timeout: "3600s",
       },
     },
+    true, // A transport error or 5xx can occur after Cloud Run accepted the job.
   );
+  if (typeof run.name !== "string" || !run.name)
+    throw new AppError("AMBIGUOUS", "Cloud Run pudo aceptar el trabajo sin devolver su operación.", 502);
   const executionName = typeof run.metadata?.name === "string" &&
     run.metadata.name.startsWith(`${resource}/executions/`) ? run.metadata.name : undefined;
   await db().doc(`cinematicJobs/${job.id}`).update({
