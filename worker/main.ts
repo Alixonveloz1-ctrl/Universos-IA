@@ -6,7 +6,7 @@ import path from "node:path";
 import sharp from "sharp";
 import type { Transaction } from "@google-cloud/firestore";
 import type { SaveOptions } from "@google-cloud/storage";
-import { db, privateObject, objectPath, googleAuth } from "../lib/persistence/google";
+import { db, privateObject, objectPath, projectObjectPath, googleAuth } from "../lib/persistence/google";
 import { imageLimits } from "../lib/models";
 import { imageReferenceIds } from "../lib/continuity/rules";
 import { config } from "../lib/config";
@@ -307,7 +307,7 @@ export async function execute(jobId: string, direct = false): Promise<"continue"
         "image/webp": "webp",
       }[mime];
       assert(extension, "MIME desconocido");
-      object = objectPath(job.projectId, versionId, "image." + extension);
+      object = projectObjectPath(s.project.universeSnapshot.name || s.project.title, job.projectId, s.project.chapterNumber || 1, versionId, "image." + extension);
       await guarded({}, true);
       if (!recovered)
         await saveVerifiedObject(object, result.bytes, {
@@ -372,7 +372,7 @@ export async function execute(jobId: string, direct = false): Promise<"continue"
           s.project.models.video,
           prompt,
           refs,
-          `gs://${config().bucket}/${objectPath(job.projectId, versionId, "provider")}/`,
+          `gs://${config().bucket}/${projectObjectPath(s.project.universeSnapshot.name || s.project.title, job.projectId, s.project.chapterNumber || 1, versionId, "provider")}/`,
         );
         await checkpoint("operation", operation);
         await guarded({ state: "waiting" }, true);
@@ -420,7 +420,7 @@ export async function execute(jobId: string, direct = false): Promise<"continue"
           "Veo sigue procesando. Reanudar consultará la misma operación.",
           503,
         );
-      const providerPrefix = objectPath(job.projectId, versionId, "provider") + "/";
+      const providerPrefix = projectObjectPath(s.project.universeSnapshot.name || s.project.title, job.projectId, s.project.chapterNumber || 1, versionId, "provider") + "/";
       const bucketPrefix = `gs://${config().bucket}/`;
       const expected = bucketPrefix + providerPrefix;
       // Vertex/Veo response shapes differ between API generations.
@@ -479,7 +479,7 @@ export async function execute(jobId: string, direct = false): Promise<"continue"
       };
       const frame = path.join(dir, "last.png");
       await lastFrame(file, frame);
-      lastFrameObject = objectPath(job.projectId, versionId, "last.png");
+      lastFrameObject = projectObjectPath(s.project.universeSnapshot.name || s.project.title, job.projectId, s.project.chapterNumber || 1, versionId, "last.png");
       await saveVerifiedObject(lastFrameObject, await readFile(frame), {
         resumable: false,
         metadata: { contentType: "image/png" },
@@ -646,8 +646,8 @@ export async function execute(jobId: string, direct = false): Promise<"continue"
       }
       const r = await assemble(dir, files);
       await guarded();
-      const object = objectPath(job.projectId, job.id, "final.mp4"),
-        reportObject = objectPath(job.projectId, job.id, "report.json");
+      const object = projectObjectPath(s.project.universeSnapshot.name || s.project.title, job.projectId, s.project.chapterNumber || 1, job.id, "final.mp4"),
+        reportObject = projectObjectPath(s.project.universeSnapshot.name || s.project.title, job.projectId, s.project.chapterNumber || 1, job.id, "report.json");
       await saveVerifiedObject(object, await readFile(r.output), {
         resumable: false,
         metadata: { contentType: "video/mp4" },
