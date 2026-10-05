@@ -454,6 +454,10 @@ summary {
   border-radius: 18px;
   background: #0b1423;
 }
+.universe-heading {
+  margin: 0;
+  font-size: inherit;
+}
 .universe-open {
   width: 100%;
   padding: 0;

@@ -911,6 +911,7 @@ export default function Studio() {
                 const latest = chapters[chapters.length - 1];
                 const name = chapters[0].universeName || chapters[0].title;
                 return <section className="universe-card" key={universeId}>
+                  <h3 className="universe-heading" aria-label={name}>
                   <button
                     className="universe-open"
                     onClick={() => void perform(async () => { await refresh(latest.id); setTab("Historia"); })}
@@ -925,6 +926,7 @@ export default function Studio() {
                       <small>Capítulo {latest.chapterNumber || 1} · {latest.title}</small>
                     </span>
                   </button>
+                  </h3>
                   <details className="universe-menu">
                     <summary aria-label={`Opciones de ${name}`}>•••</summary>
                     <div>
@@ -1033,7 +1035,7 @@ export default function Studio() {
                   }[data.job.state]
                 }
               </strong>
-              {data.job.error && data.job.state !== "needsReview" && <p role="alert">{data.job.error.message}</p>}
+              {data.job.error && <p role="alert">{data.job.error.message}</p>}
               {data.job.state === "needsReview" && <p>La aplicación está comprobando y cerrando automáticamente el intento anterior antes de continuar.</p>}
               {data.job.state === "queued" && !data.job.error && <p>{data.job.hasOperation ? "Google ya recibió el video. Esperando el resultado para procesarlo." : data.job.backend === "direct" ? "Preparando el siguiente paso de la generación." : "Preparando el procesamiento de archivos de video."}</p>}
               <div className="actions">
