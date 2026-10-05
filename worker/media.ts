@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import path from "node:path";
+import { writeFile } from "node:fs/promises";
 import { AppError, assert } from "../lib/errors";
 const exec = promisify(execFile);
 export interface Probe {
@@ -106,86 +107,53 @@ export function validateMedia(p: Probe, duration: number) {
 }
 export async function assemble(dir: string, files: string[]) {
   assert(files.length === 8, "Se requieren ocho archivos.");
-  const reports: Probe[] = [];
-  for (let i = 0; i < files.length; i++) {
-    try {
-      const report = await probe(files[i]);
-      assert(report.streams.some(s => s.codec_type === "video"), `El clip ${i + 1} no contiene video.`);
-      assert(report.streams.some(s => s.codec_type === "audio"), `El clip ${i + 1} no contiene audio. Revisa ese clip antes de unir el capítulo.`, "MISSING_AUDIO");
-      reports.push(report);
-    } catch (e) {
-      if (e instanceof AppError) throw e;
-      throw new AppError("ASSEMBLY_INPUT", `No se pudo leer el clip aprobado ${i + 1}: ${String((e as Error)?.message || e).split("\n")[0].slice(0, 500)}`, 422);
-    }
-  }
 
-  // One FFmpeg pass: decode all eight approved clips, normalize only transport
-  // properties, concatenate in strict 1..8 order, and encode one final MP4.
-  // This avoids fragile intermediate files and concat-demuxer codec/timestamp
-  // assumptions while preserving every clip's original audible content.
-  const filters: string[] = [];
-  for (let i = 0; i < files.length; i++) {
-    filters.push(
-      `[${i}:v:0]scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2,fps=24,setsar=1,setpts=PTS-STARTPTS[v${i}]`,
-      `[${i}:a:0]aresample=48000:async=1:first_pts=0,aformat=sample_rates=48000:channel_layouts=stereo,asetpts=PTS-STARTPTS[a${i}]`,
-    );
-  }
-  const concatInputs = files.map((_, i) => `[v${i}][a${i}]`).join("");
-  filters.push(`${concatInputs}concat=n=8:v=1:a=1[outv][outa]`);
+  // The owner has already reviewed and approved every clip. Final export does
+  // exactly one thing: concatenate the eight approved MP4 files in 1..8 order.
+  // No content review, no media validation, no normalization, no AI call.
+  const manifest = path.join(dir, "clips.ffconcat");
+  await writeFile(
+    manifest,
+    "ffconcat version 1.0\n" +
+      files
+        .map((file) => {
+          const name = path.basename(file);
+          assert(/^[a-zA-Z0-9_.-]+$/.test(name), "Nombre de archivo inválido");
+          return `file '${name}'`;
+        })
+        .join("\n"),
+  );
 
   const output = path.join(dir, "final.mp4");
-  const args = [
-    "-v", "error", "-y",
-    ...files.flatMap(file => ["-i", file]),
-    "-filter_complex", filters.join(";"),
-    "-map", "[outv]",
-    "-map", "[outa]",
-    "-c:v", "libx264",
-    "-pix_fmt", "yuv420p",
-    "-c:a", "aac",
-    "-ar", "48000",
-    "-ac", "2",
-    "-movflags", "+faststart",
-    output,
-  ];
   try {
-    await exec("ffmpeg", args, { timeout: 600000, maxBuffer: 8 * 1024 * 1024 });
+    await exec(
+      "ffmpeg",
+      [
+        "-v", "error",
+        "-y",
+        "-f", "concat",
+        "-safe", "1",
+        "-i", manifest,
+        "-c", "copy",
+        "-movflags", "+faststart",
+        output,
+      ],
+      { timeout: 600000, maxBuffer: 8 * 1024 * 1024 },
+    );
   } catch (e) {
     const err = e as { stderr?: string; message?: string };
     throw new AppError(
       "ASSEMBLY_FFMPEG",
-      `FFmpeg no pudo unir los ocho clips aprobados: ${String(err.stderr || err.message || e).split("\n").filter(Boolean).slice(-1)[0]?.slice(0, 700) || "error desconocido"}`,
+      `No se pudieron unir los ocho clips aprobados: ${String(err.stderr || err.message || e).split("\n").filter(Boolean).slice(-1)[0]?.slice(0, 700) || "FFmpeg falló"}`,
       422,
     );
   }
 
-  let finalProbe: Probe;
-  try {
-    finalProbe = await probe(output);
-  } catch (e) {
-    throw new AppError("ASSEMBLY_OUTPUT", `El MP4 final se creó pero no pudo verificarse: ${String((e as Error)?.message || e).split("\n")[0].slice(0, 500)}`, 422);
-  }
-  const video = finalProbe.streams.find(s => s.codec_type === "video");
-  const audio = finalProbe.streams.find(s => s.codec_type === "audio");
-  assert(video && audio, "La exportación final no contiene video y audio.");
-
   return {
     output,
     report: {
-      duration: Number(finalProbe.format.duration),
-      width: video.width,
-      height: video.height,
-      audioCodec: audio.codec_name,
-      videoCodec: video.codec_name,
-      normalized: true,
-      assembly: "single-pass-concat-filter",
+      assembly: "concat-copy",
       order: [1, 2, 3, 4, 5, 6, 7, 8],
-      clips: reports.map((r, i) => ({
-        clip: i + 1,
-        sourceDuration: Number(r.format.duration),
-        videoCodec: r.streams.find(s => s.codec_type === "video")?.codec_name,
-        audioCodec: r.streams.find(s => s.codec_type === "audio")?.codec_name || null,
-      })),
     },
   };
 }
