@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { db, mediaResponse, privateObject, objectPath } from "@/lib/persistence/google";
+import { db, mediaResponse, privateObject, objectPath, directVideoObjectPath } from "@/lib/persistence/google";
 import { config } from "@/lib/config";
 import {
   createProject,
@@ -303,7 +303,7 @@ async function handler(
         assert(prompt.length > 0 && prompt.length <= 12000, "El prompt debe tener entre 1 y 12000 caracteres.");
         model(modelId, "video");
         const idv = randomUUID();
-        const inputObject = objectPath("direct-video", idv, "input." + (image.type === "image/png" ? "png" : image.type === "image/webp" ? "webp" : "jpg"));
+        const inputObject = directVideoObjectPath(idv, "input." + (image.type === "image/png" ? "png" : image.type === "image/webp" ? "webp" : "jpg"));
         const imageBytes = Buffer.from(await image.arrayBuffer());
         const token = await (await import("@/lib/persistence/google")).googleAuth().getAccessToken();
         const upload = new URL(`https://storage.googleapis.com/upload/storage/v1/b/${config().bucket}/o`);
@@ -318,7 +318,7 @@ async function handler(
         });
         assert(uploaded.ok, `No se pudo guardar la imagen inicial (Google ${uploaded.status}).`, "STORAGE_UPLOAD");
         const ref: ImageRef = { bytesBase64Encoded: imageBytes.toString("base64"), mimeType: image.type };
-        const outputPrefix = objectPath("direct-video", idv, "provider") + "/";
+        const outputPrefix = directVideoObjectPath(idv, "provider") + "/";
         const directPrompt = [
           "SOURCE CONTEXT: The supplied starting image is synthetic AI-generated artwork provided by the adult user for an original fictional project. It is not supplied as a photograph of a real person or public figure. Do not infer or assign a real-world identity from visual resemblance. Treat every depicted person as an original fictional adult character. Preserve the image's fictional visual identity and follow the user's requested motion/audio instructions below.",
           prompt,
