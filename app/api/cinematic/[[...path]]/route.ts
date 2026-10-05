@@ -217,6 +217,12 @@ async function handler(req: Request, context: { params: Promise<{ path?: string[
     const { ref, project } = await readProject(pid);
 
     if (parts.length === 1) {
+      if (req.method === "PATCH") {
+        const change = z.object({ models: cinematicProjectInput.shape.models }).strict().parse(await requestJson(req));
+        for (const kind of ["text", "image", "video"] as const) model(change.models[kind], kind);
+        await ref.update({ models: change.models, updatedAt: Date.now() });
+        return json({ ok: true });
+      }
       if (req.method === "GET") {
         const assets = (await ref.collection("assets").get()).docs
           .map(d => d.data() as CinematicAsset)
@@ -430,4 +436,5 @@ async function handler(req: Request, context: { params: Promise<{ path?: string[
 
 export const GET = handler;
 export const POST = handler;
+export const PATCH = handler;
 export const DELETE = handler;
