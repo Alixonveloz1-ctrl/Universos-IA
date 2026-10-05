@@ -37,6 +37,7 @@ export function videoRequest(
   refs: ImageRef[],
   mode: "initial" | "references",
   storageUri: string,
+  durationSeconds: 4 | 6 | 8 = VIDEO.durationSeconds,
 ) {
   const m = model(id, "video");
   assert(
@@ -49,6 +50,7 @@ export function videoRequest(
       : refs.length >= 1 && refs.length <= 3,
     "Cantidad incompatible de referencias.",
   );
+  assert([4, 6, 8].includes(durationSeconds), "Duración de video no permitida.");
   return {
     instances: [
       {
@@ -63,7 +65,7 @@ export function videoRequest(
             }),
       },
     ],
-    parameters: { ...VIDEO, personGeneration: "allow_adult", storageUri },
+    parameters: { ...VIDEO, durationSeconds, personGeneration: "allow_adult", storageUri },
   };
 }
 export async function textGenerate(
@@ -183,10 +185,11 @@ export async function startVideo(
   prompt: string,
   refs: ImageRef[],
   storageUri: string,
+  durationSeconds: 4 | 6 | 8 = VIDEO.durationSeconds,
 ) {
   const r = await googlePost(
     endpoint(id, "predictLongRunning"),
-    videoRequest(id, prompt, refs, "initial", storageUri),
+    videoRequest(id, prompt, refs, "initial", storageUri, durationSeconds),
     true,
   );
   if (!r.name)
