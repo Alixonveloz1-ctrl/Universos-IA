@@ -89,7 +89,8 @@ export default function CinematicStudio() {
 
   const pendingVideoIds = useMemo(
     () => data?.assets.filter(a => a.kind === "video" && a.state === "waiting" &&
-      (a.planRevision || 0) === (data.project.planRevision || 0)).map(a => a.id).sort().join(",") || "",
+      (a.planRevision || 0) === (data.project.planRevision || 0) &&
+      a.inputRefs[0] === data.project.approvedImages[String(a.segmentNumber)]).map(a => a.id).sort().join(",") || "",
     [data],
   );
   const finalizing = !!data?.finalizeJob && ["queued", "running"].includes(data.finalizeJob.state);
@@ -228,6 +229,9 @@ export default function CinematicStudio() {
   const { project, assets } = data;
   const plan = project.plan;
   const currentAssets = assets.filter(a => (a.planRevision || 0) === (project.planRevision || 0));
+  const staleWaitingIds = assets.filter(a => a.role === "segment-video" && a.state === "waiting" &&
+    ((a.planRevision || 0) !== (project.planRevision || 0) ||
+      a.inputRefs[0] !== project.approvedImages[String(a.segmentNumber)])).map(a => a.id);
   const setProjectModel = (kind: "text" | "image" | "video", value: string) =>
     void perform(async () => {
       await cinematicApi(project.id, "PATCH", { models: { ...project.models, [kind]: value } });
@@ -283,6 +287,13 @@ export default function CinematicStudio() {
               await loadProject(project.id);
             });
           }}>Reconciliar o cerrar intento</button> : null}
+      </section>}
+      {!!staleWaitingIds.length && <section className="panel">
+        <p className="muted">Hay {staleWaitingIds.length} video(s) de aprobaciones anteriores pendientes en Google.</p>
+        <button disabled={busy} onClick={() => void perform(async () => {
+          for (const id of staleWaitingIds) await cinematicApi(`${project.id}/videos/${id}`);
+          await loadProject(project.id);
+        })}>Consultar operaciones anteriores</button>
       </section>}
 
       {plan && (
@@ -367,10 +378,13 @@ export default function CinematicStudio() {
           <section>
             <h2>Bloques cinematográficos</h2>
             {plan.segments.map(segment => {
-              const imageCandidate = latest(currentAssets, a => a.role === "segment-image" && a.segmentNumber === segment.number);
-              const videoCandidate = latest(currentAssets, a => a.role === "segment-video" && a.segmentNumber === segment.number);
               const approvedImageId = project.approvedImages[String(segment.number)];
               const approvedVideoId = project.approvedVideos[String(segment.number)];
+              const imageCandidate = latest(currentAssets, a => a.role === "segment-image" &&
+                a.segmentNumber === segment.number && a.inputRefs.length === segment.characterIds.length &&
+                segment.characterIds.every((id, i) => a.inputRefs[i] === project.approvedCharacters[id]));
+              const videoCandidate = latest(currentAssets, a => a.role === "segment-video" &&
+                a.segmentNumber === segment.number && a.inputRefs[0] === approvedImageId);
               const shownImage = imageCandidate || assets.find(a => a.id === approvedImageId);
               const shownVideo = videoCandidate || assets.find(a => a.id === approvedVideoId);
               const castReady = segment.characterIds.every(id => !!project.approvedCharacters[id]);
