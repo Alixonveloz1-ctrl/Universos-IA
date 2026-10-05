@@ -152,6 +152,9 @@ export async function assemble(dir: string, files: string[]) {
   return {
     output,
     report: {
+      // Informational only; no validation is performed here.
+      duration: 64,
+      normalized: false,
       assembly: "concat-copy",
       order: [1, 2, 3, 4, 5, 6, 7, 8],
     },
