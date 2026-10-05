@@ -95,6 +95,25 @@ export function privateObject(key: string) {
     throw new AppError("PATH", "Objeto fuera del prefijo");
   return bucket().file(key);
 }
+export async function readPrivateObject(key: string) {
+  privateObject(key);
+  const token = await googleAuth().getAccessToken();
+  const upstream = await fetch(
+    `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(config().bucket)}/o/${encodeURIComponent(key)}?alt=media`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(600000),
+    },
+  );
+  if (!upstream.ok)
+    throw new AppError(
+      "STORAGE_READ",
+      `No se pudo leer el archivo guardado (Google ${upstream.status}).`,
+      upstream.status === 404 ? 404 : 502,
+    );
+  return Buffer.from(await upstream.arrayBuffer());
+}
+
 // Serve private media through the authenticated app. WIF has access tokens,
 // not a local signing key or the metadata server expected by getSignedUrl.
 export async function mediaResponse(key: string, range: string | null = null) {
