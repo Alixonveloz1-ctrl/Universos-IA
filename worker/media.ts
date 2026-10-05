@@ -123,8 +123,14 @@ function signature(p: Probe) {
 }
 export async function assemble(dir: string, files: string[]) {
   assert(files.length === 8, "Se requieren ocho archivos.");
-  const reports = await Promise.all(files.map(probe));
-  reports.forEach((r) => validateMedia(r, 8));
+  let reports: Probe[];
+  try {
+    reports = await Promise.all(files.map(probe));
+    reports.forEach((r) => validateMedia(r, 8));
+  } catch (e) {
+    if (e instanceof AppError) throw e;
+    throw new AppError("ASSEMBLY_INPUT", `No se pudo leer uno de los ocho clips para el ensamblaje: ${String((e as Error)?.message || e).split("\n")[0].slice(0, 500)}`, 422);
+  }
   let normalized = false;
   let inputs = files;
   if (!reports.every((r) => signature(r) === signature(reports[0]))) {
@@ -132,34 +138,39 @@ export async function assemble(dir: string, files: string[]) {
     inputs = [];
     for (let i = 0; i < files.length; i++) {
       const output = path.join(dir, `normalized-${i}.mp4`);
-      await exec(
-        "ffmpeg",
-        [
-          "-v",
-          "error",
-          "-y",
-          "-i",
-          files[i],
-          "-map",
-          "0:v:0",
-          "-map",
-          "0:a:0",
-          "-c:v",
-          "libx264",
-          "-pix_fmt",
-          "yuv420p",
-          "-vf",
-          "scale=720:1280,fps=24",
-          "-c:a",
-          "aac",
-          "-ar",
-          "48000",
-          "-ac",
-          "2",
-          output,
-        ],
-        { timeout: 300000 },
-      );
+      try {
+        await exec(
+          "ffmpeg",
+          [
+            "-v",
+            "error",
+            "-y",
+            "-i",
+            files[i],
+            "-map",
+            "0:v:0",
+            "-map",
+            "0:a:0",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-vf",
+            "scale=720:1280,fps=24",
+            "-c:a",
+            "aac",
+            "-ar",
+            "48000",
+            "-ac",
+            "2",
+            output,
+          ],
+          { timeout: 300000 },
+        );
+      } catch (e) {
+        const err = e as { stderr?: string; message?: string };
+        throw new AppError("ASSEMBLY_NORMALIZE", `No se pudo normalizar el clip ${i + 1}: ${String(err.stderr || err.message || e).split("\n").filter(Boolean).slice(-1)[0]?.slice(0, 500) || "FFmpeg falló"}`, 422);
+      }
       validateMedia(await probe(output), 8);
       inputs.push(output);
     }
@@ -177,30 +188,35 @@ export async function assemble(dir: string, files: string[]) {
         .join("\n"),
   );
   const output = path.join(dir, "final.mp4");
-  await exec(
-    "ffmpeg",
-    [
-      "-v",
-      "error",
-      "-y",
-      "-f",
-      "concat",
-      "-safe",
-      "1",
-      "-i",
-      manifest,
-      "-map",
-      "0:v:0",
-      "-map",
-      "0:a:0",
-      "-c",
-      "copy",
-      "-movflags",
-      "+faststart",
-      output,
-    ],
-    { timeout: 300000 },
-  );
+  try {
+    await exec(
+      "ffmpeg",
+      [
+        "-v",
+        "error",
+        "-y",
+        "-f",
+        "concat",
+        "-safe",
+        "1",
+        "-i",
+        manifest,
+        "-map",
+        "0:v:0",
+        "-map",
+        "0:a:0",
+        "-c",
+        "copy",
+        "-movflags",
+        "+faststart",
+        output,
+      ],
+      { timeout: 300000 },
+    );
+  } catch (e) {
+    const err = e as { stderr?: string; message?: string };
+    throw new AppError("ASSEMBLY_FFMPEG", `FFmpeg no pudo unir los ocho clips: ${String(err.stderr || err.message || e).split("\n").filter(Boolean).slice(-1)[0]?.slice(0, 500) || "error desconocido"}`, 422);
+  }
   const report = validateMedia(await probe(output), 64);
   const timeline = await validateTimeline(output, report.toleranceSeconds);
   return {
