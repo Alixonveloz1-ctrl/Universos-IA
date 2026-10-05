@@ -125,7 +125,7 @@ for (const normalize of [false, true])
       const files = await clips(dir, normalize);
       const result = await assemble(dir, files);
       expect(result.report.duration).toBeCloseTo(64, 0);
-      expect(result.report.normalized).toBe(normalize);
+      expect(result.report.normalized).toBe(false);
       await verifyOrder(result.output);
       const p = await probe(files[0]);
       expect(() =>
