@@ -54,6 +54,32 @@ export function bucket() {
   });
   return storage.bucket(config().bucket);
 }
+export function readableFolderName(title: string, id: string) {
+  const safe = title
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9._ -]+/g, "")
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .slice(0, 90) || "proyecto";
+  if (!/^[a-zA-Z0-9_.-]+$/.test(id) || id.includes(".."))
+    throw new AppError("PATH", "ID de proyecto inválido");
+  return `${safe}--${id}`;
+}
+export function projectObjectPath(title: string, projectId: string, chapterNumber: number, versionId: string, name: string) {
+  for (const x of [versionId, name])
+    if (!/^[a-zA-Z0-9_.-]+$/.test(x) || x.includes(".."))
+      throw new AppError("PATH", "Ruta inválida");
+  const chapter = Math.max(1, Math.trunc(chapterNumber || 1));
+  return `${config().prefix}/proyectos/${readableFolderName(title, projectId)}/capitulo-${chapter}/${versionId}/${name}`;
+}
+export function directVideoObjectPath(id: string, name: string) {
+  for (const x of [id, name])
+    if (!/^[a-zA-Z0-9_.-]+$/.test(x) || x.includes(".."))
+      throw new AppError("PATH", "Ruta inválida");
+  return `${config().prefix}/video-libre/${id}/${name}`;
+}
 export function objectPath(projectId: string, versionId: string, name: string) {
   for (const x of [projectId, versionId, name])
     if (!/^[a-zA-Z0-9_.-]+$/.test(x) || x.includes(".."))
