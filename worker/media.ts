@@ -1,6 +1,5 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { AppError, assert } from "../lib/errors";
 const exec = promisify(execFile);
@@ -104,22 +103,6 @@ export function validateMedia(p: Probe, duration: number) {
     videoCodec: v.codec_name,
     toleranceSeconds: tolerance,
   };
-}
-function signature(p: Probe) {
-  return JSON.stringify(
-    p.streams.map((s) => ({
-      type: s.codec_type,
-      codec: s.codec_name,
-      timebase: s.time_base,
-      w: s.width,
-      h: s.height,
-      rate: s.r_frame_rate,
-      sample: s.sample_rate,
-      channels: s.channels,
-      layout: s.channel_layout,
-      pix: s.pix_fmt,
-    })),
-  );
 }
 export async function assemble(dir: string, files: string[]) {
   assert(files.length === 8, "Se requieren ocho archivos.");
