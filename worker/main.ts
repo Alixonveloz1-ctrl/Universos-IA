@@ -748,6 +748,13 @@ export async function startupCheck() {
 }
 if (process.env.WORKER_SELF_TEST === "1")
   startupCheck().catch(e => { console.error(safeError(e)); process.exitCode = 1; });
+else if (process.env.CINEMATIC_JOB_ID)
+  import("./cinematic").then(({ executeCinematicFinalize }) =>
+    executeCinematicFinalize(process.env.CINEMATIC_JOB_ID!)
+  ).catch((e) => {
+    console.error(safeError(e));
+    process.exitCode = 1;
+  });
 else if (process.env.JOB_ID)
   execute(process.env.JOB_ID).catch((e) => {
     console.error(safeError(e));

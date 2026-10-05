@@ -107,7 +107,7 @@ options:
   logging: CLOUD_LOGGING_ONLY
 BUILD
 gcloud builds submit "$build_dir" --project="$GCP_PROJECT_ID" --region="$GCP_REGION" --config="$build_dir/cloudbuild.yaml" --service-account="projects/$GCP_PROJECT_ID/serviceAccounts/$build_email" --gcs-source-staging-dir="gs://$GCS_OUTPUT_BUCKET/$GCS_PREFIX/build/source"
-gcloud run jobs deploy "$CLOUD_RUN_JOB_NAME" --project="$GCP_PROJECT_ID" --region="$GCP_REGION" --image="$image" --service-account="$worker_email" --labels=firestore-scope=universos-ia-v1,story-flow=chapters-v1,model-catalog=text-v2 --tasks=1 --parallelism=1 --max-retries=0 --task-timeout=3600s --memory=2Gi --cpu=2 --set-env-vars="GCP_PROJECT_ID=$GCP_PROJECT_ID,GCS_OUTPUT_BUCKET=$GCS_OUTPUT_BUCKET,GCS_PREFIX=$GCS_PREFIX,FIRESTORE_DATABASE_ID=$FIRESTORE_DATABASE_ID,MAX_ACTIVE_JOBS=1"
+gcloud run jobs deploy "$CLOUD_RUN_JOB_NAME" --project="$GCP_PROJECT_ID" --region="$GCP_REGION" --image="$image" --service-account="$worker_email" --labels=firestore-scope=universos-ia-v1,story-flow=chapters-v1,model-catalog=text-v2,cinematic-flow=v1 --tasks=1 --parallelism=1 --max-retries=0 --task-timeout=3600s --memory=2Gi --cpu=2 --set-env-vars="GCP_PROJECT_ID=$GCP_PROJECT_ID,GCS_OUTPUT_BUCKET=$GCS_OUTPUT_BUCKET,GCS_PREFIX=$GCS_PREFIX,FIRESTORE_DATABASE_ID=$FIRESTORE_DATABASE_ID,MAX_ACTIVE_JOBS=1"
 role_id=universosJobExecutor
 if ! gcloud iam roles list --project="$GCP_PROJECT_ID" --format='value(name)' | grep -Fxq "projects/$GCP_PROJECT_ID/roles/$role_id"; then
  gcloud iam roles create "$role_id" --project="$GCP_PROJECT_ID" --title='Universos job execution' --permissions=run.jobs.run,run.jobs.runWithOverrides,run.jobs.get

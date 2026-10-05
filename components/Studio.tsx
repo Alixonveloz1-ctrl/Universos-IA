@@ -27,6 +27,7 @@ import {
 } from "@/lib/director/catalog";
 import { MODELS, DEFAULT_MODELS } from "@/lib/models";
 import { TELENOVELA_STYLE, TELENOVELA_DESCRIPTION } from "@/lib/director/styles";
+import CinematicStudio from "./CinematicStudio";
 type Data = Snapshot & {
   narratives: Narrative[];
   exports: {
@@ -387,10 +388,7 @@ function ProjectThumbnail({
   const [url, setUrl] = useState("");
   useEffect(() => {
     let active = true;
-    if (!version) {
-      setUrl("");
-      return () => { active = false; };
-    }
+    if (!version) return () => { active = false; };
     api(`projects/${projectId}/media/${version}`)
       .then((r) => { if (active) setUrl(r.url); })
       .catch(() => { if (active) setUrl(""); });
@@ -398,7 +396,7 @@ function ProjectThumbnail({
   }, [projectId, version]);
   return (
     <div className="project-thumb">
-      {url ? (
+      {version && url ? (
         <Image unoptimized fill sizes="(max-width: 640px) 50vw, 320px" src={url} alt={title} />
       ) : (
         <span aria-hidden="true">✦</span>
@@ -423,6 +421,7 @@ export default function Studio() {
     [data, setData] = useState<Data | null>(null),
     [tab, setTab] = useState("Historia"),
     [directMode, setDirectMode] = useState(false),
+    [cinematicMode, setCinematicMode] = useState(false),
     [directImage, setDirectImage] = useState<File | null>(null),
     [directPrompt, setDirectPrompt] = useState(""),
     [directModel, setDirectModel] = useState("veo-3.1-fast-generate-001"),
@@ -639,14 +638,17 @@ export default function Studio() {
           </span>
         </div>
         <div className="actions">
-          <button onClick={() => { setData(null); setDirectMode(false); }}>Mis proyectos</button>
-          <button onClick={() => { setData(null); setDirectMode(true); }}>Video directo</button>
+          <button onClick={() => { setData(null); setDirectMode(false); setCinematicMode(false); }}>Mis proyectos</button>
+          <button onClick={() => { setData(null); setDirectMode(true); setCinematicMode(false); }}>Video directo</button>
+          <button onClick={() => { setData(null); setDirectMode(false); setCinematicMode(true); }}>Cinemático</button>
           <button
             onClick={() =>
               void perform(async () => {
                 await api("session", "DELETE");
                 setSession(false);
                 setData(null);
+                setDirectMode(false);
+                setCinematicMode(false);
               })
             }
           >
@@ -659,7 +661,9 @@ export default function Studio() {
           {error}
         </div>
       )}
-      {directMode ? (
+      {cinematicMode ? (
+        <CinematicStudio />
+      ) : directMode ? (
         <section className="panel">
           <h2>Video directo</h2>
           <label>

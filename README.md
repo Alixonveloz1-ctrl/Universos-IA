@@ -43,6 +43,10 @@ El repositorio propio es https://github.com/Alixonveloz1-ctrl/Universos-IA. Desd
 
 El instalador está escrito pero no probado en Google Cloud. Revisar nombres, permisos y proyecto destino antes de ejecutarlo. No inicia generaciones de modelos. Los nombres de Vercel y WIF son entradas del instalador; no son valores preseleccionados de otra aplicación. Conectar el repositorio nuevo a Vercel con producción desde main, configurar variables y OIDC. No presentar como terminada esta instalación hasta verificar el inicio de sesión, generación real y redeploy.
 
+## Modos de producción
+
+La aplicación conserva tres entradas independientes: el flujo de **Universos** de 64 segundos, **Video directo** y **Cinemático** para short dramas fotorealistas de 30/60/90 segundos con montaje por planos y audio nativo de Veo. El contrato del tercer modo está en [docs/CINEMATIC.md](docs/CINEMATIC.md).
+
 ## Uso
 
 1. Entrar, crear un universo, seleccionar género/subgénero/trama/tono/cierre y pedir tres ideas.

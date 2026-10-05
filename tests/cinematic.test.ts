@@ -1,0 +1,128 @@
+import { describe, expect, it } from "vitest";
+import {
+  cinematicSegmentDurations,
+  validateCinematicPlan,
+  type CinematicPlan,
+} from "../lib/cinematic/schema";
+import { compileCinematicVideoPrompt } from "../lib/cinematic/director";
+import { videoRequest } from "../lib/providers/vertex";
+
+function plan30(): CinematicPlan {
+  const durations = cinematicSegmentDurations(30);
+  return {
+    title: "La puerta",
+    premise: "Una mujer descubre una verdad detrás de una puerta cerrada.",
+    hook: "La protagonista ya está intentando abrir la puerta en el primer segundo.",
+    ending: "El rostro que encuentra dentro cambia el significado de todo.",
+    visualBible: "Premium realistic cinematic short drama, shallow depth of field, stable identities.",
+    colorAndLighting: "Warm practical key light with cool window separation.",
+    cameraLanguage: "35mm establishing, 50-70mm medium, 85-100mm reactions.",
+    editingLanguage: "Information-driven hard cuts, inserts, POV and reaction close-ups.",
+    soundBible: {
+      identity: "Restrained suspense with one continuous dramatic identity.",
+      musicPalette: "Dark intimate cinematic suspense.",
+      instrumentation: "Low cello, muted pulse and sparse piano.",
+      rhythmAndTempo: "Slow 72 BPM pulse, never restarting at visual cuts.",
+      ambienceBed: "Quiet interior room tone with distant traffic.",
+      dialogueMix: "Close intelligible production dialogue above music.",
+      effectsLanguage: "Detailed motivated Foley with brief impact accents.",
+      continuityRule: "Carry music and room tone across hard cuts and technical block boundaries.",
+    },
+    characters: [{
+      id: "mara",
+      name: "Mara",
+      role: "Protagonista",
+      age: "32",
+      gender: "Mujer",
+      visualIdentity: "Adult woman, oval face, dark wavy hair, brown eyes, stable facial geometry.",
+      wardrobe: "Dark blue tailored coat and cream blouse.",
+      lockedTraits: ["dark wavy hair", "brown eyes", "dark blue coat"],
+      voice: {
+        timbre: "warm mezzo",
+        register: "mid-low",
+        rhythm: "measured",
+        energy: "contained",
+        diction: "clear conversational",
+        expression: "tense but controlled",
+      },
+    }],
+    segments: durations.map((duration, index) => ({
+      number: index + 1,
+      durationSeconds: duration,
+      goal: `Advance revelation ${index + 1}`,
+      location: "Same apartment hallway.",
+      characterIds: ["mara"],
+      continuityIn: index === 0 ? "Mara stands at the closed door." : `state-${index}`,
+      continuityOut: `state-${index + 1}`,
+      audioContinuityIn: index === 0 ? "Low cello pulse and quiet room tone are already active." : `audio-${index}`,
+      audioContinuityOut: `audio-${index + 1}`,
+      openingFrameDirection: "Mara in controlled medium close-up facing the door.",
+      shots: [
+        {
+          id: `s${index + 1}a`,
+          start: 0,
+          end: duration / 2,
+          shotType: "medium" as const,
+          lensMm: 55,
+          camera: "locked with a shallow push-in",
+          framing: "waist-up, eyes on the door",
+          action: "Mara reaches toward the handle and listens.",
+          characterIds: ["mara"],
+          transition: "start" as const,
+          nativeAudioBeat: "room tone and restrained score continue",
+        },
+        {
+          id: `s${index + 1}b`,
+          start: duration / 2,
+          end: duration,
+          shotType: "close-up" as const,
+          lensMm: 90,
+          camera: "locked close-up",
+          framing: "face dominant",
+          action: "Her eyes register a new piece of information.",
+          characterIds: ["mara"],
+          transition: "hard-cut" as const,
+          nativeAudioBeat: "sound bridge continues over the hard cut",
+        },
+      ],
+      dialogue: [],
+      soundEffects: ["subtle clothing movement"],
+      musicDirection: "Continue the same low cello pulse without a restart.",
+    })),
+  };
+}
+
+describe("cinematic production contract", () => {
+  it("builds exact Veo-compatible technical durations", () => {
+    expect(cinematicSegmentDurations(30)).toEqual([8, 8, 8, 6]);
+    expect(cinematicSegmentDurations(60)).toEqual([8, 8, 8, 8, 8, 8, 8, 4]);
+    expect(cinematicSegmentDurations(90)).toEqual([8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 6, 4]);
+    for (const total of [30, 60, 90] as const)
+      expect(cinematicSegmentDurations(total).reduce((a, b) => a + b, 0)).toBe(total);
+  });
+
+  it("validates literal audiovisual handoffs and compiles multi-shot native audio prompts", () => {
+    const plan = validateCinematicPlan(plan30(), 30);
+    const prompt = compileCinematicVideoPrompt(plan, plan.segments[0], "Español", "Latinoamericano");
+    expect(prompt).toContain("MULTI-SHOT CINEMATIC MICROSEQUENCE");
+    expect(prompt).toContain("HARD-CUT");
+    expect(prompt).toContain("NATIVE AUDIO");
+    expect(prompt).toContain(plan.soundBible.identity);
+    expect(prompt).not.toContain("ONE CONTINUOUS TAKE");
+  });
+
+  it("passes the selected cinematic duration to Veo without changing the default contract", () => {
+    const ref = { bytesBase64Encoded: "AA==", mimeType: "image/png" };
+    const request = videoRequest(
+      "veo-3.1-fast-generate-001",
+      "cinematic test",
+      [ref],
+      "initial",
+      "gs://bucket/prefix/",
+      6,
+    );
+    expect(request.parameters.durationSeconds).toBe(6);
+    expect(request.parameters.generateAudio).toBe(true);
+    expect(request.parameters.aspectRatio).toBe("9:16");
+  });
+});
