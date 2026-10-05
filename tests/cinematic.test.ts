@@ -4,8 +4,11 @@ import {
   validateCinematicPlan,
   type CinematicPlan,
 } from "../lib/cinematic/schema";
-import { compileCinematicVideoPrompt } from "../lib/cinematic/director";
+import { compileCinematicOpeningImagePrompt, compileCinematicVideoPrompt } from "../lib/cinematic/director";
 import { videoRequest } from "../lib/providers/vertex";
+import { verifiedVideoObject } from "../lib/direct-video";
+import { currentManifest } from "../worker/cinematic";
+import type { CinematicFinalizeJob, CinematicProject } from "../lib/cinematic/types";
 
 function plan30(): CinematicPlan {
   const durations = cinematicSegmentDurations(30);
@@ -124,5 +127,49 @@ describe("cinematic production contract", () => {
     expect(request.parameters.durationSeconds).toBe(6);
     expect(request.parameters.generateAudio).toBe(true);
     expect(request.parameters.aspectRatio).toBe("9:16");
+  });
+
+  it("rejects duplicate identities and overlapping or invisible speech", () => {
+    const duplicates = plan30();
+    duplicates.characters.push({ ...duplicates.characters[0] });
+    expect(() => validateCinematicPlan(duplicates, 30)).toThrow("duplicados");
+    const overlapping = plan30();
+    overlapping.segments[0].dialogue = [
+      { characterId: "mara", text: "Primera frase", intention: "urgent", start: 1, end: 3 },
+      { characterId: "mara", text: "Segunda frase", intention: "urgent", start: 2, end: 4 },
+    ];
+    expect(() => validateCinematicPlan(overlapping, 30)).toThrow("solapa");
+    overlapping.segments[0].dialogue[1].start = 3;
+    overlapping.segments[0].shots[0].characterIds = [];
+    expect(() => validateCinematicPlan(overlapping, 30)).toThrow("hablante");
+  });
+
+  it("lists only characters visible in the opening shot", () => {
+    const plan = plan30();
+    plan.characters.push({ ...plan.characters[0], id: "leo", name: "Leo" });
+    plan.segments[0].characterIds.push("leo");
+    const prompt = compileCinematicOpeningImagePrompt(plan, plan.segments[0]);
+    expect(prompt).toContain('"name":"Mara"');
+    expect(prompt).not.toContain('"name":"Leo"');
+  });
+
+  it("accepts only an MP4 from the exact bucket and prefix", () => {
+    const outputPrefix = "isolated/video-libre/id/provider/";
+    const result = { response: { generatedVideos: [{ video: { uri: `gs://right/${outputPrefix}file.mp4` } }] } };
+    expect(verifiedVideoObject(result, "right", outputPrefix)).toBe(outputPrefix + "file.mp4");
+    expect(() => verifiedVideoObject(result, "wrong", outputPrefix)).toThrow("destino esperado");
+    expect(() => verifiedVideoObject({ response: { videos: [{ gcsUri: "gs://right/isolated/video-libre/id/provider-evil/file.mp4" }] } }, "right", outputPrefix)).toThrow();
+    expect(() => verifiedVideoObject({ response: {} }, "right", outputPrefix)).toThrow();
+  });
+
+  it("will not publish an export after any approved input changes", () => {
+    const project = { id: "p", revision: 7, planRevision: 2, activeFinalizeJobId: "j",
+      approvedVideos: { "1": "a" } } as unknown as CinematicProject;
+    const job = { id: "j", revision: 7, planRevision: 2,
+      segments: [{ number: 1, assetId: "a", storageObject: "x", durationSeconds: 8 }] } as CinematicFinalizeJob;
+    expect(currentManifest(project, job)).toBe(true);
+    expect(currentManifest({ ...project, revision: 8 }, job)).toBe(false);
+    expect(currentManifest({ ...project, approvedVideos: { "1": "b" } }, job)).toBe(false);
+    expect(currentManifest({ ...project, activeFinalizeJobId: "other" }, job)).toBe(false);
   });
 });

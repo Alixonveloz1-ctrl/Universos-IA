@@ -36,7 +36,7 @@ options:
   logging: CLOUD_LOGGING_ONLY
 BUILD
 gcloud builds submit "$build_dir" --project="$project" --region="$region" --config="$build_dir/cloudbuild.yaml" --service-account="projects/$project/serviceAccounts/universos-build@$project.iam.gserviceaccount.com" --gcs-source-staging-dir=gs://universos_ia/universos-ia/build/source
-gcloud run jobs update "$job" --project="$project" --region="$region" --image="$image" --update-labels=firestore-scope=universos-ia-v1,story-flow=chapters-v1,model-catalog=text-v2
+gcloud run jobs update "$job" --project="$project" --region="$region" --image="$image" --update-labels=firestore-scope=universos-ia-v1,story-flow=chapters-v1,model-catalog=text-v2,cinematic-flow=v1
 printf '\nComprobando el arranque y el acceso a tus datos, sin generar contenido…\n'
 if ! gcloud run jobs execute "$job" --project="$project" --region="$region" --update-env-vars=WORKER_SELF_TEST=1 --tasks=1 --task-timeout=120s --wait; then
   printf '\nFalló la comprobación. Consultando el error de esta ejecución…\n' >&2

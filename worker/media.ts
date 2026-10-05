@@ -107,10 +107,19 @@ export function validateMedia(p: Probe, duration: number) {
 }
 export async function assemble(dir: string, files: string[]) {
   assert(files.length === 8, "Se requieren ocho archivos.");
-
-  // The owner has already reviewed and approved every clip. Final export does
-  // exactly one thing: concatenate the eight approved MP4 files in 1..8 order.
-  // No content review, no media validation, no normalization, no AI call.
+  const probes = await Promise.all(files.map(probe));
+  const video = (p: Probe) => p.streams.find(s => s.codec_type === "video")!;
+  const audio = (p: Probe) => p.streams.find(s => s.codec_type === "audio")!;
+  const first = probes[0];
+  const compatible = probes.every(p => {
+    const v = video(p), a = audio(p), v0 = video(first), a0 = audio(first);
+    return v && a && v.codec_name === v0.codec_name && v.width === v0.width && v.height === v0.height &&
+      v.time_base === v0.time_base && v.r_frame_rate === v0.r_frame_rate && v.pix_fmt === v0.pix_fmt &&
+      a.codec_name === a0.codec_name && a.sample_rate === a0.sample_rate && a.channels === a0.channels &&
+      a.time_base === a0.time_base;
+  });
+  // Stream copy is safe only when all elementary streams share their layout
+  // and timing. Otherwise normalize approved content without invoking AI.
   const manifest = path.join(dir, "clips.ffconcat");
   await writeFile(
     manifest,
@@ -126,20 +135,25 @@ export async function assemble(dir: string, files: string[]) {
 
   const output = path.join(dir, "final.mp4");
   try {
-    await exec(
-      "ffmpeg",
-      [
-        "-v", "error",
-        "-y",
-        "-f", "concat",
-        "-safe", "1",
-        "-i", manifest,
-        "-c", "copy",
-        "-movflags", "+faststart",
-        output,
-      ],
-      { timeout: 600000, maxBuffer: 8 * 1024 * 1024 },
-    );
+    if (compatible) {
+      await exec("ffmpeg", ["-v", "error", "-y", "-f", "concat", "-safe", "1",
+        "-i", manifest, "-c", "copy", "-movflags", "+faststart", output],
+      { timeout: 600000, maxBuffer: 8 * 1024 * 1024 });
+    } else {
+      const rate = Math.round(fps(video(first).r_frame_rate));
+      assert(rate > 0 && rate <= 60 && video(first).width && video(first).height, "Formato inicial inválido.");
+      const filters = files.flatMap((_, i) => [
+        `[${i}:v]fps=${rate},scale=${video(first).width}:${video(first).height}:force_original_aspect_ratio=decrease,pad=${video(first).width}:${video(first).height}:(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p,tpad=stop_mode=clone:stop_duration=0.1,trim=duration=8,setpts=PTS-STARTPTS[v${i}]`,
+        `[${i}:a]aresample=async=1:first_pts=0,apad,atrim=duration=8,asetpts=PTS-STARTPTS[a${i}]`,
+      ]).join(";") + ";" + files.map((_, i) => `[v${i}][a${i}]`).join("") + "concat=n=8:v=1:a=1[v][a]";
+      await exec("ffmpeg", ["-v", "error", "-y", ...files.flatMap(file => ["-i", file]),
+        "-filter_complex", filters, "-map", "[v]", "-map", "[a]", "-c:v", "libx264",
+        "-threads", "2", "-pix_fmt", "yuv420p", "-r", String(rate), "-c:a", "aac",
+        "-ar", "48000", "-ac", "2", "-movflags", "+faststart", output],
+      { timeout: 1800000, maxBuffer: 8 * 1024 * 1024 });
+      validateMedia(await probe(output), 64);
+      await validateTimeline(output, 0.07);
+    }
   } catch (e) {
     const err = e as { stderr?: string; message?: string };
     throw new AppError(
@@ -152,10 +166,11 @@ export async function assemble(dir: string, files: string[]) {
   return {
     output,
     report: {
-      // Informational only; no validation is performed here.
+      // The approved inputs are preserved in order; incompatible streams are
+      // re-encoded to one consistent MP4 and validated.
       duration: 64,
-      normalized: false,
-      assembly: "concat-copy",
+      normalized: !compatible,
+      assembly: compatible ? "concat-copy" : "normalized-concat",
       order: [1, 2, 3, 4, 5, 6, 7, 8],
     },
   };

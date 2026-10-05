@@ -77,8 +77,8 @@ export function compileCinematicOpeningImagePrompt(
   plan: CinematicPlan,
   segment: CinematicSegment,
 ) {
-  const cast = plan.characters.filter(c => segment.characterIds.includes(c.id));
   const first = segment.shots[0];
+  const cast = plan.characters.filter(c => first.characterIds.includes(c.id));
   return [
     "Create the EXACT opening frame for one cinematic video block. Vertical 9:16. ONE image only, no storyboard, no split screen, no text.",
     "Attached reference images are canonical identity references for the named adult fictional characters. Preserve each face, hair, proportions, wardrobe and accessories. Do not merge identities.",

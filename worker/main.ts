@@ -253,7 +253,10 @@ export async function execute(jobId: string, direct = false): Promise<"continue"
       // second text generation just to rephrase it before every image.
       const savedPrompt = job.checkpoint[`prompt_${t.id}`] as { prompt?: string } | undefined;
       prompt = savedPrompt?.prompt || compileImagePrompt(s, t, job.instructions || t.instructions);
-      const recovered = await recoverImage(job.projectId, versionId);
+      const recovered = await recoverImage(job.projectId, versionId, {
+        title: s.project.universeSnapshot.name || s.project.title,
+        chapterNumber: s.project.chapterNumber || 1,
+      });
       if (job.checkpoint.pendingCall === key) await reconciled();
       let result;
       if (recovered) result = recovered;
@@ -362,7 +365,10 @@ export async function execute(jobId: string, direct = false): Promise<"continue"
         job.checkpoint.pendingCall === key
       ) {
         recoveredObject =
-          (await recoverVideo(job.projectId, versionId)) || undefined;
+          (await recoverVideo(job.projectId, versionId, {
+            title: s.project.universeSnapshot.name || s.project.title,
+            chapterNumber: s.project.chapterNumber || 1,
+          })) || undefined;
         await reconciled();
         if (recoveredObject) await checkpoint("videoObject", recoveredObject);
       }
@@ -456,7 +462,10 @@ export async function execute(jobId: string, direct = false): Promise<"continue"
       } else {
         // If the response omitted a usable URI, fall back to the exact private
         // destination requested for this attempt.
-        const reconciledObject = await recoverVideo(job.projectId, versionId);
+        const reconciledObject = await recoverVideo(job.projectId, versionId, {
+          title: s.project.universeSnapshot.name || s.project.title,
+          chapterNumber: s.project.chapterNumber || 1,
+        });
         if (!reconciledObject) {
           await checkpoint("providerReturnedUri", typeof uri === "string" ? {
             unusableUri: true,

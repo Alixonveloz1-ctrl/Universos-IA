@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DEFAULT_MODELS, MODELS } from "@/lib/models";
 import type { CinematicAsset, CinematicFinalizeJob, CinematicProject } from "@/lib/cinematic/types";
 
@@ -9,6 +9,9 @@ type CinematicData = {
   project: CinematicProject;
   assets: CinematicAsset[];
   finalizeJob: CinematicFinalizeJob | null;
+  generation: { id: string; state: string; kind?: string; role?: string; characterId?: string;
+    segmentNumber?: number; error?: string } | null;
+  recoverableFinalize: boolean;
 };
 
 type CinematicListItem = {
@@ -23,13 +26,21 @@ type CinematicListItem = {
 };
 
 async function cinematicApi(path = "", method = "GET", data?: unknown) {
+  const paid = method === "POST" && /\/(plan|image|video)$/.test(path);
+  const key = `cinematic:intent:${path}`;
+  const requestId = paid ? (sessionStorage.getItem(key) || crypto.randomUUID()) : null;
+  if (requestId) sessionStorage.setItem(key, requestId);
   const res = await fetch("/api/cinematic" + (path ? "/" + path : ""), {
     method,
     headers: method === "GET" ? {} : { "Content-Type": "application/json" },
-    ...(data !== undefined ? { body: JSON.stringify(data) } : {}),
+    ...(data !== undefined ? { body: JSON.stringify(requestId ? { ...(data as object), requestId } : data) } : {}),
   });
   const result = await res.json();
-  if (!res.ok) throw new Error(result.error?.message || "No se pudo completar la operación cinematográfica.");
+  if (!res.ok) {
+    if (paid && result.error?.code !== "AMBIGUOUS") sessionStorage.removeItem(key);
+    throw new Error(result.error?.message || "No se pudo completar la operación cinematográfica.");
+  }
+  if (paid && !["submitting", "uncertain"].includes(result.state || result.run?.state)) sessionStorage.removeItem(key);
   return result;
 }
 
@@ -47,6 +58,7 @@ export default function CinematicStudio() {
   const [language, setLanguage] = useState("Español");
   const [accent, setAccent] = useState("Latinoamericano");
   const [models, setModels] = useState<{ text: string; image: string; video: string }>({ ...DEFAULT_MODELS });
+  const polling = useRef(false);
 
   const loadList = useCallback(async () => {
     setItems(await cinematicApi());
@@ -71,30 +83,36 @@ export default function CinematicStudio() {
     catch (e) { setError(e instanceof Error ? e.message : "Error inesperado."); }
     finally {
       setBusy(false);
+      if (data?.project.id) void loadProject(data.project.id).catch(() => {});
     }
   };
 
   const pendingVideoIds = useMemo(
-    () => data?.assets.filter(a => a.kind === "video" && a.state === "waiting").map(a => a.id).sort().join(",") || "",
-    [data?.assets],
+    () => data?.assets.filter(a => a.kind === "video" && a.state === "waiting" &&
+      (a.planRevision || 0) === (data.project.planRevision || 0)).map(a => a.id).sort().join(",") || "",
+    [data],
   );
   const finalizing = !!data?.finalizeJob && ["queued", "running"].includes(data.finalizeJob.state);
   useEffect(() => {
-    if (!data?.project.id || (!pendingVideoIds && !finalizing)) return;
+    if (!data?.project.id || (!pendingVideoIds && !finalizing && !data.generation)) return;
     const projectId = data.project.id;
     const timer = setInterval(() => {
       void (async () => {
+        if (polling.current) return;
+        polling.current = true;
         try {
           for (const id of pendingVideoIds.split(",").filter(Boolean))
             await cinematicApi(`${projectId}/videos/${id}`);
           await loadProject(projectId);
         } catch (e) {
           setError(e instanceof Error ? e.message : "No se pudo actualizar la generación.");
+        } finally {
+          polling.current = false;
         }
       })();
     }, 5000);
     return () => clearInterval(timer);
-  }, [data?.project.id, pendingVideoIds, finalizing, loadProject]);
+  }, [data?.project.id, data?.generation, pendingVideoIds, finalizing, loadProject]);
 
   const modelSelect = (kind: "text" | "image" | "video", value: string, change: (value: string) => void) => (
     <label>
@@ -209,6 +227,7 @@ export default function CinematicStudio() {
 
   const { project, assets } = data;
   const plan = project.plan;
+  const currentAssets = assets.filter(a => (a.planRevision || 0) === (project.planRevision || 0));
   const setProjectModel = (kind: "text" | "image" | "video", value: string) =>
     void perform(async () => {
       await cinematicApi(project.id, "PATCH", { models: { ...project.models, [kind]: value } });
@@ -234,7 +253,7 @@ export default function CinematicStudio() {
           <p className="muted">El cambio se aplica a generaciones futuras. Los activos anteriores conservan el modelo con el que fueron creados.</p>
         </details>
         <button
-          disabled={busy}
+          disabled={busy || !!data.generation}
           onClick={() => {
             if (plan && !window.confirm("Regenerar el plan reiniciará las aprobaciones cinematográficas de esta producción. ¿Continuar?")) return;
             void perform(async () => {
@@ -248,6 +267,23 @@ export default function CinematicStudio() {
       </section>
 
       {error && <p className="error" role="alert">{error}</p>}
+      {data.generation && <section className="panel">
+        <p className="muted">Intento {data.generation.id}: {data.generation.state}. {data.generation.error}</p>
+        {data.generation.state === "uncertain" || data.generation.state === "submitting" ?
+          <button disabled={busy} onClick={() => {
+            if (!window.confirm("Revisa la operación y los posibles cargos de Google antes de cerrar este intento. Un video incierto puede tardar hasta 24 horas en liberarse. ¿Continuar?")) return;
+            void perform(async () => {
+              await cinematicApi(`${project.id}/generations/${data.generation!.id}/resolve`, "POST", { acknowledge: true });
+              const g = data.generation!;
+              const path = g.role === "character" ? `${project.id}/characters/${g.characterId}/image`
+                : g.role === "segment-image" ? `${project.id}/segments/${g.segmentNumber}/image`
+                : g.role === "segment-video" ? `${project.id}/segments/${g.segmentNumber}/video`
+                : `${project.id}/plan`;
+              sessionStorage.removeItem(`cinematic:intent:${path}`);
+              await loadProject(project.id);
+            });
+          }}>Reconciliar o cerrar intento</button> : null}
+      </section>}
 
       {plan && (
         <>
@@ -280,7 +316,7 @@ export default function CinematicStudio() {
             <h2>Referencias canónicas</h2>
             <div className="cards">
               {plan.characters.map(character => {
-                const candidate = latest(assets, a => a.role === "character" && a.characterId === character.id);
+                const candidate = latest(currentAssets, a => a.role === "character" && a.characterId === character.id);
                 const approvedId = project.approvedCharacters[character.id];
                 const shown = candidate || assets.find(a => a.id === approvedId);
                 return (
@@ -300,7 +336,7 @@ export default function CinematicStudio() {
                     )}
                     <div className="actions">
                       <button
-                        disabled={busy}
+                      disabled={busy || !!data.generation}
                         onClick={() => void perform(async () => {
                           await cinematicApi(`${project.id}/characters/${character.id}/image`, "POST", {});
                           await loadProject(project.id);
@@ -331,8 +367,8 @@ export default function CinematicStudio() {
           <section>
             <h2>Bloques cinematográficos</h2>
             {plan.segments.map(segment => {
-              const imageCandidate = latest(assets, a => a.role === "segment-image" && a.segmentNumber === segment.number);
-              const videoCandidate = latest(assets, a => a.role === "segment-video" && a.segmentNumber === segment.number);
+              const imageCandidate = latest(currentAssets, a => a.role === "segment-image" && a.segmentNumber === segment.number);
+              const videoCandidate = latest(currentAssets, a => a.role === "segment-video" && a.segmentNumber === segment.number);
               const approvedImageId = project.approvedImages[String(segment.number)];
               const approvedVideoId = project.approvedVideos[String(segment.number)];
               const shownImage = imageCandidate || assets.find(a => a.id === approvedImageId);
@@ -372,7 +408,7 @@ export default function CinematicStudio() {
                   )}
                   <div className="actions">
                     <button
-                      disabled={busy || !castReady}
+                      disabled={busy || !!data.generation || !castReady}
                       title={castReady ? "" : "Aprueba las referencias de todos los personajes de este bloque."}
                       onClick={() => void perform(async () => {
                         await cinematicApi(`${project.id}/segments/${segment.number}/image`, "POST", {});
@@ -409,7 +445,7 @@ export default function CinematicStudio() {
                   {videoCandidate?.state === "failed" && <p className="error">{videoCandidate.error}</p>}
                   <div className="actions">
                     <button
-                      disabled={busy || !approvedImageId || videoCandidate?.state === "waiting"}
+                      disabled={busy || !!data.generation || !approvedImageId || videoCandidate?.state === "waiting"}
                       onClick={() => void perform(async () => {
                         await cinematicApi(`${project.id}/segments/${segment.number}/video`, "POST", {});
                         await loadProject(project.id);
@@ -443,7 +479,7 @@ export default function CinematicStudio() {
             </p>
             <button
               className="primary wide"
-              disabled={busy || finalizing || plan.segments.some(s => !project.approvedVideos[String(s.number)])}
+              disabled={busy || !!data.generation || finalizing || plan.segments.some(s => !project.approvedVideos[String(s.number)])}
               onClick={() => void perform(async () => {
                 await cinematicApi(`${project.id}/finalize`, "POST", {});
                 await loadProject(project.id);
@@ -452,6 +488,16 @@ export default function CinematicStudio() {
               {finalizing ? "Ensamblando…" : `Ensamblar ${project.durationSeconds} segundos`}
             </button>
             {data.finalizeJob?.state === "failed" && <p className="error">{data.finalizeJob.error?.message}</p>}
+            {data.finalizeJob?.dispatchState === "uncertain" && finalizing &&
+              <p className="muted">El despacho del ensamblado es incierto. Se puede recuperar el mismo trabajo después de 70 minutos.</p>}
+            {finalizing && data.finalizeJob && data.recoverableFinalize &&
+              <button disabled={busy} onClick={() => {
+                if (!window.confirm("La ejecución anterior pudo terminar. Revisa su estado antes de recuperar el mismo trabajo. ¿Continuar?")) return;
+                void perform(async () => {
+                  await cinematicApi(`${project.id}/finalize/${data.finalizeJob!.id}/recover`, "POST", { acknowledge: true });
+                  await loadProject(project.id);
+                });
+              }}>Recuperar ensamblado</button>}
             {project.final && (
               <>
                 <video

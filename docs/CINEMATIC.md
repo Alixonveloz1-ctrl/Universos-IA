@@ -14,7 +14,7 @@ Los videos finales se dividen únicamente en duraciones nativas compatibles con 
 - 60 s = 8 + 8 + 8 + 8 + 8 + 8 + 8 + 4
 - 90 s = 8 + 8 + 8 + 8 + 8 + 8 + 8 + 8 + 8 + 8 + 6 + 4
 
-El ensamblador concatena los MP4 aprobados y valida que audio y video cubran la duración exacta.
+El ensamblador guarda un manifiesto inmutable de los MP4 aprobados y de la revisión del proyecto. Normaliza video, audio y marcas de tiempo antes de unirlos; valida duración y continuidad de paquetes. Si cambian las aprobaciones durante la ejecución, conserva el archivo de ese trabajo para diagnóstico pero no lo publica como película vigente.
 
 ## Lenguaje de producción
 
@@ -40,8 +40,10 @@ Cada personaje guarda una voz canónica. Las intervenciones vuelven a enviar el 
 
 Cambiar de modelo afecta generaciones futuras; los activos anteriores conservan el modelo con el que fueron creados. Aprobar una referencia nueva invalida solo los bloques cinematográficos dependientes.
 
+Cada generación de pago recibe un ID de intento persistente antes de llamar a Google. Un reintento HTTP consulta ese mismo intento y no vuelve a pagar automáticamente. Si se pierde la respuesta, la interfaz ofrece reconciliarlo; un video de inicio incierto solo puede cerrarse después de 24 horas si todavía no aparece el MP4 del prefijo privado. Los trabajos de ensamblado cuyo despacho es incierto se reenvían con el mismo ID después de 70 minutos, cuando la ejecución anterior ya excedió su tiempo máximo. No borres una producción con operaciones pendientes.
+
 ## Despliegue
 
-El worker necesita la etiqueta `cinematic-flow=v1`. Después de actualizar el código, ejecutar `./s` (o el flujo equivalente de actualización del worker) antes de ensamblar una producción cinematográfica.
+El worker necesita la etiqueta `cinematic-flow=v1`. `./s` la añade también a los jobs preexistentes. Después de actualizar el código, ejecuta `./s` antes de ensamblar una producción cinematográfica.
 
 La verificación dedicada `Verify cinematic production` ejecuta lint, TypeScript, el contrato de duraciones/prompts y el build sin realizar generaciones pagadas.

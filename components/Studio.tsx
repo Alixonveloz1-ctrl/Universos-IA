@@ -497,6 +497,12 @@ export default function Studio() {
     return () => clearInterval(timer);
   }, [directVideo?.id, directVideo?.url, directVideo?.state]);
   useEffect(() => {
+    const id = sessionStorage.getItem("direct-video:active");
+    if (id) void api("direct-video/" + id).then(setDirectVideo).catch(() => {
+      sessionStorage.removeItem("direct-video:active");
+    });
+  }, []);
+  useEffect(() => {
     if (!pid) return;
     const timer = setInterval(() => {
       api("projects/" + pid)
@@ -680,17 +686,41 @@ export default function Studio() {
             Prompt
             <textarea rows={12} maxLength={12000} value={directPrompt} onChange={(e) => setDirectPrompt(e.target.value)} placeholder="Escribe o pega aquí el prompt completo del video." />
           </label>
-          <button className="primary wide" disabled={busy || !directImage || !directPrompt.trim()} onClick={() => void perform(async () => {
+          <p className="muted">La imagen inicial puede ocupar hasta 4 MB.</p>
+          <button className="primary wide" disabled={busy || !directImage || !directPrompt.trim() ||
+            !!directVideo && !["completed", "failed"].includes(directVideo.state)} onClick={() => void perform(async () => {
+            const id = crypto.randomUUID();
+            sessionStorage.setItem("direct-video:active", id);
+            setDirectVideo({ id, state: "uploading" });
             const form = new FormData();
             form.set("image", directImage!);
             form.set("prompt", directPrompt);
             form.set("model", directModel);
-            const res = await fetch("/api/direct-video", { method: "POST", body: form });
-            const out = await res.json();
-            if (!res.ok) throw new Error(out.error?.message || "No se pudo iniciar el video.");
-            setDirectVideo(out);
+            form.set("requestId", id);
+            try {
+              const res = await fetch("/api/direct-video", { method: "POST", body: form });
+              const out = await res.json();
+              if (!res.ok) throw new Error(out.error?.message || "No se pudo iniciar el video.");
+              setDirectVideo(out);
+            } catch (error) {
+              // A lost HTTP response is queried by the same durable request ID.
+              const status = await api("direct-video/" + id).catch(() => null);
+              if (status) setDirectVideo(status);
+              else { setDirectVideo(null); sessionStorage.removeItem("direct-video:active"); }
+              throw error;
+            }
           })}>{directVideo?.url ? "Regenerar" : "Generar video"}</button>
-          {directVideo && !directVideo.url && <p className="muted">{directVideo.state === "failed" ? directVideo.error : "Generando video…"}</p>}
+          {directVideo && !directVideo.url && <p className="muted">{["failed", "uncertain"].includes(directVideo.state)
+            ? directVideo.error || "El estado de Google es incierto. Revisa el intento antes de generar otro."
+            : "Generando video…"}</p>}
+          {directVideo && ["uploading", "submitting", "uncertain"].includes(directVideo.state) &&
+            <button disabled={busy} onClick={() => {
+              if (!window.confirm("Revisa posibles cargos de Google antes de liberar este intento. Una generación incierta puede tardar hasta 24 horas. ¿Continuar?")) return;
+              void perform(async () => {
+                const result = await api("direct-video/" + directVideo.id + "/resolve", "POST", { acknowledge: true });
+                setDirectVideo(result);
+              });
+            }}>Reconciliar intento</button>}
           {directVideo?.url && <>
             <video className="media" src={directVideo.url} controls playsInline preload="metadata" />
             <div className="actions">

@@ -39,6 +39,13 @@ vi.mock("../lib/persistence/google", () => {
     googleAuth: () => ({ getAccessToken: async () => "test-token" }),
     objectPath: (p: string, v: string, n: string) =>
       `universos-ia/${p}/${v}/${n}`,
+    projectObjectPath: (_title: string, p: string, chapter: number, v: string, n: string) =>
+      `universos-ia/proyectos/${p}/capitulo-${chapter}/${v}/${n}`,
+    readPrivateObject: async (key: string) => {
+      const bytes = memory.files.get(key);
+      if (!bytes) throw Error("missing");
+      return bytes;
+    },
     privateObject: (key: string) => ({
       delete: async () => { memory.files.delete(key); },
       exists: async () => [memory.files.has(key)],
