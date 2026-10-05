@@ -1,0 +1,43 @@
+name: Verify cinematic production
+on:
+  push:
+    paths:
+      - "app/api/cinematic/**"
+      - "components/CinematicStudio.tsx"
+      - "components/Studio.tsx"
+      - "lib/cinematic/**"
+      - "lib/providers/vertex.ts"
+      - "worker/cinematic.ts"
+      - "worker/main.ts"
+      - "scripts/setup-gcp.sh"
+      - "tests/cinematic.test.ts"
+      - ".github/workflows/cinematic-ci.yml"
+  pull_request:
+    paths:
+      - "app/api/cinematic/**"
+      - "components/CinematicStudio.tsx"
+      - "components/Studio.tsx"
+      - "lib/cinematic/**"
+      - "lib/providers/vertex.ts"
+      - "worker/cinematic.ts"
+      - "worker/main.ts"
+      - "scripts/setup-gcp.sh"
+      - "tests/cinematic.test.ts"
+      - ".github/workflows/cinematic-ci.yml"
+permissions:
+  contents: read
+jobs:
+  cinematic:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npx vitest run tests/cinematic.test.ts
+      - run: npm run build
