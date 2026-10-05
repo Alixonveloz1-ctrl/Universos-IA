@@ -136,12 +136,13 @@ export async function assemble(dir: string, files: string[]) {
       const hasVideo = sourceReport.streams.some(s => s.codec_type === "video");
       const hasAudio = sourceReport.streams.some(s => s.codec_type === "audio");
       assert(hasVideo, `El clip ${i + 1} no contiene video.`);
+      assert(hasAudio, `El clip ${i + 1} no contiene audio. Revisa ese clip antes de unir el capítulo.`, "MISSING_AUDIO");
       reports.push(sourceReport);
       const output = path.join(dir, `normalized-${i}.mp4`);
       const args = [
         "-v", "error", "-y", "-i", files[i],
         "-map", "0:v:0",
-        ...(hasAudio ? ["-map", "0:a:0"] : []),
+        "-map", "0:a:0",
         "-c:v", "libx264", "-pix_fmt", "yuv420p",
         "-vf", "scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2,fps=24",
         "-c:a", "aac", "-ar", "48000", "-ac", "2",
@@ -150,14 +151,6 @@ export async function assemble(dir: string, files: string[]) {
         "-movflags", "+faststart",
         output,
       ];
-      // Approved clips should normally contain native audio. If an old clip
-      // does not, add silence rather than making the entire approved chapter
-      // impossible to export.
-      if (!hasAudio) {
-        args.splice(6, 0, "-f", "lavfi", "-t", "8", "-i", "anullsrc=r=48000:cl=stereo");
-        const mapIndex = args.indexOf("-c:v");
-        args.splice(mapIndex, 0, "-map", "1:a:0");
-      }
       await exec("ffmpeg", args, { timeout: 300000 });
       normalizedFiles.push(output);
     } catch (e) {
