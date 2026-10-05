@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { DEFAULT_MODELS, MODELS } from "@/lib/models";
 import type { CinematicAsset, CinematicFinalizeJob, CinematicProject } from "@/lib/cinematic/types";
 
@@ -38,8 +38,7 @@ function latest(assets: CinematicAsset[], predicate: (a: CinematicAsset) => bool
 }
 
 export default function CinematicStudio() {
-  const busyRef = useRef(false);
-  const [busy, setBusy] = useState(false);
+   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [items, setItems] = useState<CinematicListItem[]>([]);
   const [data, setData] = useState<CinematicData | null>(null);
@@ -57,18 +56,20 @@ export default function CinematicStudio() {
   }, []);
 
   useEffect(() => {
-    void loadList().catch(e => setError(e.message));
-  }, [loadList]);
+    let active = true;
+    cinematicApi()
+      .then(list => { if (active) setItems(list); })
+      .catch(e => { if (active) setError(e.message); });
+    return () => { active = false; };
+  }, []);
 
   const perform = async (fn: () => Promise<void>) => {
-    if (busyRef.current) return;
-    busyRef.current = true;
+    if (busy) return;
     setBusy(true);
     setError("");
     try { await fn(); }
     catch (e) { setError(e instanceof Error ? e.message : "Error inesperado."); }
     finally {
-      busyRef.current = false;
       setBusy(false);
     }
   };
