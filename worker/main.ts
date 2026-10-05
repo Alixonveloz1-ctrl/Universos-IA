@@ -675,7 +675,18 @@ export async function execute(jobId: string, direct = false): Promise<"continue"
       return e.destination;
     }
     logFailure(`worker:${job.type}`, e);
-    const err = safeError(e);
+    let err = safeError(e);
+    if (job.type === "finalize" && err.code === "INTERNAL") {
+      const detail = String((e as Error)?.message || e)
+        .split("\n")[0]
+        .replace(/Bearer\s+\S+/gi, "Bearer [redacted]")
+        .replace(/eyJ[A-Za-z0-9_.-]+/g, "[redacted]")
+        .slice(0, 700);
+      err = {
+        code: "ASSEMBLY_INTERNAL",
+        message: `El ensamblaje encontró un error técnico concreto: ${detail || "sin detalle disponible"}`,
+      };
+    }
     // A provider's explicit 4xx rejection cannot be a lost paid response.
     // Keep the error, but unblock a later user-requested attempt.
     if (["PROVIDER_REJECTED", "PROVIDER_AUTH", "QUOTA", "PROVIDER_BLOCKED"].includes(err.code) && job.checkpoint.pendingCall && !job.checkpoint.operation) {
