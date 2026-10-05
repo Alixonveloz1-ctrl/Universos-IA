@@ -646,8 +646,8 @@ export async function execute(jobId: string, direct = false): Promise<"continue"
       }
       const r = await assemble(dir, files);
       await guarded();
-      const object = projectObjectPath(s.project.universeSnapshot.name || s.project.title, job.projectId, s.project.chapterNumber || 1, job.id, "final.mp4"),
-        reportObject = projectObjectPath(s.project.universeSnapshot.name || s.project.title, job.projectId, s.project.chapterNumber || 1, job.id, "report.json");
+      const object = projectObjectPath(job.snapshot.project.universeSnapshot.name || job.snapshot.project.title, job.projectId, job.snapshot.project.chapterNumber || 1, job.id, "final.mp4"),
+        reportObject = projectObjectPath(job.snapshot.project.universeSnapshot.name || job.snapshot.project.title, job.projectId, job.snapshot.project.chapterNumber || 1, job.id, "report.json");
       await saveVerifiedObject(object, await readFile(r.output), {
         resumable: false,
         metadata: { contentType: "video/mp4" },
