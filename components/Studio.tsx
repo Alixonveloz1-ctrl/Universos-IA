@@ -388,10 +388,7 @@ function ProjectThumbnail({
   const [url, setUrl] = useState("");
   useEffect(() => {
     let active = true;
-    if (!version) {
-      setUrl("");
-      return () => { active = false; };
-    }
+    if (!version) return () => { active = false; };
     api(`projects/${projectId}/media/${version}`)
       .then((r) => { if (active) setUrl(r.url); })
       .catch(() => { if (active) setUrl(""); });
@@ -399,7 +396,7 @@ function ProjectThumbnail({
   }, [projectId, version]);
   return (
     <div className="project-thumb">
-      {url ? (
+      {version && url ? (
         <Image unoptimized fill sizes="(max-width: 640px) 50vw, 320px" src={url} alt={title} />
       ) : (
         <span aria-hidden="true">✦</span>
