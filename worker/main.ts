@@ -1,12 +1,12 @@
 import { femaleReference, withReferenceLook } from "../lib/director/reference-look";
 import { randomUUID, createHash } from "node:crypto";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import sharp from "sharp";
 import type { Transaction } from "@google-cloud/firestore";
 import type { SaveOptions } from "@google-cloud/storage";
-import { db, privateObject, objectPath, projectObjectPath, googleAuth } from "../lib/persistence/google";
+import { db, privateObject, objectPath, projectObjectPath, googleAuth, readPrivateObject } from "../lib/persistence/google";
 import { imageLimits } from "../lib/models";
 import { imageReferenceIds } from "../lib/continuity/rules";
 import { config } from "../lib/config";
@@ -215,7 +215,7 @@ export async function execute(jobId: string, direct = false): Promise<"continue"
     for (const id of versions) {
       const a = job.snapshot.assets.find((x) => x.id === id);
       assert(a && a.kind === "image", "Referencia no disponible");
-      const [bytes] = await privateObject(a.storageObject).download();
+      const bytes = await readPrivateObject(a.storageObject);
       assert(bytes.length <= maxBytes, "Referencia demasiado grande");
       out.push({
         bytesBase64Encoded: bytes.toString("base64"),
@@ -472,7 +472,7 @@ export async function execute(jobId: string, direct = false): Promise<"continue"
       }
       if (!recoveredObject) await checkpoint("videoObject", object);
       const file = path.join(dir, "clip.mp4");
-      await privateObject(object).download({ destination: file });
+      await writeFile(file, await readPrivateObject(object));
       technicalReport = {
         ...validateMedia(await probe(file), 8),
         continuity: reviewClipTiming(s, c),
@@ -637,7 +637,7 @@ export async function execute(jobId: string, direct = false): Promise<"continue"
         const a = job.snapshot.assets.find((x) => x.id === ids[i]);
         assert(a, "Versión exportada no encontrada");
         const local = path.join(dir, `clip-${i}.mp4`);
-        await privateObject(a.storageObject).download({ destination: local });
+        await writeFile(local, await readPrivateObject(a.storageObject));
         const sum = createHash("sha256")
           .update(await readFile(local))
           .digest("hex");
