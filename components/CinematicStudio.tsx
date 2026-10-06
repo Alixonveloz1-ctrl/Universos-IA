@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DEFAULT_MODELS, MODELS } from "@/lib/models";
 import type { CinematicAsset, CinematicFinalizeJob, CinematicProject } from "@/lib/cinematic/types";
+import { cinematicImageCharacterIds } from "@/lib/cinematic/types";
 import {
   CINEMATIC_GENRES, CINEMATIC_STYLES, DEFAULT_CINEMATIC_GENRE,
   DEFAULT_CINEMATIC_SUBGENRE, cinematicGenre, cinematicStyle, cinematicSubgenre,
@@ -465,13 +466,16 @@ export default function CinematicStudio() {
           </section>
 
           <section>
-            <h2>Bloques cinematográficos</h2>
+            <h2>{project.shotLayout === "one-shot-per-video" ? "Tomas independientes" : "Bloques cinematográficos"}</h2>
             {plan.segments.map(segment => {
+              const isShot = project.shotLayout === "one-shot-per-video";
+              const imageCast = cinematicImageCharacterIds(segment, project.shotLayout);
+              const label = isShot ? "toma" : "bloque";
               const approvedImageId = project.approvedImages[String(segment.number)];
               const approvedVideoId = project.approvedVideos[String(segment.number)];
               const imageCandidate = latest(currentAssets, a => a.role === "segment-image" &&
-                a.segmentNumber === segment.number && a.inputRefs.length === segment.characterIds.length &&
-                segment.characterIds.every((id, i) => a.inputRefs[i] === project.approvedCharacters[id]));
+                a.segmentNumber === segment.number && a.inputRefs.length === imageCast.length &&
+                imageCast.every((id, i) => a.inputRefs[i] === project.approvedCharacters[id]));
               const videoAttempts = currentAssets.filter(a => a.role === "segment-video" &&
                 a.segmentNumber === segment.number && a.inputRefs[0] === approvedImageId)
                 .sort((a, b) => b.createdAt - a.createdAt);
@@ -481,15 +485,15 @@ export default function CinematicStudio() {
               if (approvedVideo?.storageObject && !playableVideos.some(a => a.id === approvedVideo.id))
                 playableVideos.push(approvedVideo);
               const shownImage = imageCandidate || assets.find(a => a.id === approvedImageId);
-              const castReady = segment.characterIds.every(id => !!project.approvedCharacters[id]);
+              const castReady = imageCast.every(id => !!project.approvedCharacters[id]);
               return (
                 <article className="clip" key={segment.number}>
-                  <h3>Bloque {segment.number} · {segment.durationSeconds} s</h3>
+                  <h3>{isShot ? "Toma" : "Bloque"} {segment.number} · {segment.durationSeconds} s</h3>
                   <p><b>Objetivo:</b> {segment.goal}</p>
                   <p><b>Imagen inicial:</b> {segment.openingFrameDirection}</p>
                   <p className="muted">{segment.location}</p>
                   <details>
-                    <summary>Mapa de planos · {segment.shots.length}</summary>
+                    <summary>{isShot ? "Encuadre y acción" : `Mapa de planos · ${segment.shots.length}`}</summary>
                     {segment.shots.map(shot => (
                       <p key={shot.id}>
                         <b>{shot.start}–{shot.end}s · {shot.shotType} · {shot.lensMm} mm · {shot.transition}</b><br />
@@ -509,7 +513,7 @@ export default function CinematicStudio() {
                     <Image
                       unoptimized
                       src={`/api/cinematic/${project.id}/media/${shownImage.id}`}
-                      alt={`Imagen inicial bloque ${segment.number}`}
+                      alt={`Imagen inicial ${label} ${segment.number}`}
                       width={450}
                       height={800}
                       className="media"
@@ -518,7 +522,7 @@ export default function CinematicStudio() {
                   <div className="actions">
                     <button
                       disabled={busy || !!data.generation || !castReady}
-                      title={castReady ? "" : "Aprueba las referencias de todos los personajes de este bloque."}
+                      title={castReady ? "" : `Aprueba las referencias de los personajes visibles en esta ${label}.`}
                       onClick={() => void perform(async () => {
                         await cinematicApi(`${project.id}/segments/${segment.number}/image`, "POST", {});
                         await loadProject(project.id);
@@ -561,7 +565,7 @@ export default function CinematicStudio() {
                         >Aprobar este video</button>}
                     </div>
                   ))}
-                  {videoCandidate?.state === "waiting" && <p className="muted">Veo está generando este bloque con audio nativo…</p>}
+                  {videoCandidate?.state === "waiting" && <p className="muted">Veo está generando esta {label} con audio nativo…</p>}
                   {videoCandidate?.state === "failed" && <p className="error">{videoCandidate.error}</p>}
                   {videoCandidate?.state === "failed" && videoCandidate.operation && videoCandidate.outputPrefix &&
                     <button disabled={busy} onClick={() => void perform(async () => {
@@ -587,7 +591,7 @@ export default function CinematicStudio() {
           <section className="panel">
             <h2>Película final</h2>
             <p className="muted">
-              Une exclusivamente las versiones aprobadas, en orden, conservando el audio nativo de cada bloque.
+              Une exclusivamente las versiones aprobadas, en orden, conservando el audio nativo de cada video.
             </p>
             <button
               className="primary wide"

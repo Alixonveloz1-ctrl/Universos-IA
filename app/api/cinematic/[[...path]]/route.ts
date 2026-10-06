@@ -39,6 +39,7 @@ import type {
   CinematicProject,
   CinematicPlanRun,
 } from "@/lib/cinematic/types";
+import { cinematicImageCharacterIds } from "@/lib/cinematic/types";
 import { findCinematicVideoObject } from "@/lib/cinematic/video-output";
 
 export const runtime = "nodejs";
@@ -397,7 +398,8 @@ async function handler(req: Request, context: { params: Promise<{ path?: string[
           assert(current.activeGenerationId === id && revision(current) === revision(project),
             "El proyecto cambió durante la generación del plan.");
           tx.update(ref, {
-            title: plan.title, plan, approvedCharacters: {}, approvedImages: {}, approvedVideos: {},
+            title: plan.title, plan, shotLayout: "one-shot-per-video",
+            approvedCharacters: {}, approvedImages: {}, approvedVideos: {},
             final: null, revision: revision(current) + 1, planRevision: planRevision(current) + 1,
             activeGenerationId: null, updatedAt: Date.now(),
           });
@@ -443,8 +445,9 @@ async function handler(req: Request, context: { params: Promise<{ path?: string[
       const number = Number(parts[2]);
       const segment = project.plan.segments.find(s => s.number === number);
       assert(segment, "Bloque cinematográfico no encontrado.");
-      const refIds = segment.characterIds.map(id => project.approvedCharacters[id]).filter((x): x is string => !!x);
-      assert(refIds.length === segment.characterIds.length, "Aprueba primero las referencias de todos los personajes visibles en este bloque.");
+      const imageCast = cinematicImageCharacterIds(segment, project.shotLayout);
+      const refIds = imageCast.map(id => project.approvedCharacters[id]).filter((x): x is string => !!x);
+      assert(refIds.length === imageCast.length, "Aprueba primero las referencias de todos los personajes visibles en esta toma.");
       const limits = imageLimits(project.models.image);
       assert(refIds.length <= limits.maxReferenceImages,
         `Este bloque necesita ${refIds.length} referencias y el generador de imagen seleccionado admite ${limits.maxReferenceImages}. Cambia manualmente de generador o reduce el reparto del bloque.`);
@@ -568,8 +571,9 @@ async function handler(req: Request, context: { params: Promise<{ path?: string[
         } else if (asset.role === "segment-image") {
           const segment = current.plan.segments.find(s => s.number === asset.segmentNumber);
           assert(segment, "Imagen de bloque inválida.");
-          assert(asset.inputRefs.length === segment.characterIds.length &&
-            segment.characterIds.every((id, i) => asset.inputRefs[i] === current.approvedCharacters[id]),
+          const imageCast = cinematicImageCharacterIds(segment, current.shotLayout);
+          assert(asset.inputRefs.length === imageCast.length &&
+            imageCast.every((id, i) => asset.inputRefs[i] === current.approvedCharacters[id]),
             "Las referencias del bloque cambiaron. Genera una imagen nueva.");
           approvedImages[String(segment.number)] = asset.id;
           delete approvedVideos[String(segment.number)];
@@ -587,7 +591,8 @@ async function handler(req: Request, context: { params: Promise<{ path?: string[
 
     if (parts.length === 2 && parts[1] === "finalize" && req.method === "POST") {
       assert(project.plan, "Falta el plan cinematográfico.");
-      validateCinematicPlan(project.plan, project.durationSeconds);
+      validateCinematicPlan(project.plan, project.durationSeconds,
+        project.shotLayout === "one-shot-per-video" ? "shot" : "legacy");
       const jobId = randomUUID();
       const now = Date.now();
       const jobRef = db().doc(`cinematicJobs/${jobId}`);
@@ -596,7 +601,8 @@ async function handler(req: Request, context: { params: Promise<{ path?: string[
         assert(!current.deleting && !current.activeFinalizeJobId && !current.activeGenerationId,
           "Hay un ensamblado o una generación en curso.");
         assert(current.plan && planRevision(current) === planRevision(project), "El plan cambió.");
-        const plan = validateCinematicPlan(current.plan, current.durationSeconds);
+        const plan = validateCinematicPlan(current.plan, current.durationSeconds,
+          current.shotLayout === "one-shot-per-video" ? "shot" : "legacy");
         const ids = plan.segments.map(s => current.approvedVideos[String(s.number)]);
         assert(ids.every(Boolean), "Aprueba todos los videos antes de ensamblar.");
         const snapshots = await Promise.all(ids.map(id => tx.get(ref.collection("assets").doc(id))));
