@@ -35,6 +35,11 @@ describe("cinematic plan request", () => {
       expect(prompt).toContain("physicalContacts enumera TODO contacto físico");
       expect(prompt).toContain("Si faceVisible=false, su voz nativa procede de su posición establecida");
       expect(prompt).toContain("Elige esas posiciones ANTES de narrar la escena");
+      expect(prompt).toContain("planifica primero los hechos filmables de segments");
+      expect(prompt).toContain("hook debe suceder visiblemente en la primera toma");
+      expect(prompt).toContain("ending debe ocurrir visiblemente en la última toma");
+      expect(prompt).toContain("ESTRUCTURA DE 30 SEGUNDOS / 7 TOMAS");
+      expect(prompt).toContain("una sucesión de siete miradas bonitas sin nuevos hechos resulta aburrida");
       expect(prompt).not.toContain("Veo recibe una sola imagen inicial y debe inventar los demás encuadres");
       expect(schema.properties).toHaveProperty("segments");
       expect(schema.required).toContain("characters");
@@ -97,5 +102,22 @@ describe("cinematic plan request", () => {
     expect(prompt).toContain("CONCEPTO DEL USUARIO — AUTORIDAD NARRATIVA: Un detective busca a su hermana desaparecida.");
     expect(prompt).toContain("concepto escrito por el usuario MANDA");
     expect(prompt).not.toContain("TRAMA LIBRE");
+  });
+
+  it("plans both sides of a visible adult love triangle before promising a choice", async () => {
+    textGenerate.mockReset();
+    textGenerate.mockResolvedValue({});
+    await expect(generateCinematicPlan(cinematicProjectInput.parse({
+      concept: "Colegiala rubia fan service", visualStyle: "anime2d",
+      genre: "romance", subgenre: "love-triangle", durationSeconds: 30,
+      language: "Español", accent: "Latinoamericano",
+      models: { text: "gemini-3-flash-preview", image: "gemini-3.1-flash-image",
+        video: "veo-3.1-lite-generate-001" },
+    }))).rejects.toThrow("plan incompleto");
+    const prompt = textGenerate.mock.calls[0][1] as string;
+    expect(prompt).toContain("TRIÁNGULO AMOROSO");
+    expect(prompt).toContain("establece al novio o novia y su vínculo de manera visible");
+    expect(prompt).toContain("personajes de 21 años o más");
+    expect(prompt).toContain("trasládala a una universidad o academia para adultos");
   });
 });

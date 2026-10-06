@@ -397,6 +397,16 @@ export default function CinematicStudio() {
             <p><b>Premisa:</b> {plan.premise}</p>
             <p><b>Gancho:</b> {plan.hook}</p>
             <p><b>Cierre:</b> {plan.ending}</p>
+            <h3>Lo que se filmará, toma por toma</h3>
+            <p className="muted">Revisa estos hechos antes de generar imágenes y videos. Si falta una parte de la historia, puedes proponer otra versión del plan.</p>
+            <ol className="storyboard">
+              {plan.segments.map(segment => (
+                <li key={segment.number}>
+                  <b>{segment.durationSeconds} s · {segment.goal}</b>
+                  <span>{segment.shots.map(shot => shot.action).join(" ")}</span>
+                </li>
+              ))}
+            </ol>
             <details>
               <summary>Biblia visual</summary>
               <p>{plan.visualBible}</p>

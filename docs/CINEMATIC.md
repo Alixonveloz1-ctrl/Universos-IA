@@ -5,6 +5,8 @@ La tercera entrada de Universos IA vive aislada de los dos flujos existentes:
 - **Mis proyectos** conserva el flujo de universos/historias de 64 segundos.
 - **Video directo** conserva imagen + prompt + Veo.
 - **Cinemático** usa su propia colección `cinematicProjects`, su propia API y su propio plan de producción.
+- El Director escribe la sinopsis a partir de hechos asignados a tomas: el gancho debe verse en la primera y el cierre en la última. La pantalla muestra objetivo y acción de cada toma antes de generar activos para poder rechazar una historia que no avance. En 30 segundos cada una de las siete tomas debe aportar información, decisión o consecuencia; una reacción sin un hecho previo no reemplaza el conflicto.
+- Las imágenes iniciales representan el estado anterior a su única acción. El prompt de Veo pide el cambio narrativo previsto sin inventar otro corte dentro del video. Los conceptos escolares con connotación de fan service se adaptan a personajes y entornos claramente adultos.
 
 ## Duraciones
 
