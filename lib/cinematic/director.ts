@@ -37,6 +37,7 @@ function planPrompt(input: CinematicProjectInput, repair = "") {
     "SONIDO Y CORTES: un hard cut visual no reinicia automáticamente música, ambiente o identidad vocal. Decide explícitamente qué sonido continúa por encima del corte y qué efecto puntual marca el beat.",
     `CONCEPTO DEL USUARIO: ${input.concept}`,
     repair ? `CORRECCIÓN OBLIGATORIA DEL BORRADOR ANTERIOR: ${repair}` : "",
+    `FORMATO JSON OBLIGATORIO: ${JSON.stringify(z.toJSONSchema(cinematicPlan))}`,
     "No escribas explicaciones fuera del JSON.",
   ].filter(Boolean).join("\n\n");
 }
@@ -47,7 +48,7 @@ export async function generateCinematicPlan(input: CinematicProjectInput) {
     const result = await textGenerate(
       input.models.text,
       planPrompt(input, repair),
-      z.toJSONSchema(cinematicPlan),
+      undefined, // This large nested schema triggers Google's InvalidArgument: 400.
       32768,
       130000, // Two repair attempts must fit inside the 300-second web function.
     );
