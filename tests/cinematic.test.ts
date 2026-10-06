@@ -5,7 +5,7 @@ import {
   validateCinematicPlan,
   type CinematicPlan,
 } from "../lib/cinematic/schema";
-import { compileCinematicOpeningImagePrompt, compileCinematicVideoPrompt } from "../lib/cinematic/director";
+import { CINEMATIC_NEGATIVE_PROMPT, compileCinematicOpeningImagePrompt, compileCinematicVideoPrompt } from "../lib/cinematic/director";
 import { videoRequest } from "../lib/providers/vertex";
 import { verifiedVideoObject } from "../lib/direct-video";
 import { currentManifest } from "../worker/cinematic";
@@ -146,6 +146,12 @@ describe("cinematic production contract", () => {
     expect(request.parameters.durationSeconds).toBe(6);
     expect(request.parameters.generateAudio).toBe(true);
     expect(request.parameters.aspectRatio).toBe("9:16");
+    expect(request.parameters).not.toHaveProperty("negativePrompt");
+    const cinematicRequest = videoRequest(
+      "veo-3.1-fast-generate-001", "cinematic test", [ref], "initial",
+      "gs://bucket/prefix/", 6, CINEMATIC_NEGATIVE_PROMPT,
+    );
+    expect(cinematicRequest.parameters.negativePrompt).toContain("duplicated hands");
   });
 
   it("rejects duplicate identities and overlapping or invisible speech", () => {
