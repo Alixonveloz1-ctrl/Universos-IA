@@ -128,6 +128,9 @@ export async function mediaResponse(key: string, range: string | null = null) {
   const headers = new Headers({ "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" });
   for (const name of ["content-type", "content-length", "content-range", "accept-ranges"])
     if (upstream.headers.has(name)) headers.set(name, upstream.headers.get(name)!);
+  if (key.toLowerCase().endsWith(".mp4") &&
+      (!headers.has("content-type") || headers.get("content-type") === "application/octet-stream"))
+    headers.set("content-type", "video/mp4");
   return new Response(upstream.body, { status: upstream.status, headers });
 }
 export async function googlePost(url: string, body: unknown, paid = false, timeoutMs = 120000) {
