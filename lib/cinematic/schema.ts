@@ -324,9 +324,6 @@ export function validateCinematicPlan(value: unknown, total: 30 | 60 | 90,
       if (!segment.shots.some(shot => turn.start < shot.end - 0.001 && turn.end > shot.start + 0.001 &&
         shot.characterIds.includes(turn.characterId)))
         throw new Error(`El hablante del bloque ${segment.number} no aparece en su toma.`);
-      if (layout === "shot" && !segment.shots[0].openingSubjects?.some(s =>
-        s.characterId === turn.characterId && s.faceVisible))
-        throw new Error(`El hablante de la toma ${segment.number} necesita un rostro visible desde la imagen inicial.`);
     }
     if (i > 0) {
       const prev = plan.segments[i - 1];

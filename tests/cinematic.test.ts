@@ -236,7 +236,10 @@ describe("cinematic production contract", () => {
     expect(video).toContain("A later face shot must be a separate video starting from its own approved image");
 
     first.dialogue = [{ characterId: "leo", text: "Detente.", intention: "urgent", start: 1, end: 2 }];
-    expect(() => validateCinematicPlan(plan, 30, "shot")).toThrow("rostro visible");
+    expect(validateCinematicPlan(plan, 30, "shot").segments[0].dialogue).toHaveLength(1);
+    const offscreenVoice = compileCinematicVideoPrompt(plan, first, "Español", "Latinoamericano");
+    expect(offscreenVoice).toContain("native voice from the established offscreen or partial-body position");
+    expect(offscreenVoice).toContain("every visible listener's mouth still");
     first.dialogue = [];
     const second = plan.segments[1];
     second.characterIds = ["leo"];
@@ -247,6 +250,24 @@ describe("cinematic production contract", () => {
     expect(validateCinematicPlan(plan, 30, "shot").segments[1].shots[0].openingSubjects?.[0].faceVisible).toBe(true);
     expect(compileCinematicVideoPrompt(plan, second, "Español", "Latinoamericano"))
       .toContain("recognizable faces at frame zero: Leo");
+  });
+
+  it("keeps an offscreen speaker entirely out of the starting image", () => {
+    const plan = shotPlan(30);
+    plan.characters.push({ ...plan.characters[0], id: "leo", name: "Leo" });
+    const first = plan.segments[0];
+    first.characterIds.push("leo");
+    first.shots[0].characterIds.push("leo");
+    first.shots[0].openingSubjects!.push({ characterId: "leo", screenSide: "right",
+      depth: "adjacent-offscreen", faceVisible: false, visibleParts: "none, voice only" });
+    first.dialogue = [{ characterId: "leo", text: "Espera.", intention: "warning", start: 1, end: 2 }];
+    expect(validateCinematicPlan(plan, 30, "shot").segments[0].dialogue).toHaveLength(1);
+    const image = compileCinematicOpeningImagePrompt(plan, first);
+    expect(image).toContain("A reference does not require its character to appear in this frame");
+    expect(image).toContain("zero visible parts for offscreen speech");
+    const video = compileCinematicVideoPrompt(plan, first, "Español", "Latinoamericano");
+    expect(video).toContain("initial visible parts: none, voice only");
+    expect(video).toContain("native voice from the established offscreen or partial-body position");
   });
 
   it("validates literal audiovisual handoffs and compiles multi-shot native audio prompts", () => {
