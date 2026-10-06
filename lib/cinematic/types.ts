@@ -1,4 +1,8 @@
-import type { CinematicPlan, CinematicProjectInput } from "./schema";
+import type { CinematicPlan, CinematicProjectInput, CinematicSegment } from "./schema";
+
+export function cinematicImageCharacterIds(segment: CinematicSegment, shotLayout?: string): string[] {
+  return shotLayout === "one-shot-per-video" ? segment.shots[0].characterIds : segment.characterIds;
+}
 
 export type CinematicAssetRole = "character" | "segment-image" | "segment-video";
 export type CinematicAssetState = "submitting" | "uncertain" | "candidate" | "waiting" | "completed" | "failed";
@@ -26,6 +30,7 @@ export interface CinematicProject extends CinematicProjectInput {
   id: string;
   owner: "personal";
   mode: "cinematic-v1";
+  shotLayout?: "one-shot-per-video";
   title: string;
   plan?: CinematicPlan;
   approvedCharacters: Record<string, string>;

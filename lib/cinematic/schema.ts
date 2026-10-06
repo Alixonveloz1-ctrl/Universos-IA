@@ -118,13 +118,14 @@ export const cinematicPlan = z.object({
   editingLanguage: long,
   soundBible: cinematicSoundBible,
   characters: z.array(cinematicCharacter).min(1).max(8),
-  segments: z.array(cinematicSegment).min(4).max(12),
+  segments: z.array(cinematicSegment).min(4).max(15),
 }).strict();
 
 export type CinematicProjectInput = z.infer<typeof cinematicProjectInput>;
 export type CinematicPlan = z.infer<typeof cinematicPlan>;
 export type CinematicCharacter = z.infer<typeof cinematicCharacter>;
 export type CinematicSegment = z.infer<typeof cinematicSegment>;
+export type CinematicLayout = "legacy" | "shot";
 
 export function cinematicSegmentDurations(total: 30 | 60 | 90): (4 | 6 | 8)[] {
   if (total === 30) return [8, 8, 8, 6];
@@ -132,12 +133,21 @@ export function cinematicSegmentDurations(total: 30 | 60 | 90): (4 | 6 | 8)[] {
   return [8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 6, 4];
 }
 
+// One native Veo generation, and one independently approved opening image,
+// for every shot. Older stored plans retain their original block durations.
+export function cinematicShotDurations(total: 30 | 60 | 90): (4 | 6 | 8)[] {
+  if (total === 30) return [4, 4, 4, 4, 4, 4, 6];
+  if (total === 60) return Array(10).fill(6) as 6[];
+  return Array(15).fill(6) as 6[];
+}
+
 // The Director chooses the story and shots; the editor owns the exact technical
 // boundaries. Rounding or a slightly different block length must not force a
 // second paid generation of the same story.
-export function alignCinematicPlan(value: unknown, total: 30 | 60 | 90): unknown {
+export function alignCinematicPlan(value: unknown, total: 30 | 60 | 90,
+  layout: CinematicLayout = "legacy"): unknown {
   if (!value || typeof value !== "object" || !Array.isArray((value as { segments?: unknown }).segments)) return value;
-  const expected = cinematicSegmentDurations(total);
+  const expected = layout === "shot" ? cinematicShotDurations(total) : cinematicSegmentDurations(total);
   const source = (value as { segments: unknown[] }).segments;
   if (source.length !== expected.length) return value;
   const plan = structuredClone(value) as { characters?: { id?: unknown; name?: unknown }[]; segments: Record<string, unknown>[] };
@@ -232,11 +242,12 @@ export function alignCinematicPlan(value: unknown, total: 30 | 60 | 90): unknown
   return plan;
 }
 
-export function validateCinematicPlan(value: unknown, total: 30 | 60 | 90) {
+export function validateCinematicPlan(value: unknown, total: 30 | 60 | 90,
+  layout: CinematicLayout = "legacy") {
   const plan = cinematicPlan.parse(value);
-  const expected = cinematicSegmentDurations(total);
+  const expected = layout === "shot" ? cinematicShotDurations(total) : cinematicSegmentDurations(total);
   if (plan.segments.length !== expected.length)
-    throw new Error(`Se requieren ${expected.length} bloques técnicos para ${total} segundos.`);
+    throw new Error(`Se requieren ${expected.length} ${layout === "shot" ? "tomas independientes" : "bloques técnicos"} para ${total} segundos.`);
   const characterIds = new Set(plan.characters.map(c => c.id));
   if (characterIds.size !== plan.characters.length)
     throw new Error("Hay IDs de personaje duplicados.");
@@ -246,6 +257,8 @@ export function validateCinematicPlan(value: unknown, total: 30 | 60 | 90) {
     const segment = plan.segments[i];
     if (segment.number !== i + 1 || segment.durationSeconds !== expected[i])
       throw new Error(`El bloque ${i + 1} debe durar ${expected[i]} segundos.`);
+    if (layout === "shot" && segment.shots.length !== 1)
+      throw new Error(`La toma ${i + 1} necesita exactamente un plano y una imagen inicial; los cortes van entre videos.`);
     if (segment.characterIds.some(id => !characterIds.has(id)))
       throw new Error(`El bloque ${segment.number} usa un personaje fuera de la biblia.`);
     if (!close(segment.shots[0].start, 0) || !close(segment.shots.at(-1)!.end, segment.durationSeconds))

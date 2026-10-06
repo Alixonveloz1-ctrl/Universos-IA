@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   alignCinematicPlan,
   cinematicSegmentDurations,
+  cinematicShotDurations,
   cinematicProjectInput,
   validateCinematicPlan,
   type CinematicPlan,
@@ -12,6 +13,7 @@ import { videoRequest } from "../lib/providers/vertex";
 import { verifiedVideoObject } from "../lib/direct-video";
 import { currentManifest } from "../worker/cinematic";
 import type { CinematicFinalizeJob, CinematicProject } from "../lib/cinematic/types";
+import { cinematicImageCharacterIds } from "../lib/cinematic/types";
 
 function plan30(): CinematicPlan {
   const durations = cinematicSegmentDurations(30);
@@ -98,6 +100,24 @@ function plan30(): CinematicPlan {
   };
 }
 
+function shotPlan(total: 30 | 60 | 90): CinematicPlan {
+  const plan = plan30();
+  const source = plan.segments[0];
+  plan.segments = cinematicShotDurations(total).map((duration, index) => ({
+    ...structuredClone(source),
+    number: index + 1,
+    durationSeconds: duration,
+    goal: `Beat ${index + 1}`,
+    continuityIn: index === 0 ? "Mara stands at the closed door." : `state-${index}`,
+    continuityOut: `state-${index + 1}`,
+    audioContinuityIn: index === 0 ? "Quiet room tone and cello." : `audio-${index}`,
+    audioContinuityOut: `audio-${index + 1}`,
+    shots: [{ ...source.shots[0], id: `take-${index + 1}`, start: 0, end: duration,
+      action: `Mara performs one small action for beat ${index + 1}.` }],
+  }));
+  return plan;
+}
+
 describe("cinematic production contract", () => {
   it("accepts an empty concept, validates dependent subgenres and defaults older productions to realism", () => {
     const input = { durationSeconds: 30, language: "Español", accent: "Latinoamericano",
@@ -147,6 +167,46 @@ describe("cinematic production contract", () => {
     expect(cinematicSegmentDurations(90)).toEqual([8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 6, 4]);
     for (const total of [30, 60, 90] as const)
       expect(cinematicSegmentDurations(total).reduce((a, b) => a + b, 0)).toBe(total);
+  });
+
+  it("builds one native video and one opening image for each independently planned shot", () => {
+    for (const total of [30, 60, 90] as const) {
+      const durations = cinematicShotDurations(total);
+      expect(durations.length).toBe(({ 30: 7, 60: 10, 90: 15 } as const)[total]);
+      expect(durations.every(d => [4, 6, 8].includes(d))).toBe(true);
+      expect(durations.reduce((sum, d) => sum + d, 0)).toBe(total);
+      const plan = validateCinematicPlan(shotPlan(total), total, "shot");
+      expect(plan.segments.every(s => s.shots.length === 1 && s.shots[0].end === s.durationSeconds)).toBe(true);
+    }
+
+    const plan = shotPlan(30);
+    const opening = compileCinematicOpeningImagePrompt(plan, plan.segments[0]);
+    const video = compileCinematicVideoPrompt(plan, plan.segments[0], "Español", "Latinoamericano");
+    expect(opening).toContain("EXACT opening frame for one cinematic shot");
+    expect(video).toContain("ONE CONTINUOUS SHOT FROM THE SUPPLIED OPENING IMAGE");
+    expect(video).toContain("ONLY SHOT (seconds within this video)");
+    expect(video).not.toContain("MULTI-SHOT CINEMATIC MICROSEQUENCE");
+    expect(video).not.toContain("HARD-CUT transitions");
+    expect(videoRequest("veo-3.1-lite-generate-001", video,
+      [{ bytesBase64Encoded: "AA==", mimeType: "image/png" }], "initial",
+      "gs://bucket/shot/", plan.segments[0].durationSeconds).parameters.durationSeconds).toBe(4);
+
+    const extraShot = structuredClone(plan);
+    extraShot.segments[0].shots.push({ ...extraShot.segments[0].shots[0], id: "unexpected-cut",
+      start: 2, end: 4, transition: "hard-cut" });
+    expect(() => validateCinematicPlan(extraShot, 30, "shot")).toThrow("exactamente un plano");
+    expect(() => validateCinematicPlan(plan, 30)).toThrow("bloques técnicos");
+  });
+
+  it("uses only the current shot's visible cast as image references while preserving legacy approvals", () => {
+    const plan = shotPlan(30);
+    plan.characters.push({ ...plan.characters[0], id: "leo", name: "Leo" });
+    plan.segments[0].characterIds.push("leo");
+    expect(cinematicImageCharacterIds(plan.segments[0], "one-shot-per-video")).toEqual(["mara"]);
+    expect(cinematicImageCharacterIds(plan.segments[0])).toEqual(["mara", "leo"]);
+    plan.segments[0].shots[0].characterIds = [];
+    expect(cinematicImageCharacterIds(plan.segments[0], "one-shot-per-video")).toEqual([]);
+    expect(validateCinematicPlan(plan, 30, "shot").segments[0].shots).toHaveLength(1);
   });
 
   it("validates literal audiovisual handoffs and compiles multi-shot native audio prompts", () => {

@@ -8,11 +8,13 @@ La tercera entrada de Universos IA vive aislada de los dos flujos existentes:
 
 ## Duraciones
 
-Los videos finales se dividen únicamente en duraciones nativas compatibles con el adaptador de Veo:
+Los planes nuevos dividen la película en tomas independientes de duración nativa para video desde una imagen inicial:
 
-- 30 s = 8 + 8 + 8 + 6
-- 60 s = 8 + 8 + 8 + 8 + 8 + 8 + 8 + 4
-- 90 s = 8 + 8 + 8 + 8 + 8 + 8 + 8 + 8 + 8 + 8 + 6 + 4
+- 30 s = seis tomas de 4 s y una de 6 s (7 imágenes y 7 videos).
+- 60 s = diez tomas de 6 s (10 imágenes y 10 videos).
+- 90 s = quince tomas de 6 s (15 imágenes y 15 videos).
+
+Cada toma se planifica con un único plano que cubre toda su duración. Su imagen inicial es la fuente del video correspondiente. El siguiente ángulo, insert o reacción tiene otra imagen inicial y otra generación; el editor hace el corte entre los MP4 aprobados. Los planes anteriores conservan sus duraciones originales y pueden ensamblarse sin migración. Pedir un plan nuevo en una producción anterior la convierte al formato por toma y reinicia las aprobaciones de ese plan.
 
 El ensamblador guarda un manifiesto inmutable de los MP4 aprobados y de la revisión del proyecto. Normaliza video, audio y marcas de tiempo antes de unirlos; valida duración y continuidad de paquetes. Si cambian las aprobaciones durante la ejecución, conserva el archivo de ese trabajo para diagnóstico pero no lo publica como película vigente.
 
@@ -22,9 +24,7 @@ El selector de estilo ofrece **Cinemático realista** y **Anime 2D** con ilustra
 
 El formulario incluye nueve géneros y sus subgéneros dependientes. El concepto escrito es opcional: si existe, determina la historia y tiene prioridad sobre las categorías; en blanco, el Director inventa una trama para el género y subgénero seleccionados. Tras ver el plan se puede pedir otra trama con las mismas elecciones; el Director recibe un resumen de la anterior para variar la nueva propuesta. Si ya se aprobaron imágenes o videos, la interfaz avisa que una nueva versión reiniciará esas aprobaciones y la película final de esa producción.
 
-Cada bloque técnico puede contener varios planos internos. Se permiten y se programan hard cuts, POV, inserts, close-ups y reaction shots. La primera toma parte de una imagen inicial aprobada; Veo crea los cortes posteriores dentro del mismo bloque.
-
-Para mejorar la estabilidad, se pide al Director normalmente 2–3 planos en 8 segundos y 1–2 en 4 o 6 segundos, con un solo beat físico principal por bloque. Fija la hora, el clima, la dirección de la luz, la posición de las personas y el estado de los objetos. La imagen inicial debe representar el estado anterior al descubrimiento: si alguien va a desenterrar un ataúd, la tierra todavía lo tapa; no se acepta como punto de partida un pozo que ya lo deja a la vista. El Director conserva la excavación de la historia y planifica cuándo y cómo aparece el ataúd. El generador de la imagen recibe el objetivo y las acciones posteriores como sucesos que aún no deben mostrarse; la pantalla enseña la dirección del fotograma inicial para compararla con la imagen antes de aprobarla. El prompt de Veo usa la imagen aprobada como autoridad visual y se concentra en movimiento, acciones con causa y efecto, cortes y audio nativo. Una lista negativa específica para Cinemático busca reducir manos duplicadas, herramientas flotantes, utilería que cambia y cuadros negros no previstos. Ninguna de estas indicaciones garantiza un resultado perfecto: la aprobación sigue siendo manual y se muestran todas las versiones generadas.
+El Director distribuye los planos entre tomas, con un beat físico realizable por video y sin cortes internos, cambios de escenario o contraplano inventado por Veo. Fija la hora, el clima, la dirección de la luz, la posición de las personas y el estado de los objetos. La imagen inicial debe representar el estado anterior al descubrimiento: si alguien va a desenterrar un ataúd, la tierra todavía lo tapa; no se acepta como punto de partida un pozo que ya lo deja a la vista. El Director conserva la excavación de la historia y planifica cuándo y cómo aparece el ataúd. El generador de cada imagen recibe el objetivo y la acción posterior como sucesos que aún no deben mostrarse; la pantalla enseña la dirección del fotograma inicial para compararla con la imagen antes de aprobarla. El prompt de Veo usa la imagen aprobada como autoridad visual y se concentra en el movimiento de esa única toma y su audio nativo. Una lista negativa específica para Cinemático busca reducir manos duplicadas, herramientas flotantes, utilería que cambia y cuadros negros no previstos. Ninguna de estas indicaciones garantiza un resultado perfecto: la aprobación sigue siendo manual y se muestran todas las versiones generadas. El mayor número de tomas implica más generaciones y tiempo/costo que el formato anterior.
 
 El selector de video ofrece Veo 3.1 Lite, Fast y Veo 3.1. El valor inicial sigue siendo Lite; cambiar a otro modelo es una elección manual antes de pagar una nueva generación. Los prompts nuevos se aplican a videos regenerados y a producciones nuevas; no alteran los MP4 ya guardados.
 
@@ -40,8 +40,8 @@ Cada personaje guarda una voz canónica. Las intervenciones vuelven a enviar el 
 2. Elegir 30/60/90 s y los modelos de Director, imagen y video.
 3. Generar el plan cinematográfico.
 4. Generar y aprobar referencias canónicas de personajes.
-5. Generar y aprobar la imagen inicial de cada bloque.
-6. Generar, escuchar/revisar y aprobar cada bloque Veo.
+5. Generar y aprobar la imagen inicial de cada toma.
+6. Generar, escuchar/revisar y aprobar cada toma Veo.
 7. Ensamblar únicamente los videos aprobados.
 
 Cambiar de modelo afecta generaciones futuras; los activos anteriores conservan el modelo con el que fueron creados. Aprobar una referencia nueva invalida solo los bloques cinematográficos dependientes.
