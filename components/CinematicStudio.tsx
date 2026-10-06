@@ -346,9 +346,9 @@ export default function CinematicStudio() {
         <button
           disabled={busy || !!data.generation}
           onClick={() => {
-            if (plan && (Object.keys(project.approvedCharacters).length || Object.keys(project.approvedImages).length ||
-              Object.keys(project.approvedVideos).length || project.final) &&
-              !window.confirm("Crear otra trama reiniciará las aprobaciones y la película final de esta producción. ¿Continuar?")) return;
+            if (plan && (assets.some(asset => (asset.planRevision || 0) === (project.planRevision || 0)) ||
+              project.final) &&
+              !window.confirm("Crear otra trama dejará fuera de uso las generaciones, aprobaciones y la película final de esta producción. ¿Continuar?")) return;
             void perform(async () => {
               await cinematicApi(`${project.id}/plan`, "POST", {});
               await loadProject(project.id);
