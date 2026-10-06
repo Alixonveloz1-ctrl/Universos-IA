@@ -39,7 +39,7 @@ import type {
   CinematicProject,
   CinematicPlanRun,
 } from "@/lib/cinematic/types";
-import { cinematicImageCharacterIds } from "@/lib/cinematic/types";
+import { cinematicImageCharacterIds, cinematicMissingApprovedVideos } from "@/lib/cinematic/types";
 import { findCinematicVideoObject } from "@/lib/cinematic/video-output";
 
 export const runtime = "nodejs";
@@ -65,8 +65,15 @@ async function reserveGeneration(project: CinematicProject, id: string, asset: C
     assert(current && !current.deleting && revision(current) === revision(project) && planRevision(current) === planRevision(project),
       "La producción cambió. Actualiza antes de generar.");
     assert(!current.activeGenerationId, "Hay una generación sin resolver. Consulta su estado antes de iniciar otra.");
+    if (asset.role === "segment-video")
+      assert(!current.activeFinalizeJobId, "Espera a que termine el ensamblado antes de regenerar un video.");
     tx.create(doc, asset);
-    tx.update(ref, { activeGenerationId: id, updatedAt: Date.now() });
+    if (asset.role === "segment-video") {
+      const approvedVideos = { ...current.approvedVideos };
+      delete approvedVideos[String(asset.segmentNumber)];
+      tx.update(ref, { activeGenerationId: id, approvedVideos, final: null,
+        revision: revision(current) + 1, updatedAt: Date.now() });
+    } else tx.update(ref, { activeGenerationId: id, updatedAt: Date.now() });
     return null;
   });
 }
@@ -602,13 +609,18 @@ async function handler(req: Request, context: { params: Promise<{ path?: string[
       const jobId = randomUUID();
       const now = Date.now();
       const jobRef = db().doc(`cinematicJobs/${jobId}`);
+      const assets = (await ref.collection("assets").get()).docs.map(doc => doc.data() as CinematicAsset);
       const job = await db().runTransaction(async tx => {
         const current = (await tx.get(ref)).data() as CinematicProject;
         assert(!current.deleting && !current.activeFinalizeJobId && !current.activeGenerationId,
           "Hay un ensamblado o una generación en curso.");
-        assert(current.plan && planRevision(current) === planRevision(project), "El plan cambió.");
+        assert(current.plan && planRevision(current) === planRevision(project) && revision(current) === revision(project),
+          "La producción cambió. Actualiza antes de ensamblar.");
         const plan = validateCinematicPlan(current.plan, current.durationSeconds,
           current.shotLayout === "one-shot-per-video" ? "shot" : "legacy");
+        const missing = cinematicMissingApprovedVideos(current, assets);
+        assert(!missing.length,
+          `Aprueba la versión actual del video de ${missing.length === 1 ? "la toma" : "las tomas"} ${missing.join(", ")} antes de ensamblar.`);
         const ids = plan.segments.map(s => current.approvedVideos[String(s.number)]);
         assert(ids.every(Boolean), "Aprueba todos los videos antes de ensamblar.");
         const snapshots = await Promise.all(ids.map(id => tx.get(ref.collection("assets").doc(id))));

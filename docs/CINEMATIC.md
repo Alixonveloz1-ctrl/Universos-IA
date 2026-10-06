@@ -32,6 +32,8 @@ El selector de video ofrece Veo 3.1 Lite, Fast y Veo 3.1. El valor inicial sigue
 
 Cuando una versión de video no se aprueba, el siguiente intento con la misma imagen simplifica y ralentiza la acción; tras otro intento no aprobado, reduce el movimiento a un paso o gesto y deja el resto para la toma siguiente. El Director solo permite cruzar una puerta por una abertura visible y conserva el panel y el marco como obstáculos sólidos. Se puede añadir una indicación breve para corregir el movimiento de una toma concreta sin cambiar las demás; la versión y el prompt exacto quedan guardados como otro intento. Después de varios intentos se aconseja regenerar la imagen inicial si su postura o trayecto impiden una animación coherente. Los rechazos de seguridad de Google se muestran como tales y no desencadenan reintentos automáticos.
 
+Al regenerar un video, se retira la aprobación de esa toma y se muestra solamente el intento más reciente. Las versiones anteriores permanecen almacenadas, pero no se apilan en la página ni se seleccionan para el ensamblaje. Una toma vuelve a estar lista cuando se aprueba su versión más reciente, completada a partir de su imagen actualmente aprobada. El botón de ensamblaje indica el número de cada toma pendiente; el servidor aplica la misma regla antes de crear un trabajo de montaje.
+
 ## Audio
 
 Todo el audio se solicita nativamente en Veo. El plan contiene una única Biblia Sonora global con identidad musical, instrumentación, tempo, ambiente, mezcla de diálogo, lenguaje de efectos y regla de continuidad. Esa misma Biblia se inyecta en cada prompt.

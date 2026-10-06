@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DEFAULT_MODELS, MODELS } from "@/lib/models";
 import type { CinematicAsset, CinematicFinalizeJob, CinematicProject } from "@/lib/cinematic/types";
-import { cinematicImageCharacterIds } from "@/lib/cinematic/types";
+import { cinematicImageCharacterIds, cinematicMissingApprovedVideos, currentCinematicVideo } from "@/lib/cinematic/types";
 import {
   CINEMATIC_GENRES, CINEMATIC_STYLES, DEFAULT_CINEMATIC_GENRE,
   DEFAULT_CINEMATIC_SUBGENRE, cinematicGenre, cinematicStyle, cinematicSubgenre,
@@ -150,7 +150,9 @@ export default function CinematicStudio() {
     })();
     return () => { active = false; };
   }, [data?.project.id, failedVideoIds, loadProject]);
-  const finalizing = !!data?.finalizeJob && ["queued", "running"].includes(data.finalizeJob.state);
+  const finalizing = !!data?.project.activeFinalizeJobId &&
+    data.finalizeJob?.id === data.project.activeFinalizeJobId &&
+    ["queued", "running"].includes(data.finalizeJob.state);
   useEffect(() => {
     if (!data?.project.id || (!pendingVideoIds && !finalizing && !data.generation)) return;
     const projectId = data.project.id;
@@ -309,6 +311,7 @@ export default function CinematicStudio() {
   const { project, assets } = data;
   const plan = project.plan;
   const currentAssets = assets.filter(a => (a.planRevision || 0) === (project.planRevision || 0));
+  const missingVideoNumbers = cinematicMissingApprovedVideos(project, assets);
   const staleWaitingIds = assets.filter(a => a.role === "segment-video" && a.state === "waiting" &&
     ((a.planRevision || 0) !== (project.planRevision || 0) ||
       a.inputRefs[0] !== project.approvedImages[String(a.segmentNumber)])).map(a => a.id);
@@ -480,11 +483,7 @@ export default function CinematicStudio() {
               const videoAttempts = currentAssets.filter(a => a.role === "segment-video" &&
                 a.segmentNumber === segment.number && a.inputRefs[0] === approvedImageId)
                 .sort((a, b) => b.createdAt - a.createdAt);
-              const videoCandidate = videoAttempts[0];
-              const playableVideos = videoAttempts.filter(a => a.state === "completed" && a.storageObject);
-              const approvedVideo = assets.find(a => a.id === approvedVideoId);
-              if (approvedVideo?.storageObject && !playableVideos.some(a => a.id === approvedVideo.id))
-                playableVideos.push(approvedVideo);
+              const videoCandidate = currentCinematicVideo(project, assets, segment.number);
               const shownImage = imageCandidate || assets.find(a => a.id === approvedImageId);
               const castReady = imageCast.every(id => !!project.approvedCharacters[id]);
               return (
@@ -565,26 +564,26 @@ export default function CinematicStudio() {
                   </div>
                   {approvedImageId && <p className="muted">✓ Imagen inicial aprobada</p>}
 
-                  {playableVideos.map(video => (
-                    <div key={video.id}>
+                  {videoCandidate?.state === "completed" && videoCandidate.storageObject && (
+                    <div>
                       <video
                         className="media"
-                        src={`/api/cinematic/${project.id}/media/${video.id}`}
+                        src={`/api/cinematic/${project.id}/media/${videoCandidate.id}`}
                         controls
                         playsInline
                         preload="metadata"
                       />
-                      {video.id === approvedVideoId ? <p className="muted">✓ Video aprobado</p> :
+                      {videoCandidate.id === approvedVideoId ? <p className="muted">✓ Video aprobado</p> :
                         <button
                           className="primary"
                           disabled={busy}
                           onClick={() => void perform(async () => {
-                            await cinematicApi(`${project.id}/assets/${video.id}/approve`, "POST", {});
+                            await cinematicApi(`${project.id}/assets/${videoCandidate.id}/approve`, "POST", {});
                             await loadProject(project.id);
                           })}
                         >Aprobar este video</button>}
                     </div>
-                  ))}
+                  )}
                   {videoCandidate?.state === "waiting" && <p className="muted">Veo está generando esta {label} con audio nativo…</p>}
                   {videoCandidate?.state === "failed" && <p className="error">{videoCandidate.error}</p>}
                   {videoCandidate?.state === "failed" && /prompt could not be submitted|sensitive words|Responsible AI/i.test(videoCandidate.error || "") &&
@@ -633,7 +632,7 @@ export default function CinematicStudio() {
             </p>
             <button
               className="primary wide"
-              disabled={busy || !!data.generation || finalizing || plan.segments.some(s => !project.approvedVideos[String(s.number)])}
+              disabled={busy || !!data.generation || finalizing || !!project.activeFinalizeJobId || missingVideoNumbers.length > 0}
               onClick={() => void perform(async () => {
                 await cinematicApi(`${project.id}/finalize`, "POST", {});
                 await loadProject(project.id);
@@ -641,6 +640,9 @@ export default function CinematicStudio() {
             >
               {finalizing ? "Ensamblando…" : `Ensamblar ${project.durationSeconds} segundos`}
             </button>
+            {!!missingVideoNumbers.length && <p className="muted">Falta aprobar la versión actual del video de {missingVideoNumbers.length === 1 ? "la toma" : "las tomas"} {missingVideoNumbers.join(", ")}.</p>}
+            {data.generation && <p className="muted">Resuelve la generación activa para ensamblar.</p>}
+            {project.activeFinalizeJobId && !finalizing && <p className="muted">Hay un ensamblado pendiente; consulta o recupera ese trabajo antes de iniciar otro.</p>}
             {data.finalizeJob?.state === "failed" && <p className="error">{data.finalizeJob.error?.message}</p>}
             {data.finalizeJob?.dispatchState === "uncertain" && finalizing &&
               <p className="muted">El despacho del ensamblado es incierto. Se puede recuperar el mismo trabajo después de 70 minutos.</p>}

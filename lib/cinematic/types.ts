@@ -52,6 +52,22 @@ export interface CinematicProject extends CinematicProjectInput {
   updatedAt: number;
 }
 
+export function currentCinematicVideo(project: CinematicProject, assets: CinematicAsset[], number: number) {
+  const imageId = project.approvedImages[String(number)];
+  if (!imageId) return undefined;
+  return assets.filter(asset => asset.role === "segment-video" && asset.segmentNumber === number &&
+    (asset.planRevision || 0) === (project.planRevision || 0) && asset.inputRefs[0] === imageId)
+    .sort((a, b) => b.createdAt - a.createdAt || b.id.localeCompare(a.id))[0];
+}
+
+export function cinematicMissingApprovedVideos(project: CinematicProject, assets: CinematicAsset[]) {
+  return (project.plan?.segments || []).filter(segment => {
+    const current = currentCinematicVideo(project, assets, segment.number);
+    return !current || current.id !== project.approvedVideos[String(segment.number)] ||
+      current.state !== "completed" || !current.storageObject;
+  }).map(segment => segment.number);
+}
+
 export interface CinematicFinalizeJob {
   id: string;
   projectId: string;
