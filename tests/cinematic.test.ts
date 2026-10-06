@@ -112,7 +112,10 @@ function shotPlan(total: 30 | 60 | 90): CinematicPlan {
     continuityOut: `state-${index + 1}`,
     audioContinuityIn: index === 0 ? "Quiet room tone and cello." : `audio-${index}`,
     audioContinuityOut: `audio-${index + 1}`,
-    shots: [{ ...source.shots[0], id: `take-${index + 1}`, start: 0, end: duration,
+    shots: [{ ...structuredClone(source.shots[0]), id: `take-${index + 1}`, start: 0, end: duration,
+      openingSubjects: [{ characterId: "mara", screenSide: "center", depth: "foreground",
+        faceVisible: true, visibleParts: "face and upper body" }],
+      physicalContacts: [],
       action: `Mara performs one small action for beat ${index + 1}.` }],
   }));
   return plan;
@@ -205,8 +208,45 @@ describe("cinematic production contract", () => {
     expect(cinematicImageCharacterIds(plan.segments[0], "one-shot-per-video")).toEqual(["mara"]);
     expect(cinematicImageCharacterIds(plan.segments[0])).toEqual(["mara", "leo"]);
     plan.segments[0].shots[0].characterIds = [];
+    plan.segments[0].shots[0].openingSubjects = [];
     expect(cinematicImageCharacterIds(plan.segments[0], "one-shot-per-video")).toEqual([]);
     expect(validateCinematicPlan(plan, 30, "shot").segments[0].shots).toHaveLength(1);
+  });
+
+  it("rejects a background holder of a foreground hand and locks a hidden face to its own later shot", () => {
+    const plan = shotPlan(30);
+    plan.characters.push({ ...plan.characters[0], id: "leo", name: "Leo" });
+    const first = plan.segments[0];
+    first.characterIds.push("leo");
+    first.shots[0].characterIds.push("leo");
+    first.shots[0].openingSubjects!.push({ characterId: "leo", screenSide: "right",
+      depth: "background", faceVisible: false, visibleParts: "distant silhouette" });
+    first.shots[0].physicalContacts = [{ actorId: "leo", targetId: "mara",
+      atFrameZero: true, contact: "Leo holds Mara's wrist" }];
+    expect(() => validateCinematicPlan(plan, 30, "shot")).toThrow("lejos");
+
+    first.shots[0].openingSubjects![1] = { characterId: "leo", screenSide: "right",
+      depth: "adjacent-offscreen", faceVisible: false, visibleParts: "connected arm and hand only" };
+    expect(validateCinematicPlan(plan, 30, "shot").segments[0].shots[0].physicalContacts).toHaveLength(1);
+    const image = compileCinematicOpeningImagePrompt(plan, first);
+    const video = compileCinematicVideoPrompt(plan, first, "Español", "Latinoamericano");
+    expect(image).toContain("background cannot also own a foreground hand");
+    expect(image).toContain('"faceVisible":false');
+    expect(video).toContain("people whose faces must stay hidden: Leo");
+    expect(video).toContain("A later face shot must be a separate video starting from its own approved image");
+
+    first.dialogue = [{ characterId: "leo", text: "Detente.", intention: "urgent", start: 1, end: 2 }];
+    expect(() => validateCinematicPlan(plan, 30, "shot")).toThrow("rostro visible");
+    first.dialogue = [];
+    const second = plan.segments[1];
+    second.characterIds = ["leo"];
+    second.shots[0].characterIds = ["leo"];
+    second.shots[0].openingSubjects = [{ characterId: "leo", screenSide: "center",
+      depth: "foreground", faceVisible: true, visibleParts: "face and upper body" }];
+    second.shots[0].action = "Leo's face reacts from the first frame.";
+    expect(validateCinematicPlan(plan, 30, "shot").segments[1].shots[0].openingSubjects?.[0].faceVisible).toBe(true);
+    expect(compileCinematicVideoPrompt(plan, second, "Español", "Latinoamericano"))
+      .toContain("recognizable faces at frame zero: Leo");
   });
 
   it("validates literal audiovisual handoffs and compiles multi-shot native audio prompts", () => {

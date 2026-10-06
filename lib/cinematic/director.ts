@@ -63,7 +63,13 @@ function cinematicProviderSchema(value: unknown): unknown {
       : cinematicProviderSchema(child)]));
 }
 
-const planResponseSchema = cinematicProviderSchema(z.toJSONSchema(cinematicPlan));
+// Stored legacy plans may omit staging, but the provider must supply it for
+// every new one-shot plan. Keep the optional local schema for old documents.
+const planResponseSchema = cinematicProviderSchema(z.toJSONSchema(cinematicPlan)) as {
+  properties: { segments: { items: { properties: { shots: { items: { required: string[] } } } } } }
+};
+planResponseSchema.properties.segments.items.properties.shots.items.required.push(
+  "openingSubjects", "physicalContacts");
 
 function planPrompt(input: CinematicProjectInput, repair = "", previous: unknown = null,
   includeSchema = false, previousPlan?: CinematicPlan) {
@@ -83,6 +89,7 @@ function planPrompt(input: CinematicProjectInput, repair = "", previous: unknown
       ? "JERARQUÍA NARRATIVA: el concepto escrito por el usuario MANDA sobre el género y subgénero. Respeta sus personajes, conflicto, hechos y revelación; usa las categorías solo cuando sean compatibles y nunca cambies la historia para encajarla en ellas."
       : "TRAMA LIBRE: el usuario dejó el concepto vacío. Inventa una premisa original completa en el género y subgénero elegidos, con personajes adultos, conflicto claro desde el primer segundo, giro causal y final satisfactorio o gancho. Decide tú la trama, locaciones y personajes; no exijas que el usuario escriba un concepto.",
     "REGLA ESTRUCTURAL: cada elemento de segments ES UNA TOMA COMPLETA con exactamente UN elemento en shots. Cada toma recibe su propia imagen inicial aprobada y UNA generación Veo de la duración indicada (4, 6 u 8 s). El único shot empieza en 0, termina en durationSeconds y lleva transition=start. No describas cortes internos, cambios de ángulo, contraplano, POV alterno, giro que oculte y vuelva a mostrar un rostro, cambio de escenario o salto temporal dentro de un video. Un nuevo encuadre, insert, reacción o revelación visual requiere el siguiente segmento con su propia imagen inicial y video; el montaje une esos videos después. Cada toma contiene una acción o reacción física realizable en su tiempo nativo, sin acelerar ni repetir movimiento para llenar segundos.",
+    "GEOMETRÍA OBLIGATORIA POR TOMA: en el único shot, openingSubjects contiene exactamente una entrada por characterId visible. screenSide y depth describen el lugar físico en la imagen inicial; faceVisible indica si el rostro se ve claramente desde el fotograma cero; visibleParts describe lo que sí se ve. Una persona adjacent-offscreen puede mostrar una mano o antebrazo conectado que entra desde un borde, pero no su rostro. physicalContacts es una lista explícita de TODO contacto físico entre personas, o [] si no hay ninguno; atFrameZero dice si el contacto ya existe en la imagen inicial. Dos personas que se tocan deben estar a distancia real de brazo: ambas en el mismo plano de profundidad o una inmediatamente junto al borde y la otra en primer plano. Un personaje situado al fondo NO puede sujetar una mano del primer plano; nunca dibujes una segunda copia suya en el borde. Si el rostro de una persona está oculto en el inicio, mantenlo oculto durante todo ese video; si la historia debe mostrarlo o darle diálogo con labios visibles, crea otra toma con otra imagen inicial donde su rostro ya aparece. No conviertas una mano o espalda en un rostro improvisado por Veo.",
     "LENGUAJE DEL REFERENTE: conflicto ya activo en el primer segundo; pregunta visual inmediata; preparación → impacto → reacción → revelación repartidos entre tomas independientes. Conserva ritmo con inserts y reacciones en segmentos nuevos, pero cada video tiene UN beat físico principal. Una pala, puerta, mano u objeto solo ejecuta un movimiento causal a la vez: posición inicial, agarre, trayectoria, contacto y resultado. Para una acción difícil, termina una toma antes del impacto y muestra su consecuencia en la toma siguiente con otra imagen inicial coherente; evita exigir varias acciones complejas simultáneas.",
     "CRONOLOGÍA FÍSICA: escribe cada bloque desde su estado ANTES de la acción hasta su estado DESPUÉS. La causa debe preceder al resultado. Una revelación que ocurre al excavar, abrir o entrar NO puede estar visible ni al alcance en la imagen inicial ni en un bloque anterior. Si la historia exige desenterrar a alguien, empieza con tierra que aún tapa el ataúd; un pozo abierto con el ataúd a la vista contradice esa historia y el plan debe corregirse ANTES de generar imágenes. No sustituyas la excavación por otra acción para justificar una revelación adelantada. En openingFrameDirection describe explícitamente qué obstáculo y cubierta siguen presentes, qué está fuera de vista y dónde se encuentran los personajes y la herramienta; en continuityOut registra exactamente qué cambió. El suelo removido, las tapas abiertas y los daños no regresan al estado anterior entre cortes o bloques. Un flashback o salto temporal exige señal narrativa explícita.",
     "DISTRIBUCIÓN DE MOVIMIENTO: aproximadamente 60–70% microactuación (ojos, respiración, expresión, manos pequeñas), 20–25% movimiento corporal moderado y 10–15% acción compleja. No conviertas cada plano en una demostración de cámara.",
@@ -167,6 +174,16 @@ export function compileCinematicOpeningImagePrompt(
 ) {
   const first = segment.shots[0];
   const cast = plan.characters.filter(c => first.characterIds.includes(c.id));
+  const subjects = first.openingSubjects?.map(s => ({
+    name: plan.characters.find(c => c.id === s.characterId)?.name || s.characterId,
+    ...s,
+  }));
+  const contacts = first.physicalContacts?.map(c => ({
+    actor: plan.characters.find(x => x.id === c.actorId)?.name || c.actorId,
+    target: plan.characters.find(x => x.id === c.targetId)?.name || c.targetId,
+    atFrameZero: c.atFrameZero,
+    contact: c.contact,
+  }));
   return [
     "Create the EXACT opening frame for one cinematic shot and one Veo video. Vertical 9:16. ONE image only, no storyboard, no split screen, no text.",
     "Attached reference images are canonical identity references for the named adult fictional characters. Preserve each face, hair, proportions, wardrobe and accessories. Do not merge identities.",
@@ -178,11 +195,14 @@ export function compileCinematicOpeningImagePrompt(
     `INCOMING CONTINUITY: ${segment.continuityIn}`,
     `OPENING FRAME DIRECTION: ${segment.openingFrameDirection}`,
     `FIRST SHOT: type=${first.shotType}; lens=${first.lensMm}mm; camera=${first.camera}; framing=${first.framing}; action at frame zero=${first.action}`,
+    subjects ? `PHYSICAL STAGING AT FRAME ZERO — exact person count, position, depth, visible parts and face visibility: ${JSON.stringify(subjects)}` : "",
+    contacts ? `PERSON-TO-PERSON CONTACTS — only these people touch; atFrameZero=true means show the connected contact now, otherwise leave it for later motion: ${JSON.stringify(contacts)}` : "",
     `STORY BEAT SCHEDULED AFTER THIS OPENING FRAME (do not show its result yet): ${segment.goal}`,
     `LATER ACTIONS, NOT PART OF THE OPENING IMAGE: ${segment.shots.map(shot => `${shot.start}-${shot.end}s ${shot.action}`).join(" | ")}`,
     `VISIBLE CAST: ${JSON.stringify(cast.map(c => ({ id: c.id, name: c.name, visualIdentity: c.visualIdentity, wardrobe: c.wardrobe, lockedTraits: c.lockedTraits })))}`,
-    "Freeze the action at its opening instant with readable eyelines and room for the scheduled movement. Establish the actual time of day, weather, light direction, subject positions and prop state that every subsequent angle must preserve. Depict only the BEFORE state of the scheduled actions: keep a future discovery physically covered and out of sight. If someone will dig to uncover a buried object, show the undisturbed or partially excavated ground still covering it; do not show a deep open pit with the object already exposed. If someone will open a closed object, show it still closed. Do not foreshadow by depicting the physical result. If a physical action starts here, show an anatomically connected grip, the prop and its target in a plausible spatial relationship. Keep background detail subordinate to faces and the story object.",
-  ].join("\n\n");
+    "GEOMETRY CHECK BEFORE DRAWING: each named character appears exactly once. For a contact marked atFrameZero=true, place the holder immediately beside the other person at a reachable distance in the same depth plane, with a continuous arm from that one holder's shoulder to the contacting hand. For atFrameZero=false, put them within reach but do not show the grip before it happens. A person far down the hallway or in the background cannot also own a foreground hand. If the intended composition shows only an arm entering from the edge, its owner is just outside that edge: do not also show that owner standing elsewhere. If a direction conflicts with physical reach, correct the staging to the contact; keep the action and identities. No extra people, disconnected limbs or duplicate bodies. A face marked hidden stays outside the opening frame; any face needed in this video must already be clearly visible here.",
+    "Freeze the action at its opening instant with readable eyelines and room for the scheduled movement. Establish the actual time of day, weather, light direction, subject positions and prop state that this one continuous video must preserve. Depict only the BEFORE state of the scheduled actions: keep a future discovery physically covered and out of sight. If someone will dig to uncover a buried object, show the undisturbed or partially excavated ground still covering it; do not show a deep open pit with the object already exposed. If someone will open a closed object, show it still closed. Do not foreshadow by depicting the physical result. If a physical action starts here, show an anatomically connected grip, the prop and its target in a plausible spatial relationship. Keep background detail subordinate to faces and the story object.",
+  ].filter(Boolean).join("\n\n");
 }
 
 function voiceLock(plan: CinematicPlan, segment: CinematicSegment, language: string, accent: string) {
@@ -202,6 +222,11 @@ export function compileCinematicVideoPrompt(
   visualStyle: CinematicVisualStyle = "realistic",
 ) {
   const singleShot = segment.shots.length === 1;
+  const openingSubjects = segment.shots[0].openingSubjects;
+  const visibleFaces = openingSubjects?.filter(s => s.faceVisible).map(s =>
+    plan.characters.find(c => c.id === s.characterId)?.name || s.characterId);
+  const hiddenFaces = openingSubjects?.filter(s => !s.faceVisible).map(s =>
+    plan.characters.find(c => c.id === s.characterId)?.name || s.characterId);
   const cuts = segment.shots.map((s, i) =>
     `${s.start}-${s.end}s | ${i === 0 ? "START FROM SUPPLIED IMAGE" : s.transition.toUpperCase()} | ${s.shotType} | ${s.lensMm}mm | on-screen cast: ${s.characterIds.map(id => `${plan.characters.find(c => c.id === id)?.name || id} [speaker_${id}]`).join(", ") || "none"} | camera: ${s.camera} | framing: ${s.framing} | action: ${s.action} | native audio beat: ${s.nativeAudioBeat || "continue established sound"}`
   ).join("\n");
@@ -220,6 +245,9 @@ export function compileCinematicVideoPrompt(
       ? "ONE CONTINUOUS SHOT FROM THE SUPPLIED OPENING IMAGE. Hold this camera setup and composition throughout this video. Small motivated movement within the same view is allowed. No internal edit, hard cut, insert, reverse angle, new location, time jump, hidden face that reappears changed, or invented second view. The next shot has its own separately generated opening image and video; the editor cuts between finished videos. Preserve the image's time of day, weather, light direction, cast, props and physical geography."
       : "THIS IS A MULTI-SHOT CINEMATIC MICROSEQUENCE. Follow the planned shot order with clean HARD-CUT transitions. The times are pacing targets, not an instruction to warp bodies or objects to hit an exact frame. Keep the same geography and continuously advancing moment across every camera angle; a close-up is still in this same scene. Do not add a time-of-day or weather change unless the shot explicitly calls for a deliberate story transition.",
     (singleShot ? "ONLY SHOT (seconds within this video):\n" : "SHOT SEQUENCE (seconds within this block):\n") + cuts,
+    singleShot ? `FACE-VISIBILITY LOCK: recognizable faces at frame zero: ${visibleFaces?.join(", ") || "read only from the supplied image"}; people whose faces must stay hidden: ${hiddenFaces?.join(", ") || "any person whose face is not clearly visible in the supplied image"}. Do not reveal, invent, turn toward the camera, or move the camera to show a face absent from the starting image. If a holder enters only as a hand or arm, keep that person's head and face outside the frame until this video ends. A later face shot must be a separate video starting from its own approved image.` : "",
+    singleShot && segment.shots[0].physicalContacts?.length
+      ? `CONTACT GEOMETRY: ${JSON.stringify(segment.shots[0].physicalContacts)}. Keep every grip connected to its one owner's arm and shoulder; no distant background double or new person at the frame edge.` : "",
     singleShot
       ? "PHYSICAL ACTION: perform the one scheduled beat in this one view. Begin in the supplied image's BEFORE state; keep a concealed object hidden until its scheduled discovery, with visible contact and cover removal first. Never reveal it early or invent an action to justify it. Every hand belongs to an established person and stays anatomically connected. A held tool follows a plausible grip and path. Show actual contact before damage. Do not repeat, reverse, morph or multiply the movement or prop. Hold a readable final reaction within the same camera setup."
       : "PHYSICAL ACTION: animate one clear cause-and-effect gesture at a time. Begin with the planned BEFORE state and preserve the story's action order: keep a concealed object hidden until its scheduled discovery, with visible contact and removal of its cover first. Do not reveal the result in advance or substitute a different action to rationalize it. Every hand belongs to an established person and enters from a physically plausible location, including an unseen person only when the story establishes where they are. A held tool follows its holder's grip and a plausible path to its target. Show actual contact before damage, or cut away before impact and show only its motivated aftermath. Object positions and damage do not reset or multiply at a cut. Prefer a readable reaction over repeated or impossible motion.",
@@ -241,5 +269,5 @@ export function compileCinematicVideoPrompt(
       : "PERFORMANCE: preserve identity and geometry through every cut. Favor microexpression and controlled physical acting. Only brief, motivated motion blur or particles at a real impact. No invented people, objects or spectacle.",
     `EXPECTED AUDIO CONTINUITY OUT: ${segment.audioContinuityOut}`,
     "No subtitles, captions, titles, logos, watermark, intro or outro.",
-  ].join("\n\n");
+  ].filter(Boolean).join("\n\n");
 }

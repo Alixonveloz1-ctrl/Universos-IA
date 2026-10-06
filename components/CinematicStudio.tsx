@@ -498,6 +498,25 @@ export default function CinematicStudio() {
                       <p key={shot.id}>
                         <b>{shot.start}–{shot.end}s · {shot.shotType} · {shot.lensMm} mm · {shot.transition}</b><br />
                         {shot.action}
+                        {shot.openingSubjects?.map(subject => (
+                          <span key={subject.characterId}>
+                            <br />
+                            {plan.characters.find(c => c.id === subject.characterId)?.name || subject.characterId}: {
+                              { left: "izquierda", center: "centro", right: "derecha" }[subject.screenSide]
+                            }, {{ foreground: "primer plano", midground: "plano medio",
+                              background: "fondo", "adjacent-offscreen": "junto al borde, fuera de cuadro" }[subject.depth]}; {
+                              subject.faceVisible ? "rostro visible" : "rostro oculto"
+                            }. {subject.visibleParts}
+                          </span>
+                        ))}
+                        {shot.physicalContacts?.map((contact, i) => (
+                          <span key={`${contact.actorId}-${contact.targetId}-${i}`}>
+                            <br />
+                            Contacto: {plan.characters.find(c => c.id === contact.actorId)?.name || contact.actorId} → {
+                              plan.characters.find(c => c.id === contact.targetId)?.name || contact.targetId
+                            }. {contact.contact} ({contact.atFrameZero ? "desde la imagen inicial" : "durante la toma"})
+                          </span>
+                        ))}
                       </p>
                     ))}
                   </details>
