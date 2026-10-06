@@ -23,6 +23,15 @@ it("preserves video range responses and rejects foreign bucket prefixes", async 
   await expect(mediaResponse("other-project/image.png")).rejects.toMatchObject({ code: "PATH" });
   expect(request).toHaveBeenCalledTimes(1);
 });
+it("serves a recovered MP4 with a playable MIME type when storage labels it as bytes", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("abc", {
+    status: 206, headers: { "content-range": "bytes 0-2/100", "content-type": "application/octet-stream" },
+  })));
+  const response = await mediaResponse("universos-ia/cinematic/project/recovered.mp4", "bytes=0-2");
+  expect(response.status).toBe(206);
+  expect(response.headers.get("content-type")).toBe("video/mp4");
+  expect(response.headers.get("content-range")).toBe("bytes 0-2/100");
+});
 it("requests low reasoning on the selected text model and structured JSON", async () => {
   const request = vi.fn().mockResolvedValue(Response.json({ candidates: [{ content: { parts: [{ text: '{"ok":true}' }] } }] })); vi.stubGlobal("fetch", request);
   expect(await textGenerate("gemini-3-flash-preview", "A short approved character description", { type: "object" })).toEqual({ ok: true });
