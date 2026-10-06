@@ -270,6 +270,25 @@ describe("cinematic production contract", () => {
     expect(video).toContain("native voice from the established offscreen or partial-body position");
   });
 
+  it("reduces motion on rejected takes and constrains a doorway to a visible open gap", () => {
+    const plan = shotPlan(30);
+    const first = plan.segments[0];
+    first.location = "Hallway by a closed door";
+    first.shots[0].action = "Mara walks toward the doorway.";
+    const initial = compileCinematicVideoPrompt(plan, first, "Español", "Latinoamericano");
+    expect(initial).toContain("pass through only a visibly open gap");
+    expect(initial).not.toContain("RETAKE DIRECTION");
+    expect(initial).not.toContain("damage");
+    expect(compileCinematicOpeningImagePrompt(plan, first)).not.toContain("deep open pit");
+    const retry = compileCinematicVideoPrompt(plan, first, "Español", "Latinoamericano", "realistic", 1);
+    expect(retry).toContain("smaller, slower action with a stable camera");
+    const adjusted = compileCinematicVideoPrompt(plan, first, "Español", "Latinoamericano", "realistic", 2,
+      "Stop before the closed door");
+    expect(adjusted).toContain("minimum physically feasible motion");
+    expect(adjusted).toContain("DIRECTOR ADJUSTMENT FOR THIS TAKE: Stop before the closed door");
+    expect(adjusted).toContain("only where physically compatible with the approved starting image");
+  });
+
   it("validates literal audiovisual handoffs and compiles multi-shot native audio prompts", () => {
     const plan = validateCinematicPlan(plan30(), 30);
     const prompt = compileCinematicVideoPrompt(plan, plan.segments[0], "Español", "Latinoamericano");

@@ -458,7 +458,9 @@ async function handler(req: Request, context: { params: Promise<{ path?: string[
     }
 
     if (parts.length === 4 && parts[1] === "segments" && parts[3] === "video" && req.method === "POST") {
-      const assetId = requestId((await requestJson(req)).requestId);
+      const request = z.object({ requestId: z.string().uuid(), motionNote: z.string().trim().max(500).optional() })
+        .strict().parse(await requestJson(req));
+      const assetId = request.requestId;
       const prior = (await ref.collection("assets").doc(assetId).get()).data() as CinematicAsset | undefined;
       if (prior) {
         assert(prior.role === "segment-video" && prior.segmentNumber === Number(parts[2]), "El intento pertenece a otra generación.");
@@ -478,8 +480,12 @@ async function handler(req: Request, context: { params: Promise<{ path?: string[
         mimeType: imageAsset.storageObject.endsWith(".png") ? "image/png" : imageAsset.storageObject.endsWith(".webp") ? "image/webp" : "image/jpeg",
       };
       const outputPrefix = objectPath("cinematic", project.id, `segment-video-${number}-${assetId}-provider`) + "/";
+      const priorAttempts = (await ref.collection("assets").get()).docs
+        .map(doc => doc.data() as CinematicAsset)
+        .filter(asset => asset.role === "segment-video" && asset.segmentNumber === number &&
+          asset.inputRefs[0] === imageId && (asset.planRevision || 0) === planRevision(project)).length;
       const prompt = compileCinematicVideoPrompt(project.plan, segment, project.language, project.accent,
-        cinematicStyle(project.visualStyle));
+        cinematicStyle(project.visualStyle), Math.min(priorAttempts, 2), request.motionNote);
       const asset: CinematicAsset = {
         id: assetId,
         projectId: project.id,
