@@ -32,7 +32,9 @@ describe("cinematic plan request", () => {
       expect(prompt).toContain("exactamente UN elemento en shots");
       expect(prompt).toContain("El único shot empieza en 0");
       expect(prompt).toContain("openingSubjects contiene exactamente una entrada");
-      expect(prompt).toContain("physicalContacts es una lista explícita");
+      expect(prompt).toContain("physicalContacts enumera TODO contacto físico");
+      expect(prompt).toContain("Si faceVisible=false, su voz nativa procede de su posición establecida");
+      expect(prompt).toContain("Elige esas posiciones ANTES de narrar la escena");
       expect(prompt).not.toContain("Veo recibe una sola imagen inicial y debe inventar los demás encuadres");
       expect(schema.properties).toHaveProperty("segments");
       expect(schema.required).toContain("characters");
