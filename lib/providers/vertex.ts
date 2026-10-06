@@ -102,6 +102,11 @@ export async function textGenerate(
     .filter((p: { text?: string; thought?: boolean }) => p.text && !p.thought)
     .map((p: { text: string }) => p.text)
     .join("");
+  console.info("text_generation_result", {
+    model: id,
+    finishReason: r.candidates?.[0]?.finishReason || null,
+    textLength: text.length,
+  });
   try {
     return JSON.parse(text);
   } catch {

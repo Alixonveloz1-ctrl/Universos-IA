@@ -123,6 +123,57 @@ export function cinematicSegmentDurations(total: 30 | 60 | 90): (4 | 6 | 8)[] {
   return [8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 6, 4];
 }
 
+// The Director chooses the story and shots; the editor owns the exact technical
+// boundaries. Rounding or a slightly different block length must not force a
+// second paid generation of the same story.
+export function alignCinematicPlan(value: unknown, total: 30 | 60 | 90): unknown {
+  if (!value || typeof value !== "object" || !Array.isArray((value as { segments?: unknown }).segments)) return value;
+  const expected = cinematicSegmentDurations(total);
+  const source = (value as { segments: unknown[] }).segments;
+  if (source.length !== expected.length) return value;
+  const plan = structuredClone(value) as { segments: Record<string, unknown>[] };
+  for (let i = 0; i < plan.segments.length; i++) {
+    const segment = plan.segments[i];
+    if (!segment || typeof segment !== "object") continue;
+    const originalDuration = Number(segment.durationSeconds);
+    segment.number = i + 1;
+    segment.durationSeconds = expected[i];
+    if (i > 0) {
+      const previous = plan.segments[i - 1];
+      if (typeof previous?.continuityOut === "string" && previous.continuityOut.trim())
+        segment.continuityIn = previous.continuityOut;
+      if (typeof previous?.audioContinuityOut === "string" && previous.audioContinuityOut.trim())
+        segment.audioContinuityIn = previous.audioContinuityOut;
+    }
+    if (!Array.isArray(segment.shots) || !segment.shots.length || segment.shots.length > 8) continue;
+    const shots = segment.shots as Record<string, unknown>[];
+    const weights = shots.map(shot => {
+      const span = Number(shot?.end) - Number(shot?.start);
+      return Number.isFinite(span) && span > 0 ? span : 1;
+    });
+    const sum = weights.reduce((a, b) => a + b, 0);
+    const timeline = Number.isFinite(originalDuration) && originalDuration > 0 ? originalDuration :
+      Math.max(...shots.map(shot => Number(shot?.end) || 0), expected[i]);
+    if (Array.isArray(segment.dialogue)) for (const turn of segment.dialogue as Record<string, unknown>[]) {
+      if (!turn || typeof turn !== "object" || !Number.isFinite(turn.start) || !Number.isFinite(turn.end)) continue;
+      turn.start = Math.round(Number(turn.start) / timeline * expected[i] * 1000) / 1000;
+      turn.end = Math.round(Number(turn.end) / timeline * expected[i] * 1000) / 1000;
+    }
+    let cursor = 0;
+    shots.forEach((shot, index) => {
+      if (!shot || typeof shot !== "object") return;
+      shot.id = `cinematic_${i + 1}_${index + 1}`;
+      shot.start = cursor;
+      cursor = index === shots.length - 1 ? expected[i]
+        : Math.round(weights.slice(0, index + 1).reduce((a, b) => a + b, 0) / sum * expected[i] * 1000) / 1000;
+      shot.end = cursor;
+      shot.transition = index === 0 ? "start"
+        : shot.transition === "match-cut" ? "match-cut" : "hard-cut";
+    });
+  }
+  return plan;
+}
+
 export function validateCinematicPlan(value: unknown, total: 30 | 60 | 90) {
   const plan = cinematicPlan.parse(value);
   const expected = cinematicSegmentDurations(total);

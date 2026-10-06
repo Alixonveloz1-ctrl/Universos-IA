@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  alignCinematicPlan,
   cinematicSegmentDurations,
   validateCinematicPlan,
   type CinematicPlan,
@@ -96,6 +97,24 @@ function plan30(): CinematicPlan {
 }
 
 describe("cinematic production contract", () => {
+  it("aligns the Director's shot boundaries and literal handoffs without changing the story", () => {
+    const draft = plan30();
+    draft.segments[1].durationSeconds = 6;
+    draft.segments[1].continuityIn = "different wording";
+    draft.segments[1].audioContinuityIn = "different audio wording";
+    draft.segments[1].shots[0].end = 3.1;
+    draft.segments[1].shots[1].start = 3.2;
+    draft.segments[1].shots[1].end = 6;
+    const aligned = alignCinematicPlan(draft, 30);
+    const result = validateCinematicPlan(aligned, 30);
+    expect(result.segments[1].durationSeconds).toBe(8);
+    expect(result.segments[1].continuityIn).toBe(result.segments[0].continuityOut);
+    expect(result.segments[1].audioContinuityIn).toBe(result.segments[0].audioContinuityOut);
+    expect(result.segments[1].shots[0].end).toBe(result.segments[1].shots[1].start);
+    expect(result.segments[1].shots[1].end).toBe(8);
+    expect(result.segments[1].goal).toBe(draft.segments[1].goal);
+  });
+
   it("builds exact Veo-compatible technical durations", () => {
     expect(cinematicSegmentDurations(30)).toEqual([8, 8, 8, 6]);
     expect(cinematicSegmentDurations(60)).toEqual([8, 8, 8, 8, 8, 8, 8, 4]);

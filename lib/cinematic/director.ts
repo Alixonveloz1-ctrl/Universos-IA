@@ -1,6 +1,8 @@
 import { z } from "zod";
+import { AppError } from "../errors";
 import { textGenerate } from "../providers/vertex";
 import {
+  alignCinematicPlan,
   cinematicPlan,
   cinematicSegmentDurations,
   validateCinematicPlan,
@@ -18,7 +20,27 @@ const CINEMATIC_MASTER_STYLE = [
   "The production should read as one professionally photographed film even though individual blocks are generated separately. This MASTER STYLE overrides any generated wording that would drift into another rendering technique.",
 ].join(" ");
 
-function planPrompt(input: CinematicProjectInput, repair = "") {
+// Google's structured-output service rejects the full Zod schema (including
+// string limits, regexes and numeric literal unions) before generating text.
+// Keep only shape and required fields at the provider; validate locally.
+function cinematicProviderSchema(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(cinematicProviderSchema);
+  if (!value || typeof value !== "object") return value;
+  const object = value as Record<string, unknown>;
+  if (Array.isArray(object.anyOf) && object.anyOf.every(item =>
+    item && typeof item === "object" && typeof (item as { const?: unknown }).const === "number"))
+    return { type: "number" };
+  return Object.fromEntries(Object.entries(object)
+    .filter(([key]) => ["type", "properties", "required", "items", "enum"].includes(key))
+    .map(([key, child]) => [key, key === "properties"
+      ? Object.fromEntries(Object.entries(child as Record<string, unknown>)
+        .map(([name, field]) => [name, cinematicProviderSchema(field)]))
+      : cinematicProviderSchema(child)]));
+}
+
+const planResponseSchema = cinematicProviderSchema(z.toJSONSchema(cinematicPlan));
+
+function planPrompt(input: CinematicProjectInput, repair = "", previous: unknown = null, includeSchema = false) {
   const durations = cinematicSegmentDurations(input.durationSeconds);
   return [
     "Eres el Director de Producciones Cinematográficas de Universos IA. Devuelve SOLO el JSON solicitado.",
@@ -37,26 +59,44 @@ function planPrompt(input: CinematicProjectInput, repair = "") {
     "SONIDO Y CORTES: un hard cut visual no reinicia automáticamente música, ambiente o identidad vocal. Decide explícitamente qué sonido continúa por encima del corte y qué efecto puntual marca el beat.",
     `CONCEPTO DEL USUARIO: ${input.concept}`,
     repair ? `CORRECCIÓN OBLIGATORIA DEL BORRADOR ANTERIOR: ${repair}` : "",
-    `FORMATO JSON OBLIGATORIO: ${JSON.stringify(z.toJSONSchema(cinematicPlan))}`,
+    previous ? `BORRADOR ANTERIOR A CORREGIR: ${JSON.stringify(previous).slice(0, 40000)}` : "",
+    includeSchema ? `FORMATO JSON OBLIGATORIO: ${JSON.stringify(z.toJSONSchema(cinematicPlan))}` : "",
     "No escribas explicaciones fuera del JSON.",
   ].filter(Boolean).join("\n\n");
 }
 
 export async function generateCinematicPlan(input: CinematicProjectInput) {
   let repair = "";
+  let previous: unknown = null;
+  let useProviderSchema = true;
   for (let attempt = 0; attempt < 2; attempt++) {
-    const result = await textGenerate(
-      input.models.text,
-      planPrompt(input, repair),
-      undefined, // This large nested schema triggers Google's InvalidArgument: 400.
-      32768,
-      130000, // Two repair attempts must fit inside the 300-second web function.
-    );
+    const request = (schema: unknown) => textGenerate(input.models.text,
+      planPrompt(input, repair, previous, !schema), schema, 32768, 130000);
+    let result: unknown;
     try {
-      return validateCinematicPlan(result, input.durationSeconds);
+      result = await request(useProviderSchema ? planResponseSchema : undefined);
     } catch (error) {
-      repair = error instanceof Error ? error.message.slice(0, 4000) : "El plan no cumple la duración o continuidad.";
-      if (attempt === 1) throw error;
+      // A 400 explicitly rejects the request. Retrying once without provider
+      // constraints is safe and preserves compatibility with model revisions.
+      if (!(error instanceof AppError) || error.code !== "PROVIDER_REJECTED" ||
+        !error.message.startsWith("Google respondió 400.") || !useProviderSchema) throw error;
+      useProviderSchema = false;
+      console.warn("cinematic_plan_schema_rejected", { model: input.models.text });
+      result = await request(undefined);
+    }
+    try {
+      return validateCinematicPlan(alignCinematicPlan(result, input.durationSeconds), input.durationSeconds);
+    } catch (error) {
+      const issues = error instanceof z.ZodError
+        ? error.issues.map(issue => `${issue.path.join(".")}: ${issue.message}`)
+        : [error instanceof Error ? error.message : "El plan no cumple la duración o continuidad."];
+      repair = issues.join("; ").slice(0, 4000);
+      console.warn("cinematic_plan_validation", { attempt: attempt + 1,
+        paths: error instanceof z.ZodError ? error.issues.slice(0, 10).map(issue => issue.path.join(".")) : [],
+        responseKind: result && typeof result === "object" && "invalidJsonText" in result ? "invalid-json" : "object" });
+      if (attempt === 1) throw new AppError("DIRECTOR_PLAN",
+        `El Director devolvió un plan incompleto después de dos intentos. Primer problema: ${issues[0]?.slice(0, 180) || "formato JSON"}.`, 502);
+      previous = result;
     }
   }
   throw new Error("No se pudo construir el plan cinematográfico.");
