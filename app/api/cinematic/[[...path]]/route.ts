@@ -26,12 +26,13 @@ import {
   validateCinematicPlan,
 } from "@/lib/cinematic/schema";
 import {
-  CINEMATIC_NEGATIVE_PROMPT,
+  cinematicNegativePrompt,
   compileCinematicCharacterPrompt,
   compileCinematicOpeningImagePrompt,
   compileCinematicVideoPrompt,
   generateCinematicPlan,
 } from "@/lib/cinematic/director";
+import { cinematicStyle } from "@/lib/cinematic/options";
 import type {
   CinematicAsset,
   CinematicFinalizeJob,
@@ -246,6 +247,7 @@ async function handler(req: Request, context: { params: Promise<{ path?: string[
           const p = d.data() as CinematicProject;
           return {
             id: p.id, title: p.title, concept: p.concept,
+            visualStyle: cinematicStyle(p.visualStyle), genre: p.genre, subgenre: p.subgenre,
             durationSeconds: p.durationSeconds, createdAt: p.createdAt,
             updatedAt: p.updatedAt, hasPlan: !!p.plan, hasFinal: !!p.final,
           };
@@ -389,7 +391,7 @@ async function handler(req: Request, context: { params: Promise<{ path?: string[
         return json({ run: existing, plan: existing.state === "completed" ? current.plan : null }, 202);
       }
       try {
-        const plan = await generateCinematicPlan(project);
+        const plan = await generateCinematicPlan(project, project.plan);
         await db().runTransaction(async tx => {
           const current = (await tx.get(ref)).data() as CinematicProject;
           assert(current.activeGenerationId === id && revision(current) === revision(project),
@@ -425,7 +427,7 @@ async function handler(req: Request, context: { params: Promise<{ path?: string[
       assert(project.plan, "Genera primero el plan cinematográfico.");
       const character = project.plan.characters.find(c => c.id === characterId);
       assert(character, "Personaje no encontrado.");
-      const prompt = compileCinematicCharacterPrompt(project.plan, character);
+      const prompt = compileCinematicCharacterPrompt(project.plan, character, cinematicStyle(project.visualStyle));
       const asset = await saveImageCandidate(project, "character", prompt, [], [], characterId, undefined, id);
       return json(asset, 201);
     }
@@ -447,7 +449,7 @@ async function handler(req: Request, context: { params: Promise<{ path?: string[
       assert(refIds.length <= limits.maxReferenceImages,
         `Este bloque necesita ${refIds.length} referencias y el generador de imagen seleccionado admite ${limits.maxReferenceImages}. Cambia manualmente de generador o reduce el reparto del bloque.`);
       const refs = await assetRefs(project, refIds);
-      const prompt = compileCinematicOpeningImagePrompt(project.plan, segment);
+      const prompt = compileCinematicOpeningImagePrompt(project.plan, segment, cinematicStyle(project.visualStyle));
       const asset = await saveImageCandidate(project, "segment-image", prompt, refs, refIds, undefined, number, id);
       return json(asset, 201);
     }
@@ -473,7 +475,8 @@ async function handler(req: Request, context: { params: Promise<{ path?: string[
         mimeType: imageAsset.storageObject.endsWith(".png") ? "image/png" : imageAsset.storageObject.endsWith(".webp") ? "image/webp" : "image/jpeg",
       };
       const outputPrefix = objectPath("cinematic", project.id, `segment-video-${number}-${assetId}-provider`) + "/";
-      const prompt = compileCinematicVideoPrompt(project.plan, segment, project.language, project.accent);
+      const prompt = compileCinematicVideoPrompt(project.plan, segment, project.language, project.accent,
+        cinematicStyle(project.visualStyle));
       const asset: CinematicAsset = {
         id: assetId,
         projectId: project.id,
@@ -504,7 +507,7 @@ async function handler(req: Request, context: { params: Promise<{ path?: string[
           [imageRef],
           `gs://${config().bucket}/${outputPrefix}`,
           segment.durationSeconds,
-          CINEMATIC_NEGATIVE_PROMPT,
+          cinematicNegativePrompt(project.visualStyle),
         );
         await finishGeneration(project.id, assetId, { state: "waiting", operation });
         return json({ ...asset, state: "waiting", operation }, 202);

@@ -18,7 +18,9 @@ El ensamblador guarda un manifiesto inmutable de los MP4 aprobados y de la revis
 
 ## Lenguaje de producción
 
-El Director cinematográfico tiene un Master Style propio: short drama fotorealista, live-action-like, vertical 9:16 y fotografía de alto presupuesto. No hereda estilos Anime/3D de Universos.
+El selector de estilo ofrece **Cinemático realista** y **Anime 2D** con ilustración detallada, fondos pintados y actuación expresiva. Los dos utilizan el mismo flujo de planos, voces, audio nativo, aprobaciones y montaje. El estilo queda guardado por producción y se repite explícitamente en el Director, las referencias de personajes, las imágenes iniciales y Veo. El anime usa diseños originales; no replica personajes ni escenas existentes. Cinemático mantiene sus propias elecciones visuales, aisladas de las otras dos secciones.
+
+El formulario incluye nueve géneros y sus subgéneros dependientes. El concepto escrito es opcional: si existe, determina la historia y tiene prioridad sobre las categorías; en blanco, el Director inventa una trama para el género y subgénero seleccionados. Tras ver el plan se puede pedir otra trama con las mismas elecciones; el Director recibe un resumen de la anterior para variar la nueva propuesta. Si ya se aprobaron imágenes o videos, la interfaz avisa que una nueva versión reiniciará esas aprobaciones y la película final de esa producción.
 
 Cada bloque técnico puede contener varios planos internos. Se permiten y se programan hard cuts, POV, inserts, close-ups y reaction shots. La primera toma parte de una imagen inicial aprobada; Veo crea los cortes posteriores dentro del mismo bloque.
 
@@ -34,7 +36,7 @@ Cada personaje guarda una voz canónica. Las intervenciones vuelven a enviar el 
 
 ## Flujo
 
-1. Escribir el concepto.
+1. Elegir el estilo visual, género, subgénero y, si se desea, escribir un concepto propio.
 2. Elegir 30/60/90 s y los modelos de Director, imagen y video.
 3. Generar el plan cinematográfico.
 4. Generar y aprobar referencias canónicas de personajes.
