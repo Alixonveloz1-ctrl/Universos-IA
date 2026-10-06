@@ -186,7 +186,11 @@ describe("cinematic production contract", () => {
     const opening = compileCinematicOpeningImagePrompt(plan, plan.segments[0]);
     const video = compileCinematicVideoPrompt(plan, plan.segments[0], "Español", "Latinoamericano");
     expect(opening).toContain("EXACT opening frame for one cinematic shot");
+    expect(opening).toContain("FIRST SHOT AT FRAME ZERO:");
+    expect(opening).toContain("Show only the BEFORE state; the action happens later in the video.");
+    expect(opening).not.toContain("action at frame zero=");
     expect(video).toContain("ONE CONTINUOUS SHOT FROM THE SUPPLIED OPENING IMAGE");
+    expect(video).toContain("VISIBLE STORY CHANGE:");
     expect(video).toContain("ONLY SHOT (seconds within this video)");
     expect(video).not.toContain("MULTI-SHOT CINEMATIC MICROSEQUENCE");
     expect(video).not.toContain("HARD-CUT transitions");
