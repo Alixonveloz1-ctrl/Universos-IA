@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { CINEMATIC_GENRES, DEFAULT_CINEMATIC_GENRE, DEFAULT_CINEMATIC_SUBGENRE,
+  type CinematicGenre } from "./options";
 
 export const cinematicDuration = z.union([z.literal(30), z.literal(60), z.literal(90)]);
 export const cinematicSegmentDuration = z.union([z.literal(4), z.literal(6), z.literal(8)]);
@@ -7,7 +9,11 @@ const short = z.string().trim().min(1).max(1400);
 const long = z.string().trim().min(1).max(12000);
 
 export const cinematicProjectInput = z.object({
-  concept: z.string().trim().min(8).max(4000),
+  concept: z.string().trim().max(4000).default(""),
+  visualStyle: z.enum(["realistic", "anime2d"]).default("realistic"),
+  genre: z.enum(CINEMATIC_GENRES.map(genre => genre.id) as [CinematicGenre, ...CinematicGenre[]])
+    .default(DEFAULT_CINEMATIC_GENRE),
+  subgenre: z.string().trim().min(1).max(80).default(DEFAULT_CINEMATIC_SUBGENRE),
   durationSeconds: cinematicDuration,
   language: z.string().trim().min(1).max(100),
   accent: z.string().trim().min(1).max(100),
@@ -16,7 +22,10 @@ export const cinematicProjectInput = z.object({
     image: z.string().trim().min(1).max(120),
     video: z.string().trim().min(1).max(120),
   }).strict(),
-}).strict();
+}).strict().refine(input => CINEMATIC_GENRES.some(genre =>
+  genre.id === input.genre && genre.subgenres.some(subgenre => subgenre.id === input.subgenre)), {
+  path: ["subgenre"], message: "El subgénero no corresponde al género elegido.",
+});
 
 export const cinematicVoice = z.object({
   timbre: short,

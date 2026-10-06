@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   alignCinematicPlan,
   cinematicSegmentDurations,
+  cinematicProjectInput,
   validateCinematicPlan,
   type CinematicPlan,
 } from "../lib/cinematic/schema";
-import { CINEMATIC_NEGATIVE_PROMPT, compileCinematicOpeningImagePrompt, compileCinematicVideoPrompt } from "../lib/cinematic/director";
+import { CINEMATIC_NEGATIVE_PROMPT, cinematicNegativePrompt, compileCinematicCharacterPrompt,
+  compileCinematicOpeningImagePrompt, compileCinematicVideoPrompt } from "../lib/cinematic/director";
 import { videoRequest } from "../lib/providers/vertex";
 import { verifiedVideoObject } from "../lib/direct-video";
 import { currentManifest } from "../worker/cinematic";
@@ -97,6 +99,30 @@ function plan30(): CinematicPlan {
 }
 
 describe("cinematic production contract", () => {
+  it("accepts an empty concept, validates dependent subgenres and defaults older productions to realism", () => {
+    const input = { durationSeconds: 30, language: "Español", accent: "Latinoamericano",
+      models: { text: "gemini-3-flash-preview", image: "gemini-3.1-flash-image", video: "veo-3.1-lite-generate-001" } };
+    expect(cinematicProjectInput.parse(input)).toMatchObject({ concept: "", visualStyle: "realistic", genre: "drama", subgenre: "family" });
+    expect(cinematicProjectInput.parse({ ...input, genre: "fantasy", subgenre: "isekai" }).concept).toBe("");
+    expect(() => cinematicProjectInput.parse({ ...input, genre: "fantasy", subgenre: "family" })).toThrow();
+  });
+
+  it("locks anime 2D across reference, opening frame and video without changing audio or shot structure", () => {
+    const plan = plan30();
+    const character = compileCinematicCharacterPrompt(plan, plan.characters[0], "anime2d");
+    const opening = compileCinematicOpeningImagePrompt(plan, plan.segments[0], "anime2d");
+    const video = compileCinematicVideoPrompt(plan, plan.segments[0], "Español", "Latinoamericano", "anime2d");
+    for (const prompt of [character, opening, video]) {
+      expect(prompt).toContain("PREMIUM HAND-DRAWN 2D CINEMATIC ANIME");
+      expect(prompt).not.toContain("PREMIUM PHOTOREALISTIC");
+    }
+    expect(video).toContain("MULTI-SHOT CINEMATIC MICROSEQUENCE");
+    expect(video).toContain("NATIVE AUDIO");
+    expect(video).not.toContain("photorealistic CINEMATIC VIDEO");
+    expect(cinematicNegativePrompt("anime2d")).toContain("photorealism");
+    expect(cinematicNegativePrompt("anime2d")).not.toContain("cel shading");
+    expect(cinematicNegativePrompt("realistic")).toContain("cel shading");
+  });
   it("aligns the Director's shot boundaries and literal handoffs without changing the story", () => {
     const draft = plan30();
     draft.segments[1].durationSeconds = 6;

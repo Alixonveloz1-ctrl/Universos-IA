@@ -4,6 +4,11 @@ import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DEFAULT_MODELS, MODELS } from "@/lib/models";
 import type { CinematicAsset, CinematicFinalizeJob, CinematicProject } from "@/lib/cinematic/types";
+import {
+  CINEMATIC_GENRES, CINEMATIC_STYLES, DEFAULT_CINEMATIC_GENRE,
+  DEFAULT_CINEMATIC_SUBGENRE, cinematicGenre, cinematicStyle, cinematicSubgenre,
+  type CinematicGenre, type CinematicVisualStyle,
+} from "@/lib/cinematic/options";
 
 type CinematicData = {
   project: CinematicProject;
@@ -18,6 +23,9 @@ type CinematicListItem = {
   id: string;
   title: string;
   concept: string;
+  visualStyle?: CinematicVisualStyle;
+  genre?: CinematicGenre;
+  subgenre?: string;
   durationSeconds: number;
   createdAt: number;
   updatedAt: number;
@@ -71,6 +79,9 @@ export default function CinematicStudio() {
   const [items, setItems] = useState<CinematicListItem[]>([]);
   const [data, setData] = useState<CinematicData | null>(null);
   const [concept, setConcept] = useState("");
+  const [visualStyle, setVisualStyle] = useState<CinematicVisualStyle>("realistic");
+  const [genre, setGenre] = useState<CinematicGenre>(DEFAULT_CINEMATIC_GENRE);
+  const [subgenre, setSubgenre] = useState(DEFAULT_CINEMATIC_SUBGENRE);
   const [durationSeconds, setDurationSeconds] = useState<30 | 60 | 90>(30);
   const [language, setLanguage] = useState("Español");
   const [accent, setAccent] = useState("Latinoamericano");
@@ -167,16 +178,42 @@ export default function CinematicStudio() {
           <p className="muted">
             Short drama vertical con montaje por planos, continuidad visual y sonora, voces canónicas y audio nativo de Veo.
           </p>
+          <div className="grid">
+            <label>
+              Estilo visual
+              <select value={visualStyle} onChange={e => setVisualStyle(e.target.value as CinematicVisualStyle)}>
+                {CINEMATIC_STYLES.map(style => <option value={style.id} key={style.id}>{style.label}</option>)}
+              </select>
+            </label>
+            <label>
+              Género
+              <select value={genre} onChange={e => {
+                const selected = e.target.value as CinematicGenre;
+                setGenre(selected);
+                setSubgenre(cinematicGenre(selected).subgenres[0].id);
+              }}>
+                {CINEMATIC_GENRES.map(option => <option value={option.id} key={option.id}>{option.label}</option>)}
+              </select>
+            </label>
+            <label>
+              Subgénero
+              <select value={subgenre} onChange={e => setSubgenre(e.target.value)}>
+                {cinematicGenre(genre).subgenres.map(option =>
+                  <option value={option.id} key={option.id}>{option.label}</option>)}
+              </select>
+            </label>
+          </div>
           <label>
-            Concepto
+            Concepto (opcional)
             <textarea
               rows={6}
               maxLength={4000}
               value={concept}
               onChange={e => setConcept(e.target.value)}
-              placeholder="Describe la situación, conflicto o idea central. El Director construirá la producción completa."
+              placeholder="Si tienes una historia, escríbela aquí. Si lo dejas vacío, el Director inventará una según el género y subgénero elegidos."
             />
           </label>
+          <p className="muted">Tu concepto tiene prioridad sobre el género y subgénero si no coinciden.</p>
           <div className="grid">
             <label>
               Duración final
@@ -204,10 +241,13 @@ export default function CinematicStudio() {
           </div>
           <button
             className="primary wide"
-            disabled={busy || concept.trim().length < 8}
+            disabled={busy}
             onClick={() => void perform(async () => {
               const project = await cinematicApi("", "POST", {
                 concept: concept.trim(),
+                visualStyle,
+                genre,
+                subgenre,
                 durationSeconds,
                 language,
                 accent: accent.trim() || "Neutral",
@@ -234,7 +274,7 @@ export default function CinematicStudio() {
                 <article className="card" key={item.id}>
                   <span className="badge">{item.durationSeconds} s</span>
                   <h3>{item.title}</h3>
-                  <p className="muted">{item.concept}</p>
+                  <p className="muted">{item.concept || `${cinematicGenre(item.genre).label} · ${cinematicSubgenre(item.genre, item.subgenre).label}`}</p>
                   <div className="actions">
                     <button onClick={() => void perform(async () => {
                       visibleProject.current = item.id;
@@ -283,7 +323,8 @@ export default function CinematicStudio() {
           <span className="badge">Cinemático · {project.durationSeconds} s</span>
         </div>
         <h1>{project.title}</h1>
-        <p>{project.concept}</p>
+        <p className="muted">{CINEMATIC_STYLES.find(style => style.id === cinematicStyle(project.visualStyle))?.label} · {cinematicGenre(project.genre).label} · {cinematicSubgenre(project.genre, project.subgenre).label}</p>
+        {project.concept && <p>{project.concept}</p>}
         <details>
           <summary>Generadores de esta producción</summary>
           <div className="grid">
@@ -305,14 +346,16 @@ export default function CinematicStudio() {
         <button
           disabled={busy || !!data.generation}
           onClick={() => {
-            if (plan && !window.confirm("Regenerar el plan reiniciará las aprobaciones cinematográficas de esta producción. ¿Continuar?")) return;
+            if (plan && (Object.keys(project.approvedCharacters).length || Object.keys(project.approvedImages).length ||
+              Object.keys(project.approvedVideos).length || project.final) &&
+              !window.confirm("Crear otra trama reiniciará las aprobaciones y la película final de esta producción. ¿Continuar?")) return;
             void perform(async () => {
               await cinematicApi(`${project.id}/plan`, "POST", {});
               await loadProject(project.id);
             });
           }}
         >
-          {plan ? "Regenerar plan cinematográfico" : "Generar plan cinematográfico"}
+          {plan ? (project.concept ? "Proponer otra versión" : "Proponer otra trama") : "Generar plan cinematográfico"}
         </button>
       </section>
 
