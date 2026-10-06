@@ -59,6 +59,7 @@ export default function CinematicStudio() {
   const [accent, setAccent] = useState("Latinoamericano");
   const [models, setModels] = useState<{ text: string; image: string; video: string }>({ ...DEFAULT_MODELS });
   const polling = useRef(false);
+  const checkedFailedVideos = useRef(new Set<string>());
 
   const loadList = useCallback(async () => {
     setItems(await cinematicApi());
@@ -93,6 +94,27 @@ export default function CinematicStudio() {
       a.inputRefs[0] === data.project.approvedImages[String(a.segmentNumber)]).map(a => a.id).sort().join(",") || "",
     [data],
   );
+  const failedVideoIds = useMemo(
+    () => data?.assets.filter(a => a.role === "segment-video" && a.state === "failed" && a.operation && a.outputPrefix && !a.storageObject &&
+      (a.planRevision || 0) === (data.project.planRevision || 0) &&
+      a.inputRefs[0] === data.project.approvedImages[String(a.segmentNumber)]).map(a => a.id).sort().join(",") || "",
+    [data],
+  );
+  useEffect(() => {
+    if (!data?.project.id || !failedVideoIds) return;
+    const projectId = data.project.id;
+    const ids = failedVideoIds.split(",").filter(id => !checkedFailedVideos.current.has(`${projectId}:${id}`));
+    if (!ids.length) return;
+    ids.forEach(id => checkedFailedVideos.current.add(`${projectId}:${id}`));
+    void (async () => {
+      try {
+        for (const id of ids) await cinematicApi(`${projectId}/videos/${id}/recover`, "POST", {});
+        await loadProject(projectId);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "No se pudo consultar el video guardado.");
+      }
+    })();
+  }, [data?.project.id, failedVideoIds, loadProject]);
   const finalizing = !!data?.finalizeJob && ["queued", "running"].includes(data.finalizeJob.state);
   useEffect(() => {
     if (!data?.project.id || (!pendingVideoIds && !finalizing && !data.generation)) return;
@@ -383,10 +405,15 @@ export default function CinematicStudio() {
               const imageCandidate = latest(currentAssets, a => a.role === "segment-image" &&
                 a.segmentNumber === segment.number && a.inputRefs.length === segment.characterIds.length &&
                 segment.characterIds.every((id, i) => a.inputRefs[i] === project.approvedCharacters[id]));
-              const videoCandidate = latest(currentAssets, a => a.role === "segment-video" &&
-                a.segmentNumber === segment.number && a.inputRefs[0] === approvedImageId);
+              const videoAttempts = currentAssets.filter(a => a.role === "segment-video" &&
+                a.segmentNumber === segment.number && a.inputRefs[0] === approvedImageId)
+                .sort((a, b) => b.createdAt - a.createdAt);
+              const videoCandidate = videoAttempts[0];
+              const playableVideos = videoAttempts.filter(a => a.state === "completed" && a.storageObject);
+              const approvedVideo = assets.find(a => a.id === approvedVideoId);
+              if (approvedVideo?.storageObject && !playableVideos.some(a => a.id === approvedVideo.id))
+                playableVideos.push(approvedVideo);
               const shownImage = imageCandidate || assets.find(a => a.id === approvedImageId);
-              const shownVideo = videoCandidate || assets.find(a => a.id === approvedVideoId);
               const castReady = segment.characterIds.every(id => !!project.approvedCharacters[id]);
               return (
                 <article className="clip" key={segment.number}>
@@ -446,17 +473,33 @@ export default function CinematicStudio() {
                   </div>
                   {approvedImageId && <p className="muted">✓ Imagen inicial aprobada</p>}
 
-                  {shownVideo?.storageObject && (
-                    <video
-                      className="media"
-                      src={`/api/cinematic/${project.id}/media/${shownVideo.id}`}
-                      controls
-                      playsInline
-                      preload="metadata"
-                    />
-                  )}
+                  {playableVideos.map(video => (
+                    <div key={video.id}>
+                      <video
+                        className="media"
+                        src={`/api/cinematic/${project.id}/media/${video.id}`}
+                        controls
+                        playsInline
+                        preload="metadata"
+                      />
+                      {video.id === approvedVideoId ? <p className="muted">✓ Video aprobado</p> :
+                        <button
+                          className="primary"
+                          disabled={busy}
+                          onClick={() => void perform(async () => {
+                            await cinematicApi(`${project.id}/assets/${video.id}/approve`, "POST", {});
+                            await loadProject(project.id);
+                          })}
+                        >Aprobar este video</button>}
+                    </div>
+                  ))}
                   {videoCandidate?.state === "waiting" && <p className="muted">Veo está generando este bloque con audio nativo…</p>}
                   {videoCandidate?.state === "failed" && <p className="error">{videoCandidate.error}</p>}
+                  {videoCandidate?.state === "failed" && videoCandidate.operation && videoCandidate.outputPrefix &&
+                    <button disabled={busy} onClick={() => void perform(async () => {
+                      await cinematicApi(`${project.id}/videos/${videoCandidate.id}/recover`, "POST", {});
+                      await loadProject(project.id);
+                    })}>Buscar video generado sin regenerar</button>}
                   <div className="actions">
                     <button
                       disabled={busy || !!data.generation || !approvedImageId || videoCandidate?.state === "waiting"}
@@ -467,20 +510,7 @@ export default function CinematicStudio() {
                     >
                       {videoCandidate ? "Regenerar video" : "Generar video"}
                     </button>
-                    {videoCandidate?.state === "completed" && videoCandidate.id !== approvedVideoId && (
-                      <button
-                        className="primary"
-                        disabled={busy}
-                        onClick={() => void perform(async () => {
-                          await cinematicApi(`${project.id}/assets/${videoCandidate.id}/approve`, "POST", {});
-                          await loadProject(project.id);
-                        })}
-                      >
-                        Aprobar video
-                      </button>
-                    )}
                   </div>
-                  {approvedVideoId && <p className="muted">✓ Video aprobado</p>}
                 </article>
               );
             })}

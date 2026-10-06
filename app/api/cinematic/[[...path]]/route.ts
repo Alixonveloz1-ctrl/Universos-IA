@@ -37,6 +37,7 @@ import type {
   CinematicProject,
   CinematicPlanRun,
 } from "@/lib/cinematic/types";
+import { findCinematicVideoObject } from "@/lib/cinematic/video-output";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -511,29 +512,31 @@ async function handler(req: Request, context: { params: Promise<{ path?: string[
       }
     }
 
-    if (parts.length === 3 && parts[1] === "videos" && req.method === "GET") {
+    if ((parts.length === 3 && parts[1] === "videos" && req.method === "GET") ||
+        (parts.length === 4 && parts[1] === "videos" && parts[3] === "recover" && req.method === "POST")) {
       const { doc, asset } = await readAsset(pid, parts[2]);
       assert(asset.kind === "video" && asset.role === "segment-video", "Activo de video inválido.");
-      if (asset.state === "completed" || asset.state === "failed") return json(asset);
+      const recovery = parts.length === 4;
+      if (asset.state === "completed" || (asset.state === "failed" && !recovery)) return json(asset);
+      if (recovery) assert(asset.state === "failed", "Esta operación ya no necesita recuperación.");
       if (asset.state === "submitting" || asset.state === "uncertain") return json(asset);
       assert(asset.operation && asset.outputPrefix, "La operación de Veo no está registrada.");
       const result = await pollVideo(asset.model, asset.operation);
-      if (!result.done) return json(asset);
-      if (result.error) {
-        const error = String(result.error.message || "Veo no pudo completar este bloque.").slice(0, 700);
-        await doc.update({ state: "failed", error });
-        return json({ ...asset, state: "failed", error });
+      if (!result.done) {
+        if (recovery) await doc.update({ state: "waiting", error: null });
+        return json({ ...asset, state: "waiting", error: null });
       }
-      const uri = result.response?.generatedVideos?.[0]?.video?.uri ||
-        result.response?.videos?.[0]?.gcsUri;
-      const expected = `gs://${config().bucket}/${asset.outputPrefix}`;
-      if (typeof uri !== "string" || !uri.startsWith(expected) || !uri.endsWith(".mp4")) {
-        await doc.update({ state: "failed", error: "Google finalizó sin un MP4 válido en el destino esperado." });
-        return json({ ...asset, state: "failed", error: "Google finalizó sin un MP4 válido en el destino esperado." });
+      const storageObject = await findCinematicVideoObject(result, asset.outputPrefix, asset.id);
+      if (storageObject) {
+        await doc.update({ state: "completed", storageObject, error: null });
+        return json({ ...asset, state: "completed", storageObject, error: null });
       }
-      const storageObject = uri.slice(`gs://${config().bucket}/`.length);
-      await doc.update({ state: "completed", storageObject });
-      return json({ ...asset, state: "completed", storageObject });
+      const error = result.error ? String(result.error.message || "Veo no pudo completar este bloque.").slice(0, 700)
+        : Number(result.response?.raiMediaFilteredCount) > 0
+          ? "Veo filtró este intento y no entregó un archivo de video. Puedes regenerar solo este bloque."
+          : "Veo terminó, pero no entregó un video en el bucket. Puedes volver a buscar el archivo sin generar otra vez.";
+      await doc.update({ state: "failed", error });
+      return json({ ...asset, state: "failed", error });
     }
 
     if (parts.length === 4 && parts[1] === "assets" && parts[3] === "approve" && req.method === "POST") {
