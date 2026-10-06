@@ -184,8 +184,23 @@ describe("cinematic production contract", () => {
     const aligned = validateCinematicPlan(alignCinematicPlan(draft, 30), 30);
     expect(aligned.segments[1].characterIds).toContain("leo");
     expect(aligned.segments[1].shots[0].characterIds).toContain("leo");
+    expect(aligned.segments[1].shots[0].framing).toContain("Leo");
+    expect(aligned.segments[1].shots[0].action).toContain("scheduled dialogue");
+    expect(aligned.segments[1].openingFrameDirection).toContain("Leo");
     expect(draft.segments[1].characterIds).not.toContain("leo");
     expect(draft.segments[1].shots[0].characterIds).not.toContain("leo");
+
+    const reaction = plan30();
+    reaction.characters.push({ ...reaction.characters[0], id: "leo", name: "Leo" });
+    reaction.segments[0].characterIds.push("leo");
+    reaction.segments[0].shots[0].shotType = "reaction";
+    reaction.segments[0].shots[0].framing = "Only Mara listening; Leo is offscreen";
+    reaction.segments[0].shots[0].action = "Mara reacts silently to Leo's voice.";
+    reaction.segments[0].dialogue = [{ characterId: "leo", text: "Alto.", intention: "urgent", start: 1, end: 2 }];
+    const fixed = validateCinematicPlan(alignCinematicPlan(reaction, 30), 30);
+    expect(fixed.segments[0].shots[0].shotType).toBe("medium");
+    expect(fixed.segments[0].shots[0].framing).not.toContain("Leo is offscreen");
+    expect(fixed.segments[0].shots[0].action).toContain("Leo deliver");
 
     const full = plan30();
     full.characters.push(...["b", "c", "d", "e"].map(id => ({ ...full.characters[0], id })));

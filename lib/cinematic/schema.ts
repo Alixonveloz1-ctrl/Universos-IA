@@ -131,7 +131,7 @@ export function alignCinematicPlan(value: unknown, total: 30 | 60 | 90): unknown
   const expected = cinematicSegmentDurations(total);
   const source = (value as { segments: unknown[] }).segments;
   if (source.length !== expected.length) return value;
-  const plan = structuredClone(value) as { characters?: { id?: unknown }[]; segments: Record<string, unknown>[] };
+  const plan = structuredClone(value) as { characters?: { id?: unknown; name?: unknown }[]; segments: Record<string, unknown>[] };
   const knownCharacters = new Set(Array.isArray(plan.characters) ? plan.characters.map(c => c?.id) : []);
   for (let i = 0; i < plan.segments.length; i++) {
     const segment = plan.segments[i];
@@ -172,9 +172,10 @@ export function alignCinematicPlan(value: unknown, total: 30 | 60 | 90): unknown
         : shot.transition === "match-cut" ? "match-cut" : "hard-cut";
     });
     // A spoken line needs an on-screen anchor, while its audio may bridge
-    // inserts and reaction shots. Repair missing cast metadata only when the
-    // speaker is a known character and the four-person limit remains intact.
+    // cutaways. If the draft has no anchor, restage one shot along with its
+    // cast; changing cast metadata alone would contradict framing/action.
     if (Array.isArray(segment.dialogue) && Array.isArray(segment.characterIds)) {
+      const restaged = new Set<Record<string, unknown>>();
       for (const turn of segment.dialogue as Record<string, unknown>[]) {
         const id = turn?.characterId;
         if (typeof id !== "string" || !knownCharacters.has(id) ||
@@ -187,9 +188,35 @@ export function alignCinematicPlan(value: unknown, total: 30 | 60 | 90): unknown
         const overlapping = shots.filter(shot => Number(turn.start) < Number(shot.end) - 0.001 &&
           Number(turn.end) > Number(shot.start) + 0.001);
         if (overlapping.some(shot => Array.isArray(shot.characterIds) && shot.characterIds.includes(id))) continue;
-        const anchor = overlapping.find(shot => shot.shotType !== "insert" &&
-          Array.isArray(shot.characterIds) && shot.characterIds.length < 4);
-        if (anchor) (anchor.characterIds as unknown[]).push(id);
+        const candidates = overlapping.filter(shot => Array.isArray(shot.characterIds) && shot.characterIds.length < 4);
+        const dramatic = candidates.filter(shot => !["insert", "pov", "reaction"].includes(String(shot.shotType)));
+        const anchor = (dramatic.length ? dramatic : candidates).sort((a, b) =>
+          Math.min(Number(b.end), Number(turn.end)) - Math.max(Number(b.start), Number(turn.start)) -
+          (Math.min(Number(a.end), Number(turn.end)) - Math.max(Number(a.start), Number(turn.start))))[0];
+        if (anchor) {
+          (anchor.characterIds as unknown[]).push(id);
+          restaged.add(anchor);
+        }
+      }
+      for (const shot of restaged) {
+        const castIds = shot.characterIds as string[];
+        const names = castIds.map(id => {
+          const character = plan.characters?.find(c => c.id === id);
+          return typeof character?.name === "string" ? character.name : id;
+        });
+        const speakers = castIds.filter(id => (segment.dialogue as Record<string, unknown>[]).some(turn =>
+          turn?.characterId === id && Number(turn.start) < Number(shot.end) - 0.001 &&
+          Number(turn.end) > Number(shot.start) + 0.001)).map(id => {
+          const character = plan.characters?.find(c => c.id === id);
+          return typeof character?.name === "string" ? character.name : id;
+        });
+        shot.shotType = castIds.length > 2 ? "wide" : "medium";
+        shot.lensMm = castIds.length > 2 ? 35 : 55;
+        shot.camera = "Locked on the visible speakers; no POV or listener-only reaction.";
+        shot.framing = `Visible on-screen cast: ${names.join(", ")}. Keep ${speakers.join(" and ")}'s face and mouth readable during their scheduled lines.`;
+        shot.action = `${speakers.join(" and ")} deliver only their scheduled dialogue during their assigned time windows; all other visible characters listen silently and react. Preserve the story location and continuity.`;
+        if (shot === shots[0]) segment.openingFrameDirection =
+          `Frame zero of the revised ${shot.shotType}: ${names.join(", ")} visible in the location; the scheduled speakers' faces are readable.`;
       }
     }
   }
