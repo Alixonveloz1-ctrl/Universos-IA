@@ -2,6 +2,7 @@
 // durable Google storage are NOT verified by this test. Media is synthetic.
 import { test, expect } from "@playwright/test";
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -38,6 +39,7 @@ test("SIMULATED complete journey: story, canon, eight sequential clips, export a
       "-shortest",
       media,
     ]);
+    const mediaBytes = readFileSync(media);
     const full = snapshot(),
       s = snapshot();
     delete s.project.story;
@@ -57,7 +59,7 @@ test("SIMULATED complete journey: story, canon, eight sequential clips, export a
     }[] = [];
     const calls: string[] = [];
     await page.route("**/test-media.mp4", (route) =>
-      route.fulfill({ path: media, contentType: "video/mp4" }),
+      route.fulfill({ body: mediaBytes, contentType: "video/mp4" }),
     );
     await page.route("**/api/**", async (route) => {
       const req = route.request(),

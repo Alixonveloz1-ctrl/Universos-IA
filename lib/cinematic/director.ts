@@ -55,6 +55,7 @@ function planPrompt(input: CinematicProjectInput, repair = "", previous: unknown
     "AUDIO NATIVO OBLIGATORIO: voces, música, ambiente y efectos nacen SOLO dentro de Veo. Diseña UNA biblia sonora global para toda la producción. No propongas música, voces ni efectos externos.",
     "CONTINUIDAD SONORA: define una identidad musical única, instrumentación, pulso/tempo, ambiente base, tratamiento de diálogo y lenguaje de efectos. Cada bloque hereda exactamente esa identidad. audioContinuityOut de un bloque DEBE copiarse literalmente como audioContinuityIn del siguiente. Usa sound bridges cuando un corte visual no deba cortar el ambiente o la música.",
     `DIÁLOGO: idioma ${input.language}; acento ${input.accent}. Cada personaje tiene una voz canónica detallada y esa misma ficha vocal se reutiliza literalmente cada vez que habla. Líneas breves, naturales, con subtexto. No narrador ni voz en off salvo que el concepto lo exija explícitamente.`,
+    "PUESTA EN ESCENA DEL DIÁLOGO: cada línea necesita al menos un plano que se cruce con sus tiempos y muestre a su hablante en characterIds. Se permiten inserts y planos de reacción mientras la voz continúa sobre el corte; los oyentes no articulan la línea.",
     "REPARTO: todos los personajes representados como adultos. Mantén normalmente 1–3 personajes visibles por bloque para máxima estabilidad; nunca más de 4. La historia debe poder entenderse visualmente aun con el sonido apagado, pero no añadas subtítulos dentro del video.",
     "SONIDO Y CORTES: un hard cut visual no reinicia automáticamente música, ambiente o identidad vocal. Decide explícitamente qué sonido continúa por encima del corte y qué efecto puntual marca el beat.",
     `CONCEPTO DEL USUARIO: ${input.concept}`,
@@ -153,12 +154,12 @@ export function compileCinematicVideoPrompt(
   accent: string,
 ) {
   const cuts = segment.shots.map((s, i) =>
-    `${s.start}-${s.end}s | ${i === 0 ? "START FROM SUPPLIED IMAGE" : s.transition.toUpperCase()} | ${s.shotType} | ${s.lensMm}mm | camera: ${s.camera} | framing: ${s.framing} | action: ${s.action} | native audio beat: ${s.nativeAudioBeat || "continue established sound"}`
+    `${s.start}-${s.end}s | ${i === 0 ? "START FROM SUPPLIED IMAGE" : s.transition.toUpperCase()} | ${s.shotType} | ${s.lensMm}mm | on-screen cast: ${s.characterIds.map(id => `${plan.characters.find(c => c.id === id)?.name || id} [speaker_${id}]`).join(", ") || "none"} | camera: ${s.camera} | framing: ${s.framing} | action: ${s.action} | native audio beat: ${s.nativeAudioBeat || "continue established sound"}`
   ).join("\n");
   const dialogue = segment.dialogue.length
     ? segment.dialogue.map(d => {
         const c = plan.characters.find(x => x.id === d.characterId);
-        return `${d.start}-${d.end}s — ONLY ${c?.name || d.characterId} [speaker_${d.characterId}] speaks, with synchronized visible mouth articulation and this intention: ${d.intention}. Literal line: ${d.text}`;
+        return `${d.start}-${d.end}s — ONLY ${c?.name || d.characterId} [speaker_${d.characterId}] speaks, with synchronized mouth articulation when on screen; keep the same voice over any insert or reaction cutaway. Intention: ${d.intention}. Literal line: ${d.text}`;
       }).join("\n")
     : "No spoken dialogue in this block. No narrator, voice-over or invented speech.";
   const sound = plan.soundBible;
@@ -180,7 +181,7 @@ export function compileCinematicVideoPrompt(
     "AUDIO RULE: music/room tone may bridge hard cuts. A visual cut must not randomly replace the score, ambience, acoustic space or voice identities. Keep dialogue intelligible and effects transient. No external-audio assumptions.",
     "VOICE LOCKS:\n" + (voiceLock(plan, segment, language, accent) || "No speaking character in this block."),
     "SPEECH SCHEDULE:\n" + dialogue,
-    "SPEAKER OWNERSHIP IS HARD: only the named speaker articulates each line. Listeners keep relaxed mouths and react with eyes, brows, head and posture. Never swap voices between faces. No dubbing-like detached voice.",
+    "SPEAKER OWNERSHIP IS HARD: only the named speaker articulates each line when visible. The same native voice may bridge a cutaway, without showing another character speaking. Listeners keep relaxed mouths and react with eyes, brows, head and posture. Never swap voices between faces. No dubbing-like detached voice.",
     "PERFORMANCE: preserve identity and geometry through every cut. Favor microexpression and controlled physical acting. Use motion blur/particles only when motivated by the scheduled action, especially around brief high-energy impacts. Do not invent extra spectacle, transformations, objects or people.",
     `EXPECTED VISUAL CONTINUITY OUT: ${segment.continuityOut}`,
     `EXPECTED AUDIO CONTINUITY OUT: ${segment.audioContinuityOut}`,
