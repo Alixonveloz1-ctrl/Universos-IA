@@ -26,6 +26,7 @@ import {
   validateCinematicPlan,
 } from "@/lib/cinematic/schema";
 import {
+  CINEMATIC_NEGATIVE_PROMPT,
   compileCinematicCharacterPrompt,
   compileCinematicOpeningImagePrompt,
   compileCinematicVideoPrompt,
@@ -503,6 +504,7 @@ async function handler(req: Request, context: { params: Promise<{ path?: string[
           [imageRef],
           `gs://${config().bucket}/${outputPrefix}`,
           segment.durationSeconds,
+          CINEMATIC_NEGATIVE_PROMPT,
         );
         await finishGeneration(project.id, assetId, { state: "waiting", operation });
         return json({ ...asset, state: "waiting", operation }, 202);

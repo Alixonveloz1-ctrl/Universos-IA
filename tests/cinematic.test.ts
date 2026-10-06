@@ -5,7 +5,7 @@ import {
   validateCinematicPlan,
   type CinematicPlan,
 } from "../lib/cinematic/schema";
-import { compileCinematicOpeningImagePrompt, compileCinematicVideoPrompt } from "../lib/cinematic/director";
+import { CINEMATIC_NEGATIVE_PROMPT, compileCinematicOpeningImagePrompt, compileCinematicVideoPrompt } from "../lib/cinematic/director";
 import { videoRequest } from "../lib/providers/vertex";
 import { verifiedVideoObject } from "../lib/direct-video";
 import { currentManifest } from "../worker/cinematic";
@@ -146,6 +146,12 @@ describe("cinematic production contract", () => {
     expect(request.parameters.durationSeconds).toBe(6);
     expect(request.parameters.generateAudio).toBe(true);
     expect(request.parameters.aspectRatio).toBe("9:16");
+    expect(request.parameters).not.toHaveProperty("negativePrompt");
+    const cinematicRequest = videoRequest(
+      "veo-3.1-fast-generate-001", "cinematic test", [ref], "initial",
+      "gs://bucket/prefix/", 6, CINEMATIC_NEGATIVE_PROMPT,
+    );
+    expect(cinematicRequest.parameters.negativePrompt).toContain("duplicated hands");
   });
 
   it("rejects duplicate identities and overlapping or invisible speech", () => {
@@ -217,6 +223,23 @@ describe("cinematic production contract", () => {
     const prompt = compileCinematicOpeningImagePrompt(plan, plan.segments[0]);
     expect(prompt).toContain('"name":"Mara"');
     expect(prompt).not.toContain('"name":"Leo"');
+  });
+
+  it("keeps a scheduled excavation concealed in the opening image and in the video action order", () => {
+    const plan = plan30();
+    const segment = plan.segments[0];
+    segment.goal = "A man digs until he uncovers his father's coffin.";
+    segment.openingFrameDirection = "He stands over intact earth; the coffin remains buried and invisible.";
+    segment.shots[0].action = "He plants the shovel in soil and begins to dig.";
+    segment.shots[1].action = "Only after the soil is removed, an edge of the coffin emerges.";
+    const imagePrompt = compileCinematicOpeningImagePrompt(plan, segment);
+    expect(imagePrompt).toContain(segment.goal);
+    expect(imagePrompt).toContain(segment.shots[1].action);
+    expect(imagePrompt).toContain("still covering it");
+    expect(imagePrompt).toContain("do not show a deep open pit with the object already exposed");
+    const videoPrompt = compileCinematicVideoPrompt(plan, segment, "Español", "Latinoamericano");
+    expect(videoPrompt).toContain("keep a concealed object hidden until its scheduled discovery");
+    expect(videoPrompt).not.toContain("continue to the next logical action instead of discovering it again");
   });
 
   it("accepts only an MP4 from the exact bucket and prefix", () => {

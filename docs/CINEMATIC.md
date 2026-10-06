@@ -22,6 +22,10 @@ El Director cinematográfico tiene un Master Style propio: short drama fotoreali
 
 Cada bloque técnico puede contener varios planos internos. Se permiten y se programan hard cuts, POV, inserts, close-ups y reaction shots. La primera toma parte de una imagen inicial aprobada; Veo crea los cortes posteriores dentro del mismo bloque.
 
+Para mejorar la estabilidad, se pide al Director normalmente 2–3 planos en 8 segundos y 1–2 en 4 o 6 segundos, con un solo beat físico principal por bloque. Fija la hora, el clima, la dirección de la luz, la posición de las personas y el estado de los objetos. La imagen inicial debe representar el estado anterior al descubrimiento: si alguien va a desenterrar un ataúd, la tierra todavía lo tapa; no se acepta como punto de partida un pozo que ya lo deja a la vista. El Director conserva la excavación de la historia y planifica cuándo y cómo aparece el ataúd. El generador de la imagen recibe el objetivo y las acciones posteriores como sucesos que aún no deben mostrarse; la pantalla enseña la dirección del fotograma inicial para compararla con la imagen antes de aprobarla. El prompt de Veo usa la imagen aprobada como autoridad visual y se concentra en movimiento, acciones con causa y efecto, cortes y audio nativo. Una lista negativa específica para Cinemático busca reducir manos duplicadas, herramientas flotantes, utilería que cambia y cuadros negros no previstos. Ninguna de estas indicaciones garantiza un resultado perfecto: la aprobación sigue siendo manual y se muestran todas las versiones generadas.
+
+El selector de video ofrece Veo 3.1 Lite, Fast y Veo 3.1. El valor inicial sigue siendo Lite; cambiar a otro modelo es una elección manual antes de pagar una nueva generación. Los prompts nuevos se aplican a videos regenerados y a producciones nuevas; no alteran los MP4 ya guardados.
+
 ## Audio
 
 Todo el audio se solicita nativamente en Veo. El plan contiene una única Biblia Sonora global con identidad musical, instrumentación, tempo, ambiente, mezcla de diálogo, lenguaje de efectos y regla de continuidad. Esa misma Biblia se inyecta en cada prompt.

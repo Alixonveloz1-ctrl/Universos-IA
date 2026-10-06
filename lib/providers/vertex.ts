@@ -38,6 +38,7 @@ export function videoRequest(
   mode: "initial" | "references",
   storageUri: string,
   durationSeconds: 4 | 6 | 8 = VIDEO.durationSeconds,
+  negativePrompt?: string,
 ) {
   const m = model(id, "video");
   assert(
@@ -65,7 +66,8 @@ export function videoRequest(
             }),
       },
     ],
-    parameters: { ...VIDEO, durationSeconds, personGeneration: "allow_adult", storageUri },
+    parameters: { ...VIDEO, durationSeconds, personGeneration: "allow_adult", storageUri,
+      ...(negativePrompt ? { negativePrompt } : {}) },
   };
 }
 export async function textGenerate(
@@ -192,10 +194,11 @@ export async function startVideo(
   refs: ImageRef[],
   storageUri: string,
   durationSeconds: 4 | 6 | 8 = VIDEO.durationSeconds,
+  negativePrompt?: string,
 ) {
   const r = await googlePost(
     endpoint(id, "predictLongRunning"),
-    videoRequest(id, prompt, refs, "initial", storageUri, durationSeconds),
+    videoRequest(id, prompt, refs, "initial", storageUri, durationSeconds, negativePrompt),
     true,
   );
   if (!r.name)
