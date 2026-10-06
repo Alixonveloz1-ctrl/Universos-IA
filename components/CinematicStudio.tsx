@@ -443,6 +443,7 @@ export default function CinematicStudio() {
                 <article className="clip" key={segment.number}>
                   <h3>Bloque {segment.number} · {segment.durationSeconds} s</h3>
                   <p><b>Objetivo:</b> {segment.goal}</p>
+                  <p><b>Imagen inicial:</b> {segment.openingFrameDirection}</p>
                   <p className="muted">{segment.location}</p>
                   <details>
                     <summary>Mapa de planos · {segment.shots.length}</summary>

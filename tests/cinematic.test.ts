@@ -225,6 +225,23 @@ describe("cinematic production contract", () => {
     expect(prompt).not.toContain('"name":"Leo"');
   });
 
+  it("keeps a scheduled excavation concealed in the opening image and in the video action order", () => {
+    const plan = plan30();
+    const segment = plan.segments[0];
+    segment.goal = "A man digs until he uncovers his father's coffin.";
+    segment.openingFrameDirection = "He stands over intact earth; the coffin remains buried and invisible.";
+    segment.shots[0].action = "He plants the shovel in soil and begins to dig.";
+    segment.shots[1].action = "Only after the soil is removed, an edge of the coffin emerges.";
+    const imagePrompt = compileCinematicOpeningImagePrompt(plan, segment);
+    expect(imagePrompt).toContain(segment.goal);
+    expect(imagePrompt).toContain(segment.shots[1].action);
+    expect(imagePrompt).toContain("still covering it");
+    expect(imagePrompt).toContain("do not show a deep open pit with the object already exposed");
+    const videoPrompt = compileCinematicVideoPrompt(plan, segment, "Español", "Latinoamericano");
+    expect(videoPrompt).toContain("keep a concealed object hidden until its scheduled discovery");
+    expect(videoPrompt).not.toContain("continue to the next logical action instead of discovering it again");
+  });
+
   it("accepts only an MP4 from the exact bucket and prefix", () => {
     const outputPrefix = "isolated/video-libre/id/provider/";
     const result = { response: { generatedVideos: [{ video: { uri: `gs://right/${outputPrefix}file.mp4` } }] } };
