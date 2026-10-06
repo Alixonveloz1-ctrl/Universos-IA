@@ -131,7 +131,8 @@ export function alignCinematicPlan(value: unknown, total: 30 | 60 | 90): unknown
   const expected = cinematicSegmentDurations(total);
   const source = (value as { segments: unknown[] }).segments;
   if (source.length !== expected.length) return value;
-  const plan = structuredClone(value) as { segments: Record<string, unknown>[] };
+  const plan = structuredClone(value) as { characters?: { id?: unknown }[]; segments: Record<string, unknown>[] };
+  const knownCharacters = new Set(Array.isArray(plan.characters) ? plan.characters.map(c => c?.id) : []);
   for (let i = 0; i < plan.segments.length; i++) {
     const segment = plan.segments[i];
     if (!segment || typeof segment !== "object") continue;
@@ -170,6 +171,27 @@ export function alignCinematicPlan(value: unknown, total: 30 | 60 | 90): unknown
       shot.transition = index === 0 ? "start"
         : shot.transition === "match-cut" ? "match-cut" : "hard-cut";
     });
+    // A spoken line needs an on-screen anchor, while its audio may bridge
+    // inserts and reaction shots. Repair missing cast metadata only when the
+    // speaker is a known character and the four-person limit remains intact.
+    if (Array.isArray(segment.dialogue) && Array.isArray(segment.characterIds)) {
+      for (const turn of segment.dialogue as Record<string, unknown>[]) {
+        const id = turn?.characterId;
+        if (typeof id !== "string" || !knownCharacters.has(id) ||
+            !Number.isFinite(turn.start) || !Number.isFinite(turn.end)) continue;
+        const cast = segment.characterIds as unknown[];
+        if (!cast.includes(id)) {
+          if (cast.length >= 4) continue;
+          cast.push(id);
+        }
+        const overlapping = shots.filter(shot => Number(turn.start) < Number(shot.end) - 0.001 &&
+          Number(turn.end) > Number(shot.start) + 0.001);
+        if (overlapping.some(shot => Array.isArray(shot.characterIds) && shot.characterIds.includes(id))) continue;
+        const anchor = overlapping.find(shot => shot.shotType !== "insert" &&
+          Array.isArray(shot.characterIds) && shot.characterIds.length < 4);
+        if (anchor) (anchor.characterIds as unknown[]).push(id);
+      }
+    }
   }
   return plan;
 }
@@ -214,8 +236,8 @@ export function validateCinematicPlan(value: unknown, total: 30 | 60 | 90) {
         throw new Error(`El diálogo del bloque ${segment.number} no coincide con su reparto o duración.`);
       if (j && turn.start < dialogue[j - 1].end - 0.001)
         throw new Error(`El diálogo del bloque ${segment.number} se solapa.`);
-      if (segment.shots.some(shot => turn.start < shot.end - 0.001 && turn.end > shot.start + 0.001 &&
-        !shot.characterIds.includes(turn.characterId)))
+      if (!segment.shots.some(shot => turn.start < shot.end - 0.001 && turn.end > shot.start + 0.001 &&
+        shot.characterIds.includes(turn.characterId)))
         throw new Error(`El hablante del bloque ${segment.number} no aparece en su toma.`);
     }
     if (i > 0) {

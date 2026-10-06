@@ -163,6 +163,38 @@ describe("cinematic production contract", () => {
     expect(() => validateCinematicPlan(overlapping, 30)).toThrow("hablante");
   });
 
+  it("keeps the speaker visible in one shot while their voice bridges a cutaway", () => {
+    const draft = plan30();
+    const block = draft.segments[1];
+    block.dialogue = [{ characterId: "mara", text: "Estoy aquí.", intention: "urgent", start: 3, end: 5 }];
+    block.shots[1].shotType = "insert";
+    block.shots[1].characterIds = [];
+    const plan = validateCinematicPlan(draft, 30);
+    const prompt = compileCinematicVideoPrompt(plan, block, "Español", "Latinoamericano");
+    expect(prompt).toContain("on-screen cast: Mara [speaker_mara]");
+    expect(prompt).toContain("on-screen cast: none");
+    expect(prompt).toContain("same voice over any insert or reaction cutaway");
+  });
+
+  it("repairs a missing on-screen dialogue anchor without exceeding the cast limit", () => {
+    const draft = plan30();
+    const block = draft.segments[1];
+    draft.characters.push({ ...draft.characters[0], id: "leo", name: "Leo" });
+    block.dialogue = [{ characterId: "leo", text: "Estoy aquí.", intention: "urgent", start: 3, end: 5 }];
+    const aligned = validateCinematicPlan(alignCinematicPlan(draft, 30), 30);
+    expect(aligned.segments[1].characterIds).toContain("leo");
+    expect(aligned.segments[1].shots[0].characterIds).toContain("leo");
+    expect(draft.segments[1].characterIds).not.toContain("leo");
+    expect(draft.segments[1].shots[0].characterIds).not.toContain("leo");
+
+    const full = plan30();
+    full.characters.push(...["b", "c", "d", "e"].map(id => ({ ...full.characters[0], id })));
+    full.segments[0].characterIds = ["mara", "b", "c", "d"];
+    full.segments[0].shots[0].characterIds = ["mara", "b", "c", "d"];
+    full.segments[0].dialogue = [{ characterId: "e", text: "Alto.", intention: "urgent", start: 1, end: 2 }];
+    expect(() => validateCinematicPlan(alignCinematicPlan(full, 30), 30)).toThrow("reparto");
+  });
+
   it("lists only characters visible in the opening shot", () => {
     const plan = plan30();
     plan.characters.push({ ...plan.characters[0], id: "leo", name: "Leo" });
