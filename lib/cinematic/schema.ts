@@ -67,6 +67,20 @@ export const cinematicShot = z.object({
   framing: short,
   action: long,
   characterIds: z.array(cinematicId).max(4),
+  // Required for new one-shot plans. Optional so stored multi-shot plans remain valid.
+  openingSubjects: z.array(z.object({
+    characterId: cinematicId,
+    screenSide: z.enum(["left", "center", "right"]),
+    depth: z.enum(["foreground", "midground", "background", "adjacent-offscreen"]),
+    faceVisible: z.boolean(),
+    visibleParts: short,
+  }).strict()).max(4).optional(),
+  physicalContacts: z.array(z.object({
+    actorId: cinematicId,
+    targetId: cinematicId,
+    atFrameZero: z.boolean(),
+    contact: short,
+  }).strict()).max(4).optional(),
   transition: z.enum(["start", "hard-cut", "match-cut"]),
   nativeAudioBeat: z.string().max(1800),
 }).strict().refine(v => v.end > v.start, "La toma necesita una duración positiva.");
@@ -193,7 +207,7 @@ export function alignCinematicPlan(value: unknown, total: 30 | 60 | 90,
     // A spoken line needs an on-screen anchor, while its audio may bridge
     // cutaways. If the draft has no anchor, restage one shot along with its
     // cast; changing cast metadata alone would contradict framing/action.
-    if (Array.isArray(segment.dialogue) && Array.isArray(segment.characterIds)) {
+    if (layout === "legacy" && Array.isArray(segment.dialogue) && Array.isArray(segment.characterIds)) {
       const restaged = new Set<Record<string, unknown>>();
       for (const turn of segment.dialogue as Record<string, unknown>[]) {
         const id = turn?.characterId;
@@ -273,6 +287,28 @@ export function validateCinematicPlan(value: unknown, total: 30 | 60 | 90,
         throw new Error(`Las tomas del bloque ${segment.number} tienen huecos o solapamientos.`);
       if (shot.characterIds.some(id => !segment.characterIds.includes(id)))
         throw new Error(`Una toma del bloque ${segment.number} usa un personaje no presente.`);
+      if (layout === "shot") {
+        const subjects = shot.openingSubjects;
+        if (!subjects || subjects.length !== shot.characterIds.length ||
+            new Set(subjects.map(s => s.characterId)).size !== subjects.length ||
+            subjects.some(s => !shot.characterIds.includes(s.characterId)))
+          throw new Error(`La toma ${segment.number} necesita una posición y visibilidad inicial por cada personaje visible.`);
+        if (subjects.some(s => s.faceVisible && ["background", "adjacent-offscreen"].includes(s.depth)))
+          throw new Error(`La toma ${segment.number} necesita el rostro reconocible en primer plano o plano medio.`);
+        if (!shot.physicalContacts)
+          throw new Error(`La toma ${segment.number} debe declarar sus contactos físicos, aunque la lista esté vacía.`);
+        for (const contact of shot.physicalContacts) {
+          const actor = subjects.find(s => s.characterId === contact.actorId);
+          const target = subjects.find(s => s.characterId === contact.targetId);
+          if (!actor || !target || actor === target)
+            throw new Error(`Un contacto de la toma ${segment.number} usa una persona ausente o la misma persona dos veces.`);
+          const together = actor.depth === target.depth ||
+            actor.depth === "adjacent-offscreen" && target.depth === "foreground" ||
+            target.depth === "adjacent-offscreen" && actor.depth === "foreground";
+          if (!together)
+            throw new Error(`El contacto de la toma ${segment.number} sitúa a una persona lejos de la otra.`);
+        }
+      }
       if (j === 0 && shot.transition !== "start")
         throw new Error(`La primera toma del bloque ${segment.number} debe comenzar con start.`);
       if (j > 0 && shot.transition === "start")
@@ -288,6 +324,9 @@ export function validateCinematicPlan(value: unknown, total: 30 | 60 | 90,
       if (!segment.shots.some(shot => turn.start < shot.end - 0.001 && turn.end > shot.start + 0.001 &&
         shot.characterIds.includes(turn.characterId)))
         throw new Error(`El hablante del bloque ${segment.number} no aparece en su toma.`);
+      if (layout === "shot" && !segment.shots[0].openingSubjects?.some(s =>
+        s.characterId === turn.characterId && s.faceVisible))
+        throw new Error(`El hablante de la toma ${segment.number} necesita un rostro visible desde la imagen inicial.`);
     }
     if (i > 0) {
       const prev = plan.segments[i - 1];

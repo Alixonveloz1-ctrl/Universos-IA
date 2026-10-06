@@ -31,9 +31,13 @@ describe("cinematic plan request", () => {
       expect(prompt).toContain("7:6s");
       expect(prompt).toContain("exactamente UN elemento en shots");
       expect(prompt).toContain("El único shot empieza en 0");
+      expect(prompt).toContain("openingSubjects contiene exactamente una entrada");
+      expect(prompt).toContain("physicalContacts es una lista explícita");
       expect(prompt).not.toContain("Veo recibe una sola imagen inicial y debe inventar los demás encuadres");
       expect(schema.properties).toHaveProperty("segments");
       expect(schema.required).toContain("characters");
+      expect(schema.properties.segments.items.properties.shots.items.required)
+        .toEqual(expect.arrayContaining(["openingSubjects", "physicalContacts"]));
       expect(JSON.stringify(schema)).not.toMatch(/minLength|maxLength|pattern|additionalProperties|anyOf|const/);
       expect(maxOutputTokens).toBe(32768);
       expect(timeoutMs).toBe(130000);
