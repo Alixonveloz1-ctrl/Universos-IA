@@ -12,8 +12,8 @@ import { CINEMATIC_NEGATIVE_PROMPT, cinematicNegativePrompt, compileCinematicCha
 import { videoRequest } from "../lib/providers/vertex";
 import { verifiedVideoObject } from "../lib/direct-video";
 import { currentManifest } from "../worker/cinematic";
-import type { CinematicFinalizeJob, CinematicProject } from "../lib/cinematic/types";
-import { cinematicImageCharacterIds } from "../lib/cinematic/types";
+import type { CinematicAsset, CinematicFinalizeJob, CinematicProject } from "../lib/cinematic/types";
+import { cinematicImageCharacterIds, cinematicMissingApprovedVideos, currentCinematicVideo } from "../lib/cinematic/types";
 
 function plan30(): CinematicPlan {
   const durations = cinematicSegmentDurations(30);
@@ -426,5 +426,24 @@ describe("cinematic production contract", () => {
     expect(currentManifest({ ...project, revision: 8 }, job)).toBe(false);
     expect(currentManifest({ ...project, approvedVideos: { "1": "b" } }, job)).toBe(false);
     expect(currentManifest({ ...project, activeFinalizeJobId: "other" }, job)).toBe(false);
+  });
+
+  it("allows assembly only with the newest completed video approved for its current image", () => {
+    const project = {
+      plan: { segments: [shotPlan(30).segments[0]] }, planRevision: 2,
+      approvedImages: { "1": "image-new" }, approvedVideos: { "1": "old-video" },
+    } as unknown as CinematicProject;
+    const old = { id: "old-video", role: "segment-video", segmentNumber: 1, planRevision: 2,
+      inputRefs: ["image-new"], state: "completed", storageObject: "old.mp4", createdAt: 1 } as CinematicAsset;
+    const rejected = { ...old, id: "new-video", storageObject: undefined,
+      state: "failed", createdAt: 2 } as CinematicAsset;
+    expect(currentCinematicVideo(project, [old, rejected], 1)?.id).toBe("new-video");
+    expect(cinematicMissingApprovedVideos(project, [old, rejected])).toEqual([1]);
+    const replacement = { ...rejected, state: "completed", storageObject: "new.mp4" } as CinematicAsset;
+    expect(cinematicMissingApprovedVideos(project, [old, replacement])).toEqual([1]);
+    expect(cinematicMissingApprovedVideos({ ...project, approvedVideos: { "1": replacement.id } },
+      [old, replacement])).toEqual([]);
+    expect(cinematicMissingApprovedVideos({ ...project, approvedVideos: { "1": replacement.id } },
+      [{ ...replacement, inputRefs: ["image-old"] }])).toEqual([1]);
   });
 });
