@@ -87,6 +87,7 @@ export default function CinematicStudio() {
   const [language, setLanguage] = useState("Español");
   const [accent, setAccent] = useState("Latinoamericano");
   const [models, setModels] = useState<{ text: string; image: string; video: string }>({ ...DEFAULT_MODELS });
+  const [motionNotes, setMotionNotes] = useState<Record<string, string>>({});
   const polling = useRef(false);
   const checkedFailedVideos = useRef(new Set<string>());
   const visibleProject = useRef<string | null>(null);
@@ -586,16 +587,34 @@ export default function CinematicStudio() {
                   ))}
                   {videoCandidate?.state === "waiting" && <p className="muted">Veo está generando esta {label} con audio nativo…</p>}
                   {videoCandidate?.state === "failed" && <p className="error">{videoCandidate.error}</p>}
+                  {videoCandidate?.state === "failed" && /prompt could not be submitted|sensitive words|Responsible AI/i.test(videoCandidate.error || "") &&
+                    <p className="muted">Google rechazó la solicitud antes de generar el video. Revisa la acción de esta toma: repetir el mismo texto puede producir el mismo rechazo. Las versiones ya generadas siguen disponibles.</p>}
+                  {videoAttempts.length >= 3 && <p className="muted">Varios intentos con la misma imagen inicial pueden repetir el mismo defecto. Si el movimiento sigue deformado, regenera y aprueba una nueva imagen inicial con una postura y un camino más claros antes de pedir otro video.</p>}
                   {videoCandidate?.state === "failed" && videoCandidate.operation && videoCandidate.outputPrefix &&
                     <button disabled={busy} onClick={() => void perform(async () => {
                       await cinematicApi(`${project.id}/videos/${videoCandidate.id}/recover`, "POST", {});
                       await loadProject(project.id);
                     })}>Buscar video generado sin regenerar</button>}
+                  {videoCandidate && <details>
+                    <summary>Ajustar movimiento de esta toma (opcional)</summary>
+                    <label>
+                      Describe en una frase qué debe corregirse en el siguiente intento. El ajuste se aplica solo a esta toma.
+                      <textarea
+                        maxLength={500}
+                        value={motionNotes[`${project.id}:${segment.number}`] || ""}
+                        onChange={e => setMotionNotes(current => ({ ...current,
+                          [`${project.id}:${segment.number}`]: e.target.value }))}
+                        placeholder="Ej.: Detenerse delante de la puerta; no atravesarla."
+                      />
+                    </label>
+                  </details>}
                   <div className="actions">
                     <button
                       disabled={busy || !!data.generation || !approvedImageId || videoCandidate?.state === "waiting"}
                       onClick={() => void perform(async () => {
-                        await cinematicApi(`${project.id}/segments/${segment.number}/video`, "POST", {});
+                        await cinematicApi(`${project.id}/segments/${segment.number}/video`, "POST", {
+                          motionNote: motionNotes[`${project.id}:${segment.number}`] || "",
+                        });
                         await loadProject(project.id);
                       })}
                     >

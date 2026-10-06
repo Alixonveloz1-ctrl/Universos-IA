@@ -30,6 +30,8 @@ Los planes nuevos también declaran, por cada toma, la posición y profundidad d
 
 El selector de video ofrece Veo 3.1 Lite, Fast y Veo 3.1. El valor inicial sigue siendo Lite; cambiar a otro modelo es una elección manual antes de pagar una nueva generación. Los prompts nuevos se aplican a videos regenerados y a producciones nuevas; no alteran los MP4 ya guardados.
 
+Cuando una versión de video no se aprueba, el siguiente intento con la misma imagen simplifica y ralentiza la acción; tras otro intento no aprobado, reduce el movimiento a un paso o gesto y deja el resto para la toma siguiente. El Director solo permite cruzar una puerta por una abertura visible y conserva el panel y el marco como obstáculos sólidos. Se puede añadir una indicación breve para corregir el movimiento de una toma concreta sin cambiar las demás; la versión y el prompt exacto quedan guardados como otro intento. Después de varios intentos se aconseja regenerar la imagen inicial si su postura o trayecto impiden una animación coherente. Los rechazos de seguridad de Google se muestran como tales y no desencadenan reintentos automáticos.
+
 ## Audio
 
 Todo el audio se solicita nativamente en Veo. El plan contiene una única Biblia Sonora global con identidad musical, instrumentación, tempo, ambiente, mezcla de diálogo, lenguaje de efectos y regla de continuidad. Esa misma Biblia se inyecta en cada prompt.
