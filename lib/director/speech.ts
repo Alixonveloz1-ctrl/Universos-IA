@@ -10,9 +10,9 @@ export const SPEECH_PLAN_DIRECTION = [
   "SUBTEXTO OBLIGATORIO: desire, fear, secret, intention, nextAction, planes internos y objetivos ocultos son notas para el Director, NO frases pronunciables. El personaje jamás dice literalmente su estrategia oculta, ambición secreta, manipulación, seducción calculada, engaño o traición al interlocutor salvo que la historia aprobada marque una confesión/revelación explícita en ese momento. Expresa lo oculto mediante elección de palabras plausible, evasión, cumplido, pregunta, silencio, mirada, postura o acción.",
   "PRUEBA DE VOZ ALTA: antes de aceptar cada línea, comprueba si una persona real con ese objetivo la diría literalmente frente a ese interlocutor. Si la frase expone información que intenta ocultar, reescríbela como subtexto. Evita diálogo de sinopsis o guionista: «mi ambición», «mi plan», «quiero seducirte/manipularte», explicaciones de motivación y frases que cuentan al otro lo que el público debe inferir.",
   "EXPRESIVIDAD DE CORTO VIRAL: diálogo breve, coloquial y con personalidad. Favorece respuestas espontáneas, preguntas directas, dobles sentidos, réplicas, silencios incómodos, cambios de mirada y reacciones visibles cuando encajen. La réplica responde a la frase o hecho anterior y revela la actitud propia del personaje; diferencia su registro sin repetir la misma muletilla en todos. Respeta el idioma y acento elegidos; no copies acento, bromas, nombres ni argumento de una referencia. Cada clip debe tener una emoción legible y una intención de actuación concreta; evita parlamentos ceremoniosos, genéricos, literarios o explicativos. La energía nace del conflicto y de la reacción, no de añadir exposición.",
-  "APROVECHA LOS 8 SEGUNDOS: no diseñes un clip con una frase de 1–3 segundos seguida de varios segundos mirando al vacío. Cuando haya diálogo, usa normalmente 5–7 segundos del clip para una frase sustancial o un intercambio natural, dejando solo pausas breves para respiración/reacción. Si el conflicto funciona mejor sin hablar durante un momento, ese silencio debe contener una acción/reacción narrativa concreta que cambie la situación, no espera pasiva.",
+  "APROVECHA LOS 8 SEGUNDOS: no diseñes un clip con una frase de 1–3 segundos seguida de varios segundos mirando al vacío. Cuando haya diálogo, usa normalmente 5–7 segundos para una frase sustancial o un intercambio natural, y dirige el tiempo restante hasta el fotograma 8 con una reacción específica que cambie lo que el siguiente clip hereda. Si el silencio funciona mejor, debe contener acción o reacción narrativa concreta, no espera pasiva, salida de los personajes ni habitación vacía.",
   "DENSIDAD SIN PRISA: en un clip dominado por conversación, orienta el intercambio a unas 14–21 palabras totales, distribuidas según las ventanas reales y el ritmo de los personajes. Es una orientación, no una cuota ni un mínimo: usa menos cuando una acción o reacción importante necesita tiempo, y conserva siempre la dicción natural. No rellenes con exposición ni aceleres la voz. Cada intervención debe aportar presión, información nueva, provocación, decisión, mentira, amenaza, deseo, réplica o consecuencia. Evita encadenar clips con una sola frase corta y varios segundos de la misma pose; un silencio largo se justifica por lo que cambia en pantalla.",
-  "CONFLICTO DESDE EL PRIMER SEGUNDO: el clip 1 no presenta tranquilamente el mundo ni explica antecedentes. Empieza cuando el problema YA está ocurriendo: acusación, descubrimiento, provocación, situación vergonzosa, tentación, ultimátum, mentira a punto de caer, entrada que altera la escena o acción que exige reacción inmediata. Los antecedentes se infieren después mediante subtexto y consecuencias.",
+  "CONFLICTO COMPRENSIBLE DESDE EL PRIMER SEGUNDO: el clip 1 no explica antecedentes con prólogo tranquilo. Muestra la causa visible del problema y la primera respuesta de otra persona, de modo que el público entienda de qué se burlan, qué se desea o qué regla se rompe. Deja que la provocación, incomodidad y frustración motiven luego la búsqueda de remedio; no saltes directamente a la clínica o a la decisión final si los hechos previos son el corazón de la historia aprobada.",
 ].join("\n");
 
 // This is a writing heuristic, not a measurement of generated speech.
@@ -90,7 +90,7 @@ export function speechDirection(s: Snapshot, c: Clip) {
   let previousEnd = 0;
   for (const [i, d] of turns.entries()) {
     if (d.start > previousEnd)
-      schedule.push(`${previousEnd}-${d.start}s: no speech; natural breathing and silent reactions, with the approved ambience.`);
+      schedule.push(`${previousEnd}-${d.start}s: no speech; perform the specific approved visual action or meaningful silent response, with the approved ambience.`);
     const speaker = s.bible?.characters.find(x => x.id === d.characterId);
     const listeners = cast.filter(x => x.id !== d.characterId).map(x => `${x.name} [speaker_${x.id}]`).join(", ");
     schedule.push(
@@ -99,7 +99,7 @@ export function speechDirection(s: Snapshot, c: Clip) {
     previousEnd = Math.max(previousEnd, d.end);
   }
   if (previousEnd < 8)
-    schedule.push(`${previousEnd}-8s: no speech; let the final expression and the approved ambience continue naturally.`);
+    schedule.push(`${previousEnd}-8s: no speech; carry the approved causal action or an interlocutor's specific visible response through the final frame. Keep the participants visible; do not walk away, leave an empty room, freeze or add an unscheduled spoken line.`);
   return [
     "ON-CAMERA SPEECH — the only spoken script in this clip.",
     `Language: ${s.project.language}. Accent: ${s.project.accent}. Keep this selected accent throughout, including when an older voice card names a different accent. Preserve every word, accent mark and punctuation in the script; never translate it.`,

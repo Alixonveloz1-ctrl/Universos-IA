@@ -51,14 +51,14 @@ function performanceTimeline(s: Snapshot, c: Clip) {
     "Start from the approved image. Establish the eyelines and initiate the scheduled action; if its climax is scheduled here, perform it here.",
     "Continue the scheduled action or its consequence with a distinct physical step, appropriate gaze and any scheduled words.",
     "Carry out the action scheduled in this interval, or show the direct result of an action completed earlier. Never repeat an earlier climax.",
-    "Complete the scheduled action if it belongs here; otherwise show its immediate reaction and resulting state naturally until the clip ends. Do not reset it.",
+    "Advance the approved action into a specific consequential response through the final frame at 8s. Keep the relevant people visible; never fill the ending by having them walk away or by holding an empty room. Do not reset or add an event.",
   ];
   return [0, 2, 4, 6].map((start, i) => {
     const end = start + 2;
     const active = c.shots.filter(shot => shot.start < end && shot.end > start);
     const words = c.dialogue.filter(d => d.start >= start && d.start < end)
       .map(d => `${s.bible!.characters.find(x => x.id === d.characterId)?.name || d.characterId} has a speech turn scheduled separately at ${d.start}-${d.end}s; follow the canonical speech schedule without repeating its words here`);
-    return `${start}-${end}s: ${phase[i]} Approved overlapping shot direction (if the same shot spans intervals, advance it without restarting it): ${active.map(sh => `[${sh.start}-${sh.end}s; continuous group framing; ${sh.characterIds.map(id => s.bible!.characters.find(x => x.id === id)?.name || id).join(", ")}]: ${safeVideoText(withoutDialogue(sh.action, c))}`).join(" THEN ") || "continue the previous planned framing"}. ${words.length ? `Scheduled speech: ${words.join("; ")}.` : "No scheduled speech: let the action, expression, ambient sound or a motivated still reaction breathe; do not add dialogue."}`;
+    return `${start}-${end}s: ${phase[i]} Approved overlapping shot direction (if the same shot spans intervals, advance it without restarting it): ${active.map(sh => `[${sh.start}-${sh.end}s; continuous group framing; ${sh.characterIds.map(id => s.bible!.characters.find(x => x.id === id)?.name || id).join(", ")}]: ${safeVideoText(withoutDialogue(sh.action, c))}`).join(" THEN ") || "continue the previous planned framing"}. ${words.length ? `Scheduled speech: ${words.join("; ")}.` : "No scheduled speech: perform the approved action or a specific visible response that advances the situation; do not add dialogue."}`;
   }).join("\n");
 }
 
@@ -95,7 +95,7 @@ export function compileVideoPrompt(s: Snapshot, c: Clip, instructions: string) {
     "VISUAL PERFORMANCE MAP: EIGHT SECONDS (local time, continuous and non-repeating):\n" +
       c.shots.map((sh, i) => `Action ${i + 1}, ${sh.start}-${sh.end}s: ${safeVideoText(withoutDialogue(sh.action, c))}`).join("\n") +
       "\n" + performanceTimeline(s, c),
-    "Perform only the approved physical action and literal dialogue. If the action finishes early, simply continue the established ordinary motion and natural reaction; never invent a new event to fill time. Do not invent turns around the character's own axis, pacing, repeated hand motions, camera orbit, repeated actions, unrelated gestures or spectacle. Keep the same continuous viewpoint, physical environment and participants. The four intervals above are timing guidance, not permission to add events.",
+    "Perform only the approved physical action and literal dialogue. Carry its specific resulting reaction through the final frame at 8s, preserving the consequential state for the next clip; never invent a new event to fill time. Do not invent turns around the character's own axis, pacing, repeated hand motions, camera orbit, repeated actions, unrelated gestures or spectacle. Keep the same continuous viewpoint, physical environment and participants. The four intervals above are timing guidance, not permission to add events.",
     "FIGURATIVE LANGUAGE IS NOT PHYSICAL ACTION: spoken dialogue may contain metaphor, sarcasm, irony, idioms, teasing, exaggeration, threats, comparisons or figures of speech. Interpret those lines for emotional performance and subtext ONLY; never materialize their literal words as an unscripted visual event. Example: «eres alérgico a la justicia» means the person avoids/resists justice; it does NOT mean allergy symptoms, sneezing, coughing, rash, medicine or illness. Likewise figurative fire, ice, electricity, explosions, death, hunger, animals, storms, etc. do not become physical effects unless the approved ACTION/EFFECTS explicitly schedules them. Dialogue text alone never authorizes a new prop, symptom, transformation, weather event or visual effect.",
     c.characterIds.length === 2
       ? `Film both people in ONE shared physical scene. ${vehicleDirection(s, c) ? "Preserve their approved physical seats." : "Preserve the spatial relationship already established by the approved initial image; do not invent new screen-left/screen-right assignments."} Any pointing or accusation reaches the other visible person in the opening exchange. Show reactions within the shared group framing; the listener looks toward the visible speaker, never directly into the lens. Preserve furniture and lighting throughout the take.`
@@ -123,6 +123,10 @@ export function compileVideoPrompt(s: Snapshot, c: Clip, instructions: string) {
     "Local physical plan, constraints, audio and expected final state. Spoken words are defined ONLY in the canonical speech schedule above and are omitted here to prevent duplication: " +
       withoutDialogue(JSON.stringify(safeVideoText({ ...c, dialogue: [], shots: c.shots.map(sh => ({ ...sh, dialogue: "", action: withoutDialogue(sh.action, c), framing: "Continuous group view; smooth movement only; all clip characters remain visible", characterIds: c.characterIds })) })), c),
     withoutDialogue(String(safeVideoText(instructions)), c),
+    /comedia|c[oó]mico/iu.test([s.project.genre, s.project.subgenre, s.project.tone].join(" "))
+      ? "COMEDY AUDIO AND MOVEMENT: Keep the humor in the approved conversational exchange and specific reaction. No canned laughter, applause, sitcom sting, punchline jingle, sudden comic music switch, spontaneous dancing or synchronized celebration unless expressly required by the user's own concept or approved story. Use the location's continuous restrained ambience or approved subtle score; no music cue replaces narrative action. This direction overrides generic music or movement suggestions in older plans."
+      : "",
+    "FINAL-FRAME HANDOFF: At 7–8s the meaningful approved interaction is still visible and physically legible. The cast remains in the camera frame through 8.0s; no gratuitous walk-off, empty location, fade, outro pose or spare second of generic departure. If departure is essential, show the decision or first purposeful step here and continue the threshold crossing in the separately referenced next clip. Keep the last visible reaction consistent with the approved plannedEndState and the following continuityIn; do not invent new dialogue or plot events.",
     continuousCamera,
   ].join("\n\n");
 }
