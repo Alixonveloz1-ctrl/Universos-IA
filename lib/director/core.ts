@@ -17,7 +17,7 @@ import { textGenerate } from "../providers/vertex";
 import { validateChapterPlan } from "../continuity/chapters";
 import { AppError } from "../errors";
 import { buildBible } from "./bible";
-import { narrativeTreatment, visualTreatment, specificTreatment } from "./styles";
+import { narrativeTreatment, visualTreatment } from "./styles";
 import { characterStyleReference, imageReferenceIds } from "../continuity/rules";
 const continuousCamera = "ONE CONTINUOUS TAKE for all 8 seconds. No cuts, shot/reverse-shot, montage, transitions, inserts or sudden viewpoint changes. Use only a slow shallow push-in, pull-back or small lateral camera move while keeping EVERY participating character visible and recognizable throughout. Keep faces and clothing in view; nobody exits the frame, crosses behind another person, disappears behind a door or furniture, or becomes fully occluded. If a requested close-up or movement would hide a participant, retain the wider group framing instead. Preserve the initial image identities, hairstyles, clothes, materials and screen positions without transformation. Older shot divisions are timing beats ONLY: replace their camera cuts with continuous movement. This camera rule overrides conflicting framing directions in older plans or saved prompts.";
 function vehicleDirection(s: Snapshot, c?: Clip | null) {
@@ -78,7 +78,7 @@ export function narrativePrompt(j: Job, repair?: string) {
       ? "Para cada propuesta incluye universe: nombre original, entorno, reglas del mundo y personajes canónicos derivados de ESA historia. Respeta exactamente beings y visualStyle elegidos. Son borradores: solo se guardará como universo la propuesta que el usuario elija."
       : "",
     j.snapshot.project.previousChapter
-      ? "ESTA ES LA CONTINUACIÓN DE UNA HISTORIA ÚNICA, no otra historia en el mismo mundo. Las tres propuestas deben avanzar desde el final anterior, sin reiniciar ni repetir lo sucedido. Usa el historial de TODOS los capítulos. Conserva exactamente las fichas existentes de personajes, sus voces y lugares en la biblia; puedes añadir entidades nuevas. La evolución emocional, heridas, conocimientos y objetos se expresan en los estados de las escenas. En el primer clip copia exactamente previousChapter.finalState en continuityIn. Usa previousFrame si continúa la misma acción y encuadre; el fotograma final anterior está disponible. Cada capítulo tiene ocho clips de ocho segundos."
+      ? "ESTA ES LA CONTINUACIÓN DE UNA HISTORIA ÚNICA, no otra historia en el mismo mundo. Las tres propuestas deben avanzar desde el final anterior, sin reiniciar ni repetir lo sucedido. Usa el historial de TODOS los capítulos. Conserva exactamente las fichas existentes de personajes, sus voces y lugares en la biblia; puedes añadir entidades nuevas. La evolución emocional, heridas, conocimientos y objetos se expresan en los estados de las escenas. El primer clip arranca físicamente en previousChapter.finalState; el sistema fija continuityIn a ese estado observado, así que escribe su lugar, reparto, acción y plannedEndState de manera compatible, sin introducir una situación nueva antes de mostrar la transición. Usa previousFrame solo si continúa la misma acción y encuadre en el mismo lugar; el fotograma final anterior está disponible. Cada capítulo tiene ocho clips de ocho segundos."
       : "",
     settingDirection(j.snapshot.project).instruction,
     `Perfiles editoriales: ${JSON.stringify(settingDirection(j.snapshot.project).profiles)}`,
