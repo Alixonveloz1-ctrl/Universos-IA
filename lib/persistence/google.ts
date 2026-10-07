@@ -118,19 +118,72 @@ export async function readPrivateObject(key: string) {
 // not a local signing key or the metadata server expected by getSignedUrl.
 export async function mediaResponse(key: string, range: string | null = null) {
   privateObject(key); // Validate the isolated namespace before any request.
-  if (range && !/^bytes=\d*-\d*$/.test(range)) throw new AppError("RANGE", "Rango inválido", 416);
+  if (range && !/^bytes=(?:\d+-\d*|-\d+)$/.test(range)) throw new AppError("RANGE", "Rango inválido", 416);
   const token = await googleAuth().getAccessToken();
   const upstream = await fetch(`https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(config().bucket)}/o/${encodeURIComponent(key)}?alt=media`, {
-    headers: { Authorization: `Bearer ${token}`, ...(range ? { Range: range } : {}) },
+    headers: { Authorization: `Bearer ${token}`, "Accept-Encoding": "identity", ...(range ? { Range: range } : {}) },
     signal: AbortSignal.timeout(120000),
   });
-  if (!upstream.ok) throw new AppError("MEDIA_READ", `No se pudo leer el archivo guardado (Google ${upstream.status}). No necesitas regenerarlo.`, upstream.status === 404 ? 404 : 502);
-  const headers = new Headers({ "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" });
-  for (const name of ["content-type", "content-length", "content-range", "accept-ranges"])
+  if (!upstream.ok && upstream.status !== 416) throw new AppError("MEDIA_READ", `No se pudo leer el archivo guardado (Google ${upstream.status}). No necesitas regenerarlo.`, upstream.status === 404 ? 404 : 502);
+  const headers = new Headers({ "Cache-Control": "private, no-store, no-transform", "X-Content-Type-Options": "nosniff", "Accept-Ranges": "bytes" });
+  for (const name of ["content-type", "content-length", "content-range"])
     if (upstream.headers.has(name)) headers.set(name, upstream.headers.get(name)!);
-  if (key.toLowerCase().endsWith(".mp4") &&
-      (!headers.has("content-type") || headers.get("content-type") === "application/octet-stream"))
+  if (upstream.status === 206) {
+    const partial = headers.get("content-range")?.match(/^bytes (\d+)-(\d+)\/(\d+)$/);
+    if (!partial) {
+      await upstream.body?.cancel();
+      throw new AppError("MEDIA_READ", "No se pudo cargar el video. Vuelve a cargarlo; no necesitas regenerarlo.", 502);
+    }
+    headers.set("content-length", String(Number(partial[2]) - Number(partial[1]) + 1));
+  }
+  if (key.toLowerCase().endsWith(".mp4"))
     headers.set("content-type", "video/mp4");
+  if (upstream.status === 416) {
+    await upstream.body?.cancel();
+    headers.set("content-length", "0");
+    return new Response(null, { status: 416, headers });
+  }
+  // Safari probes with bytes=0-1 and refuses a full 200 response. Some
+  // storage responses ignore Range; expose the requested bytes as a 206
+  // without buffering a whole clip or sending a second storage request.
+  if (range && upstream.status === 200) {
+    const size = Number(upstream.headers.get("content-length"));
+    const [from, to] = range.slice(6).split("-");
+    const start = from ? Number(from) : Math.max(0, size - Number(to));
+    const end = from ? (to ? Math.min(Number(to), size - 1) : size - 1) : size - 1;
+    if (!upstream.headers.has("content-length") || !Number.isSafeInteger(size) || size < 0) {
+      await upstream.body?.cancel();
+      throw new AppError("MEDIA_READ", "No se pudo cargar el video. Vuelve a cargarlo; no necesitas regenerarlo.", 502);
+    }
+    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start > end || start >= size) {
+      await upstream.body?.cancel();
+      headers.set("content-range", `bytes */${size}`);
+      headers.set("content-length", "0");
+      return new Response(null, { status: 416, headers });
+    }
+    const reader = upstream.body!.getReader();
+    let offset = 0;
+    const body = new ReadableStream<Uint8Array>({
+      async pull(controller) {
+        try {
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) { controller.error(new Error("Archivo de video incompleto")); return; }
+            const chunkStart = offset;
+            offset += value.length;
+            if (offset <= start) continue;
+            controller.enqueue(value.subarray(Math.max(0, start - chunkStart), Math.min(value.length, end + 1 - chunkStart)));
+            if (offset > end) { controller.close(); await reader.cancel(); }
+            return;
+          }
+        } catch (error) { controller.error(error); }
+      },
+      cancel(reason) { return reader.cancel(reason); },
+    });
+    headers.set("content-range", `bytes ${start}-${end}/${size}`);
+    headers.set("content-length", String(end - start + 1));
+    return new Response(body, { status: 206, headers });
+  }
   return new Response(upstream.body, { status: upstream.status, headers });
 }
 export async function googlePost(url: string, body: unknown, paid = false, timeoutMs = 120000) {
