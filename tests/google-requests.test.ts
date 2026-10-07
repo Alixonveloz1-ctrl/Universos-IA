@@ -19,6 +19,8 @@ it("preserves video range responses and rejects foreign bucket prefixes", async 
   const request = vi.fn().mockResolvedValue(new Response("abc", { status: 206, headers: { "content-range": "bytes 0-2/100", "content-type": "video/mp4" } })); vi.stubGlobal("fetch", request);
   const response = await mediaResponse("universos-ia/project/video.mp4", "bytes=0-2");
   expect(response.status).toBe(206); expect(response.headers.get("content-range")).toBe("bytes 0-2/100");
+  expect(response.headers.get("content-length")).toBe("3");
+  expect(response.headers.get("accept-ranges")).toBe("bytes");
   expect(request.mock.calls[0][1].headers.Range).toBe("bytes=0-2");
   await expect(mediaResponse("other-project/image.png")).rejects.toMatchObject({ code: "PATH" });
   expect(request).toHaveBeenCalledTimes(1);
@@ -31,6 +33,76 @@ it("serves a recovered MP4 with a playable MIME type when storage labels it as b
   expect(response.status).toBe(206);
   expect(response.headers.get("content-type")).toBe("video/mp4");
   expect(response.headers.get("content-range")).toBe("bytes 0-2/100");
+});
+it("answers Safari's two-byte probe when storage ignores Range", async () => {
+  const cancelled = vi.fn();
+  const bytes = new ReadableStream<Uint8Array>({
+    start(controller) { controller.enqueue(new Uint8Array([0, 1, 2, 3])); },
+    cancel: cancelled,
+  });
+  const request = vi.fn().mockResolvedValue(new Response(bytes, {
+    headers: { "content-length": "100", "content-type": "binary/octet-stream" },
+  }));
+  vi.stubGlobal("fetch", request);
+  const response = await mediaResponse("universos-ia/project/video.mp4", "bytes=0-1");
+  expect(response.status).toBe(206);
+  expect(response.headers.get("content-range")).toBe("bytes 0-1/100");
+  expect(response.headers.get("content-length")).toBe("2");
+  expect(response.headers.get("accept-ranges")).toBe("bytes");
+  expect(response.headers.get("content-type")).toBe("video/mp4");
+  expect(response.headers.get("cache-control")).toContain("no-transform");
+  expect([...new Uint8Array(await response.arrayBuffer())]).toEqual([0, 1]);
+  expect(cancelled).toHaveBeenCalledOnce();
+  expect(request).toHaveBeenCalledOnce();
+  expect(request.mock.calls[0][1].headers["Accept-Encoding"]).toBe("identity");
+});
+it.each([
+  ["bytes=3-5", "bytes 3-5/8", [3, 4, 5]],
+  ["bytes=5-", "bytes 5-7/8", [5, 6, 7]],
+  ["bytes=-2", "bytes 6-7/8", [6, 7]],
+  ["bytes=6-100", "bytes 6-7/8", [6, 7]],
+])("supports seeking across streamed chunks: %s", async (range, contentRange, expected) => {
+  const bytes = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new Uint8Array([0, 1]));
+      controller.enqueue(new Uint8Array([2, 3, 4]));
+      controller.enqueue(new Uint8Array([5, 6, 7]));
+      controller.close();
+    },
+  });
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(bytes, { headers: { "content-length": "8" } })));
+  const response = await mediaResponse("universos-ia/project/video.mp4", range);
+  expect(response.status).toBe(206);
+  expect(response.headers.get("content-range")).toBe(contentRange);
+  expect(response.headers.get("content-length")).toBe(String(expected.length));
+  expect([...new Uint8Array(await response.arrayBuffer())]).toEqual(expected);
+});
+it("preserves storage's unsatisfiable range response instead of turning it into a server error", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("invalid range", {
+    status: 416, headers: { "content-range": "bytes */100" },
+  })));
+  const response = await mediaResponse("universos-ia/project/video.mp4", "bytes=200-");
+  expect(response.status).toBe(416);
+  expect(response.headers.get("content-range")).toBe("bytes */100");
+  expect(await response.text()).toBe("");
+});
+it.each(["bytes=8-", "bytes=5-2", "bytes=-0"])("rejects an unsatisfiable fallback range: %s", async (range) => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(new Uint8Array(8), { headers: { "content-length": "8" } })));
+  const response = await mediaResponse("universos-ia/project/video.mp4", range);
+  expect(response.status).toBe(416);
+  expect(response.headers.get("content-range")).toBe("bytes */8");
+  expect(await response.text()).toBe("");
+});
+it("keeps full MP4 downloads intact", async () => {
+  const bytes = new Uint8Array([0, 1, 2, 3]);
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(bytes, { headers: { "content-length": "4" } })));
+  const response = await mediaResponse("universos-ia/project/video.mp4");
+  expect(response.status).toBe(200);
+  expect([...new Uint8Array(await response.arrayBuffer())]).toEqual([...bytes]);
+});
+it("refuses an unknown full-response size rather than sending a broken partial response", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("abc")));
+  await expect(mediaResponse("universos-ia/project/video.mp4", "bytes=0-1")).rejects.toMatchObject({ code: "MEDIA_READ" });
 });
 it("requests low reasoning on the selected text model and structured JSON", async () => {
   const request = vi.fn().mockResolvedValue(Response.json({ candidates: [{ content: { parts: [{ text: '{"ok":true}' }] } }] })); vi.stubGlobal("fetch", request);

@@ -473,3 +473,11 @@ async function handler(
   }
 }
 export { handler as GET, handler as POST, handler as PATCH, handler as DELETE };
+
+// Media clients can inspect the same authenticated resource with HEAD.
+// Delegate to GET so a read never enters the mutation/Origin guard.
+export async function HEAD(req: Request, context: Parameters<typeof handler>[1]) {
+  const result = await handler(new Request(req, { method: "GET" }), context);
+  await result.body?.cancel();
+  return new Response(null, { status: result.status, headers: result.headers });
+}

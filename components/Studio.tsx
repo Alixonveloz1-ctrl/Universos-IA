@@ -329,7 +329,9 @@ function Media({
   kind: "image" | "video";
 }) {
   const [url, setUrl] = useState(""),
-    [error, setError] = useState("");
+    [error, setError] = useState(""),
+    [playbackError, setPlaybackError] = useState(false),
+    [reload, setReload] = useState(0);
   useEffect(() => {
     let active = true;
     const load = () =>
@@ -364,12 +366,20 @@ function Media({
   ) : (
     <>
       <video
+        key={`${url}:${reload}`}
         className="media"
-        src={url}
+        src={reload ? `${url}&reload=${reload}` : url}
         controls
         playsInline
         preload="metadata"
+        onError={() => setPlaybackError(true)}
+        onLoadedMetadata={() => setPlaybackError(false)}
       />
+      {playbackError && <div role="alert">
+        <p className="error">No se pudo cargar el video guardado.</p>
+        <button onClick={() => { setPlaybackError(false); setReload(Date.now()); }}>Volver a cargar video</button>
+        <p className="muted">Este botón vuelve a leer el MP4; no genera otro clip.</p>
+      </div>}
       <a href={url} download>
         Descargar MP4
       </a>
