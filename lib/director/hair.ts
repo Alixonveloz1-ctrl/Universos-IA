@@ -1,3 +1,5 @@
+import { speciesCrownDirection, usesSpeciesHead, type CharacterDesignContext } from "./character-design";
+
 type HairCharacter = { id: string; hair: string };
 
 const looks = [
@@ -25,8 +27,8 @@ export function hairDirection(projectId: string, characterId: string, existing: 
   return selected;
 }
 
-export function renderHair(projectId: string, character: HairCharacter): string {
+export function renderHair(projectId: string, character: HairCharacter, context?: CharacterDesignContext): string {
   return character.hair?.trim() && !missingHair.test(character.hair.trim())
     ? character.hair
-    : hairDirection(projectId, character.id);
+    : usesSpeciesHead(context) ? speciesCrownDirection : hairDirection(projectId, character.id);
 }

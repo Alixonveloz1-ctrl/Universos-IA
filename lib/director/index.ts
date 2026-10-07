@@ -1,3 +1,4 @@
+import { designContext, headDesignDirection } from "./character-design";
 // Narrative/image generation is preserved in core.ts. The video entry points
 // below compile one deterministic script instead of rewriting and duplicating it.
 import {
@@ -82,10 +83,9 @@ export function compileVideoPrompt(s: Snapshot, c: Clip, instructions: string) {
   return [
     "Generate one complete 8-second vertical audiovisual clip, with native audio. One uninterrupted camera take follows the local timing below.",
     `The ONE approved image for this clip is its initial frame. All ${c.characterIds.length} participating characters (${c.characterIds.map(id => s.bible!.characters.find(x => x.id === id)?.name || id).join(", ")}) must already be visible and recognizable in that opening image. Preserve their exact appearance, wardrobe and positions throughout the continuous camera movement; do not invent, replace or duplicate a character. Generate all later smooth camera moves and reactions inside this video from the timing below; they do not have separate images.`,
-    visualTreatment(s.project.universeSnapshot.visualStyle),
-    ["Frutas", "Verduras", "Diamantes y minerales", "Objetos", "Insectos"].includes(s.project.universeSnapshot.beings)
-      ? `CHARACTER DESIGN LOCK FOR VIDEO: ${s.project.characterDesign || "Humanoide"}. Preserve exactly the head architecture visible in the approved initial image and canonical character identity. Humanoide means fully humanoid head/face/hair. Cabeza de especie/material means a normal-scale complete recognizable species/material head on the attractive proportionate humanoid body, with expressive integrated face and the approved full hairstyle. Never switch between these modes during animation and never enlarge the head into a mascot/chibi proportion.`
-      : "",
+    visualTreatment(s.project.universeSnapshot.visualStyle, designContext(s.project)),
+    headDesignDirection(designContext(s.project)),
+    "VIDEO IDENTITY PRIORITY: preserve exactly the complete head shape, adult proportions, natural crown or hair visible in the approved initial image. Never redesign or switch head modes during animation.",
     "Preserve exact recurring identities and voice descriptions. Speak the approved dialogue literally; do not translate. No unrequested voices. Music, if requested, must not mask dialogue. Do not add an intro or outro to every clip.",
     speechDirection(s, c),
     "STRICT SCRIPT FIDELITY: Veo renders ONLY the events literally scheduled in this clip. It must not invent a climax, complication, surprise, spectacle, hazard, damage, transformation, weather event or environmental change to make the eight seconds more interesting. If the scheduled action is ordinary (for example driving and talking), keep it ordinary for the entire clip. Never add lightning, electricity, magic, energy beams, explosions, fire, smoke, sparks, supernatural light, earthquakes, cracked pavement, crashes, vehicle deformation/disassembly, flying debris, broken objects or sudden destruction unless that exact event is explicitly written in this clip's approved action/effects. Empty time is filled only by continuing the existing ordinary motion, natural breathing, eyelines and subtle reactions.",
@@ -113,7 +113,7 @@ export function compileVideoPrompt(s: Snapshot, c: Clip, instructions: string) {
         characters: s.bible!.characters.filter((x) => c.characterIds.includes(x.id)).map(x => ({
           id: x.id, name: x.name, gender: x.gender, age: x.age, material: x.material,
           face: x.face, silhouette: x.silhouette, color: x.color, texture: x.texture,
-          hair: renderHair(s.project.id, x), eyes: x.eyes, wardrobe: x.wardrobe,
+          hair: renderHair(s.project.id, x, designContext(s.project)), eyes: x.eyes, wardrobe: x.wardrobe,
           accessories: x.accessories, gestures: x.gestures, lockedTraits: x.lockedTraits,
         })),
         locations: safeVideoText(s.bible!.locations.filter((x) => x.id === c.locationId)),

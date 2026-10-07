@@ -1,3 +1,4 @@
+import { usesSpeciesHead, type CharacterDesignContext } from "./character-design";
 import references from "./reference-look.json";
 import type { ImageRef } from "../providers/vertex";
 
@@ -6,7 +7,9 @@ const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u0
 
 export const referenceLookInstruction = "La ÚLTIMA imagen adjunta es una referencia editorial de diseño FEMENINO, NO un personaje de esta historia. Es la guía principal para el ACABADO del personaje: reproduce la calidad de su rostro expresivo, mirada con párpados, mejillas suaves, anatomía adulta continua, piel de aspecto vivo, tela real y luz cálida favorecedora. Usa la ficha de abajo para identidad, especie, edad, colores y prendas concretas: esas características pertenecen al personaje nuevo. La referencia puede inspirar una postura relajada y una atmósfera cotidiana; no reproduzcas su identidad ni copies literalmente su vestuario. Conserva la técnica visual elegida: traduce el diseño a 2D o anime cuando corresponda; el ejemplo 3D no reemplaza esa elección. Humanos conservan cabeza y piel humanas; otras especies conservan sus propios rasgos. La referencia de identidad aprobada del personaje conserva prioridad para rostro e identidad.";
 
-export function femaleReference(character?: CharacterLook) {
+export function femaleReference(character?: CharacterLook, context?: CharacterDesignContext) {
+  // These editorial portraits have humanoid skulls; they cannot define species-head anatomy.
+  if (usesSpeciesHead(context)) return undefined;
   if (!character || !/\b(mujer|femenin[oa]|female|woman)\b/.test(normalize(character.gender || ""))) return undefined;
   const age = normalize(character.age || "");
   const numbers = age.match(/\d+/g)?.map(Number);
@@ -18,8 +21,8 @@ export function femaleReference(character?: CharacterLook) {
   return match || references[hash % references.length];
 }
 
-export function withReferenceLook(prompt: string, refs: ImageRef[], maxRefs: number, character?: CharacterLook) {
-  const reference = femaleReference(character);
+export function withReferenceLook(prompt: string, refs: ImageRef[], maxRefs: number, character?: CharacterLook, context?: CharacterDesignContext) {
+  const reference = femaleReference(character, context);
   if (!reference) return { prompt, refs };
   if (refs.length >= maxRefs) throw new Error("No hay espacio para la referencia visual femenina.");
   const { bytesBase64Encoded, mimeType } = reference;
