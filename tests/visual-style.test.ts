@@ -4,7 +4,7 @@ import type { Job } from "../lib/types";
 import { compileImagePrompt, compileVideoPrompt, narrativePrompt } from "../lib/director";
 import { styles } from "../lib/director/catalog";
 import { TELENOVELA_STYLE } from "../lib/director/styles";
-import { visualTreatment } from "../lib/director/styles";
+import { endingDirection, visualTreatment } from "../lib/director/styles";
 import { characterStyleReference, imageReferenceIds } from "../lib/continuity/rules";
 
 it("carries the chosen treatment through all narrative stages and both media prompts", () => {
@@ -160,4 +160,48 @@ it("retains legacy identity clues without copying an old storyboard or another c
   expect(prompt).toContain("Hermana de Cereza");
   expect(prompt).not.toContain("Otro personaje huye");
   expect(prompt).not.toContain("LEGACY_COLLAGE");
+});
+
+it("uses the selected complete head architecture for every eligible family through the production pipeline", () => {
+  for (const beings of ["Frutas", "Verduras", "Diamantes y minerales", "Objetos", "Insectos"]) {
+    const s = structuredClone(snapshot());
+    s.project.universeSnapshot.beings = beings;
+    s.project.characterDesign = "Cabeza de especie/material";
+    s.bible!.characters[0].hair = "Corona natural visible";
+    const before = JSON.stringify(s);
+    for (const style of styles) {
+      s.project.universeSnapshot.visualStyle = style;
+      for (const prompt of [
+        compileImagePrompt(s, s.targets.find(t => t.role === "character")!, ""),
+        compileImagePrompt(s, s.targets.find(t => t.role === "shot")!, ""),
+        compileVideoPrompt(s, s.plan!.clips[0], ""),
+      ]) {
+        expect(prompt).toContain("SPECIES/MATERIAL HEAD");
+        expect(prompt).toContain("Corona natural visible");
+        expect(prompt).not.toContain("100% HUMANOID HEAD");
+        expect(prompt).not.toContain("on a fully humanoid head");
+        expect(prompt).not.toContain("En ambos modos conserva cabello humanoide completo");
+        expect(prompt).toContain(style);
+      }
+      for (const type of ["ideas", "story", "bible", "plan"]) {
+        const prompt = narrativePrompt({ type, snapshot: s, instructions: "" } as Job);
+        expect(prompt).toContain("cabeza ENTERA");
+        expect(prompt).not.toContain("nunca en hair de un humanoide");
+      }
+    }
+    s.project.universeSnapshot.visualStyle = JSON.parse(before).project.universeSnapshot.visualStyle;
+    expect(JSON.stringify(s)).toBe(before);
+  }
+});
+
+it("carries the chosen ending into every narrative stage without imposing cliffhangers on resolutions", () => {
+  const s = structuredClone(snapshot());
+  for (const ending of ["Resolución", "Giro final", "Cliffhanger"]) {
+    s.project.ending = ending;
+    for (const type of ["ideas", "story", "bible", "plan"]) {
+      const prompt = narrativePrompt({ type, snapshot: s, instructions: "" } as Job);
+      expect(prompt).toContain(endingDirection(ending));
+      if (ending !== "Cliffhanger") expect(prompt).not.toContain("CIERRE ELEGIDO — CLIFFHANGER");
+    }
+  }
 });

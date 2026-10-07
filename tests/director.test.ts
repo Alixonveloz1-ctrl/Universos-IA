@@ -6,6 +6,7 @@ vi.mock("../lib/providers/vertex", () => ({ textGenerate: vi.fn() }));
 import { textGenerate } from "../lib/providers/vertex";
 import { runDirector, directPrompt } from "../lib/director";
 import { renderHair } from "../lib/director/hair";
+import { speciesCrownDirection } from "../lib/director/character-design";
 import { assertNoPendingCall } from "../worker/recovery";
 const generate = vi.mocked(textGenerate);
 beforeEach(() => generate.mockReset());
@@ -47,6 +48,24 @@ it("presents a valid bible to the owner without a second paid model review", asy
   expect(await runDirector(j, before, checkpoint)).toEqual(normalizedBible(j));
   expect(generate).toHaveBeenCalledTimes(3);
   expect(generate.mock.calls[0][2]).toBeDefined();
+});
+
+it("builds species-head cards without a compulsory human hairstyle or another model review", async () => {
+  const { j, before, checkpoint } = execution();
+  j.type = "bible";
+  j.snapshot.project.universeSnapshot.beings = "Frutas";
+  j.snapshot.project.characterDesign = "Cabeza de especie/material";
+  generate.mockResolvedValueOnce(j.snapshot.bible)
+    .mockResolvedValueOnce({ ...j.snapshot.bible!.characters[0], material: "Fresa", hair: "No aplica" })
+    .mockResolvedValueOnce(j.snapshot.bible!.locations[0]);
+  const result = await runDirector(j, before, checkpoint);
+  expect(result).toMatchObject({ characters: [{ hair: speciesCrownDirection }] });
+  expect(generate).toHaveBeenCalledTimes(3);
+  for (const [, prompt] of generate.mock.calls) {
+    expect(prompt).toContain("cabeza ENTERA");
+    expect(prompt).not.toContain("CABELLO: diseña cabello humanoide");
+    expect(prompt).not.toContain("nunca en hair de un humanoide");
+  }
 });
 it("resuming a failed Bible retries only its invalid ficha and retains completed parts", async () => {
   const { j, before, checkpoint } = execution();

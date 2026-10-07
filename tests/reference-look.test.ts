@@ -30,3 +30,13 @@ it("uses all six approved references for the matching species and selects a stab
   }
   expect(femaleReference({...woman,name:"Humana"})).toEqual(femaleReference({...woman,name:"Humana"}));
 });
+
+it("keeps own identity references and skips humanoid editorial anatomy only in species-head mode", () => {
+  const own = { bytesBase64Encoded: "own-identity", mimeType: "image/jpeg" };
+  const context = { beings: "Frutas", characterDesign: "Cabeza de especie/material" };
+  expect(femaleReference(woman, context)).toBeUndefined();
+  // A full reference budget is valid because no conflicting editorial image is added.
+  expect(withReferenceLook("species head", [own], 1, woman, context)).toEqual({ prompt: "species head", refs: [own] });
+  expect(femaleReference(woman, { ...context, characterDesign: "Humanoide" })).toBeDefined();
+  expect(femaleReference(woman, { ...context, beings: "Humanos" })).toBeDefined();
+});

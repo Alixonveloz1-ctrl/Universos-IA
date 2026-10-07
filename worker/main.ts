@@ -1,3 +1,4 @@
+import { designContext } from "../lib/director/character-design";
 import { femaleReference, withReferenceLook } from "../lib/director/reference-look";
 import { randomUUID, createHash } from "node:crypto";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -268,13 +269,13 @@ export async function execute(jobId: string, direct = false): Promise<"continue"
         );
         if (t.role === "character") {
           // The universe style anchor remains before the editorial reference.
-          const guided = withReferenceLook(prompt, refs, imageLimits(s.project.models.image).maxReferenceImages, s.bible?.characters.find(character => character.id === t.entityId));
+          const guided = withReferenceLook(prompt, refs, imageLimits(s.project.models.image).maxReferenceImages, s.bible?.characters.find(character => character.id === t.entityId), designContext(s.project));
           prompt = guided.prompt;
           refs = guided.refs;
           const character = s.bible?.characters.find(character => character.id === t.entityId);
-          const editorial = femaleReference(character);
-          await checkpoint(`editorial_${t.id}`, { referenceId: editorial?.id || null, attached: !!editorial, referenceCount: refs.length, promptVersion: 2 });
-          console.info("[character-reference]", JSON.stringify({ jobId: job.id, targetId: t.id, referenceId: editorial?.id || null, attached: !!editorial, referenceCount: refs.length, promptVersion: 2 }));
+          const editorial = femaleReference(character, designContext(s.project));
+          await checkpoint(`editorial_${t.id}`, { referenceId: editorial?.id || null, attached: !!editorial, referenceCount: refs.length, promptVersion: 3 });
+          console.info("[character-reference]", JSON.stringify({ jobId: job.id, targetId: t.id, referenceId: editorial?.id || null, attached: !!editorial, referenceCount: refs.length, promptVersion: 3 }));
         }
         await beforeCall(key);
         try {
