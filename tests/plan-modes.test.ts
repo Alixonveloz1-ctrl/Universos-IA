@@ -1,6 +1,6 @@
 // All providers are mocked. These tests never request paid generations.
 import { beforeEach, expect, it, vi } from "vitest";
-import { snapshot } from "./fixtures";
+import { snapshot, observed, b } from "./fixtures";
 import type { Job } from "../lib/types";
 import { genres, styles } from "../lib/director/catalog";
 vi.mock("../lib/providers/vertex", () => ({ textGenerate: vi.fn() }));
@@ -62,6 +62,22 @@ for (const style of styles) {
     expect(j.checkpoint.director_validation_1).toMatchObject({ issues: expect.arrayContaining([expect.objectContaining({ path: "clips[2].shots[0].end" })]) });
   });
 }
+it("recovers a saved chapter-two draft with a mismatched written handoff without paying again", async () => {
+  const { j, s, before, save } = execution();
+  s.project.chapterNumber = 2;
+  s.project.previousChapter = { projectId: "previous", exportId: "final", finalState: observed,
+    bible: b, lastClip: { ...s.assets.find(a => a.id === "v8")!, lastFrameObject: "previous/last.png" } };
+  j.snapshot = s;
+  const draft = structuredClone(s.plan!);
+  draft.clips[0].continuityIn = { ...observed, note: "Una descripción distinta" };
+  j.checkpoint.director_1 = draft;
+  const result = await runDirector(j, before, save) as typeof draft;
+  expect(result.clips[0].continuityIn).toEqual(observed);
+  expect(j.checkpoint.director_1).toEqual(draft);
+  expect(generate).not.toHaveBeenCalled();
+  expect(before).not.toHaveBeenCalled();
+  expect(save).not.toHaveBeenCalled();
+});
 it("normalizes only unambiguous serialization and handoff fields", () => {
   const { s } = execution();
   const source = JSON.parse(JSON.stringify(s.plan!));

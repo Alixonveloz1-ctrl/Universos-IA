@@ -7,7 +7,7 @@ import { planDraftKeys, validateGeneratedPlan, planIssues, describePlanIssues } 
 export async function diagnoseFailedPlan(job: Job): Promise<Job> {
   const key = planDraftKeys(job.checkpoint)[0];
   if (!key || job.type !== "plan" || job.state !== "failed" || job.error?.code !== "DIRECTOR_JSON" || job.leaseUntil > Date.now() || job.checkpoint.pendingCall) return job;
-  const stamp = `plan-diagnostic-v1:${key}`;
+  const stamp = `plan-diagnostic-v2:${key}`;
   if (job.checkpoint.planDiagnosticStamp === stamp) return job;
   const ref = db().doc(`jobs/${job.id}`);
   const stored = job.checkpoint[key];

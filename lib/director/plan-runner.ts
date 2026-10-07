@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { plan, validatePlan, type Plan } from "../schemas";
+import { plan, state, validatePlan, type Plan } from "../schemas";
 import type { Job, Snapshot } from "../types";
 import { validateChapterPlan } from "../continuity/chapters";
 import { AppError } from "../errors";
@@ -11,7 +11,7 @@ export type PlanIssue = { path: string; code: string; message: string };
 
 // Only normalize unambiguous serialization details. Never invent missing
 // actions, characters, words, scenes, timings or ending states.
-export function prepareGeneratedPlan(value: unknown): unknown {
+export function prepareGeneratedPlan(value: unknown, previousChapterState?: unknown): unknown {
   let decoded = value;
   if (row(decoded) && typeof decoded.invalidJsonText === "string") decoded = decoded.invalidJsonText;
   if (typeof decoded === "string") {
@@ -37,6 +37,12 @@ export function prepareGeneratedPlan(value: unknown): unknown {
     const clip: unknown = planCopy.clips[i];
     if (!row(clip)) continue;
     numberFields(clip, ["number", "durationSeconds"]);
+    // The observed state at the end of the approved previous chapter is an
+    // application invariant, just like the handoff between clips below. Do
+    // not make Gemini reproduce every field and key order verbatim. This also
+    // repairs an already saved draft on resume without another paid call.
+    if (i === 0 && previousChapterState !== undefined)
+      clip.continuityIn = structuredClone(state.parse(previousChapterState));
     if (Array.isArray(clip.dialogue)) {
       for (const turn of clip.dialogue) if (row(turn)) numberFields(turn, ["start", "end"]);
     }
@@ -63,7 +69,7 @@ class PlanIssues extends Error {
 
 export function validateGeneratedPlan(value: unknown, snapshot: Snapshot): Plan {
   if (!snapshot.bible) throw new PlanIssues([{ path: "bible", code: "missing", message: "Falta la biblia de este trabajo." }]);
-  const prepared = prepareGeneratedPlan(value);
+  const prepared = prepareGeneratedPlan(value, snapshot.project.previousChapter?.finalState);
   if (!row(prepared) || !Array.isArray(prepared.clips)) return plan.parse(prepared);
   const characterIds = new Set(snapshot.bible.characters.map(ch => ch.id));
   const characterByName = new Map(snapshot.bible.characters.map(ch => [ch.name.trim().toLocaleLowerCase(), ch.id]));
