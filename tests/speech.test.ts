@@ -157,6 +157,32 @@ it("adds natural dialogue direction to new plans without mutating the job", () =
   expect(narrativePrompt(j)).toContain("shots[].dialogue queda vacío");
   expect(j.instructions).toBe("User instruction");
 });
+it("keeps the story's social cause before the remedy and the final frame occupied", () => {
+  const { s, c } = scene();
+  s.project.genre = "Comedia";
+  s.project.concept = "Se burlan del número en la frente de un personaje y después busca una solución.";
+  const plan = narrativePrompt({ type: "plan", snapshot: s, instructions: "", checkpoint: {} } as Job);
+  expect(plan).toContain("representa esos hechos en pantalla antes del consultorio o remedio");
+  expect(plan).toContain("fotograma final de los 8 segundos");
+  const video = compileVideoPrompt(s, c, "");
+  expect(video).toContain("FINAL-FRAME HANDOFF");
+  expect(video).toContain("At 7–8s");
+  expect(video).toContain("no gratuitous walk-off, empty location");
+  expect(speechDirection(s, c)).toContain("through the final frame");
+});
+it("directs comedy through characters without sitcom cues while preserving the original clip", () => {
+  const { s, c } = scene();
+  s.project.genre = "Comedia";
+  c.soundDirection.music = "Un golpe musical gracioso al final";
+  const original = JSON.stringify(c);
+  const prompt = compileVideoPrompt(s, c, "");
+  expect(prompt).toContain("COMEDY AUDIO AND MOVEMENT");
+  expect(prompt).toContain("No canned laughter, applause, sitcom sting");
+  expect(prompt.lastIndexOf("COMEDY AUDIO AND MOVEMENT")).toBeGreaterThan(prompt.indexOf(c.soundDirection.music));
+  expect(JSON.stringify(c)).toBe(original);
+  s.project.genre = "Drama";
+  expect(compileVideoPrompt(s, c, "")).not.toContain("COMEDY AUDIO AND MOVEMENT");
+});
 
 
 it("sends canonical voice profiles only for characters who actually speak", () => {
