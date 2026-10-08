@@ -4,7 +4,7 @@ import { snapshot } from "./fixtures";
 import type { Job } from "../lib/types";
 vi.mock("../lib/providers/vertex", () => ({ textGenerate: vi.fn() }));
 import { textGenerate } from "../lib/providers/vertex";
-import { runDirector, directPrompt } from "../lib/director";
+import { runDirector, directPrompt, compileVideoPrompt } from "../lib/director";
 import { renderHair } from "../lib/director/hair";
 import { speciesCrownDirection } from "../lib/director/character-design";
 import { assertNoPendingCall } from "../worker/recovery";
@@ -13,7 +13,7 @@ beforeEach(() => generate.mockReset());
 function execution() {
   const j = {
     type: "story",
-    snapshot: snapshot(),
+    snapshot: structuredClone(snapshot()),
     instructions: "",
     checkpoint: {},
   } as Job;
@@ -96,8 +96,11 @@ it("uses a valid saved story draft after an earlier subjective rejection without
 });
 it("prompt compilation is checkpointed and does not modify approved source material", async () => {
   const { j, before, checkpoint } = execution();
+  j.type = "video";
+  const c = j.snapshot.plan!.clips[0], opening = c.shots[0];
+  c.shots = ["Alba levanta el anillo.", "Alba gira la muñeca hacia la luz.", "Alba inclina el anillo hacia su interlocutor.", "Alba comienza a extender la mano abierta."].map((action, i) => ({ ...opening, id: i ? `${opening.id}_${i}` : opening.id, start: i * 2, end: (i + 1) * 2, action, dialogue: "" }));
   const original = JSON.stringify(j.snapshot);
-  const target = j.snapshot.targets[0];
+  const target = j.snapshot.targets.find(t => t.role === "clip")!;
   const first = await directPrompt(
     j,
     target,
@@ -109,7 +112,7 @@ it("prompt compilation is checkpointed and does not modify approved source mater
     await directPrompt(j, target, "approved context", before, checkpoint),
   ).toBe(first);
   expect(generate).not.toHaveBeenCalled();
-  expect(first).toBe("approved context");
+  expect(first).toBe(compileVideoPrompt(j.snapshot, c, ""));
   expect(JSON.stringify(j.snapshot)).toBe(original);
 });
 
@@ -117,12 +120,29 @@ it("asks for a timed video performance before a Veo clip is submitted", async ()
   const { j, before, checkpoint } = execution();
   j.type = "video";
   const target = j.snapshot.targets.find(t => t.role === "clip")!;
+  const original = JSON.stringify(j.snapshot);
+  generate.mockResolvedValueOnce({ beats: ["Alba comienza a levantar el anillo.", "Alba gira la muñeca hacia la luz.", "Alba acerca el anillo a sus ojos.", "Alba afloja los dedos y ofrece el anillo hacia su interlocutor."] });
   const { compileVideoPrompt } = await import("../lib/director");
   const prompt = await directPrompt(j, target, compileVideoPrompt(j.snapshot, j.snapshot.plan!.clips[0], ""), before, checkpoint);
-  expect(generate).not.toHaveBeenCalled();
+  expect(generate).toHaveBeenCalledOnce();
   expect(prompt).toContain("6-8s:");
+  expect(prompt).toContain("6-8s: Alba afloja los dedos");
+  expect(JSON.stringify(j.snapshot)).toBe(original);
   expect(prompt).toContain("no speech");
   expect(prompt).toContain("ONLY audible speaker");
+});
+
+it("recovers a malformed motion result by repairing its format once and preserves that repair on resume", async () => {
+  const { j, before, checkpoint } = execution();
+  j.type = "video";
+  const target = j.snapshot.targets.find(t => t.role === "clip")!;
+  generate.mockResolvedValueOnce({ beats: ["Alba levanta el anillo."] }).mockResolvedValueOnce({ beats: ["Alba levanta el anillo.", "Alba gira la muñeca hacia la luz.", "Alba inclina el anillo hacia su interlocutor.", "Alba comienza a extender la mano abierta."] });
+  const prompt = await directPrompt(j, target, "legacy context", before, checkpoint);
+  expect(prompt).toContain("6-8s: Alba comienza a extender la mano abierta.");
+  expect(generate).toHaveBeenCalledTimes(2);
+  expect(await directPrompt(j, target, "changed context", before, checkpoint)).toBe(prompt);
+  expect(generate).toHaveBeenCalledTimes(2);
+  expect(j.checkpoint.pendingCall).toBeNull();
 });
 
 it("generates three universe drafts from dropdown preferences in the ideas call", async () => {

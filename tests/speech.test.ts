@@ -22,6 +22,8 @@ function scene() {
   ];
   c.shots[0].dialogue = c.dialogue[0].text;
   c.shots[0].action = `Ana pregunta: ${c.dialogue[0].text} Luis reacciona.`;
+  const opening = c.shots[0];
+  c.shots = [opening.action, "Ana baja la mano señaladora mientras Luis inclina el cuerpo hacia ella.", "Luis abre las palmas a la altura de la cintura al responder, Ana retrocede medio paso.", "Ana sostiene la mirada de Luis y afloja el agarre del anillo; Luis extiende lentamente la mano sin tocarla."].map((action, i) => ({ ...opening, id: i ? `${opening.id}_phase${i}` : opening.id, start: i * 2, end: (i + 1) * 2, action, dialogue: i ? "" : opening.dialogue }));
   return { s, c, target: s.targets.find(t => t.role === "clip" && t.clipNumber === 1)! };
 }
 it("includes each spoken line once even in a turn spanning two visual intervals", () => {
@@ -111,13 +113,13 @@ it("checkpoints the exact video prompt without calling Gemini and reuses it on r
   expect(await directPrompt(j, target, prompt, before, save)).toBe(prompt);
   expect(await directPrompt(j, target, "changed", before, save)).toBe(prompt);
   expect(save).toHaveBeenCalledTimes(1);
-  expect(j.checkpoint[`prompt_${target.id}`]).toMatchObject({ prompt, compilerVersion: 1 });
+  expect(j.checkpoint[`prompt_${target.id}`]).toMatchObject({ prompt, compilerVersion: 2 });
   expect(before).not.toHaveBeenCalled();
   expect(textGenerate).not.toHaveBeenCalled();
 });
 it("replaces an old unsubmitted rewrite but never resubmits or edits accepted legacy work", async () => {
   const { s, c, target } = scene();
-  const j = { type: "video", snapshot: s, checkpoint: { [`prompt_${target.id}`]: { prompt: "Legacy compiled direction for this clip." } }, instructions: "" } as Job;
+  const j = { type: "video", snapshot: s, checkpoint: { [`prompt_${target.id}`]: { prompt: "Legacy compiled direction for this clip.", compilerVersion: 1 } }, instructions: "" } as Job;
   const before = vi.fn(), save = vi.fn();
   const prompt = compileVideoPrompt(s, c, "");
   expect(await directPrompt(j, target, prompt, before, save)).toBe(prompt);
