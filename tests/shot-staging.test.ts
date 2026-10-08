@@ -57,7 +57,7 @@ it("anchors all three clip characters in the one initial image even if the openi
   expect(() => prerequisites(s, video)).not.toThrow();
 });
 
-it("maps an eight-second door action and timed dialogue to a continuous four-part video performance", () => {
+it("compiles older door actions once without duplicating them in invented timing windows", () => {
   const s = structuredClone(snapshot());
   const clip = s.plan!.clips[0];
   clip.shots[0].action = "Alba abre la puerta y ve la carta";
@@ -65,9 +65,10 @@ it("maps an eight-second door action and timed dialogue to a continuous four-par
   clip.shots.push({ ...clip.shots[0], id: "reaction", start: 4, end: 8, action: "Alba lee la carta y se queda inmóvil" });
   clip.dialogue[0] = { ...clip.dialogue[0], start: 4, end: 6, text: "¿Es tuya?" };
   const prompt = compileVideoPrompt(s, clip, "");
-  for (const window of ["0-2s:", "2-4s:", "4-6s:", "6-8s:"]) expect(prompt).toContain(window);
   const visualMap = prompt.indexOf("VISUAL PERFORMANCE MAP:");
-  expect(prompt.indexOf("0-2s:", visualMap)).toBeLessThan(prompt.indexOf("6-8s:", visualMap));
+  expect(prompt.indexOf("Action 1", visualMap)).toBeLessThan(prompt.indexOf("Action 2", visualMap));
+  expect(prompt.split(clip.shots[0].action)).toHaveLength(2);
+  expect(prompt.split(clip.shots[1].action)).toHaveLength(2);
   expect(prompt).toContain("Action 1, 0-4s: Alba abre la puerta");
   expect(prompt).toContain("Action 2, 4-8s: Alba lee la carta");
   expect(prompt).toContain("4-6s — turn 1.");

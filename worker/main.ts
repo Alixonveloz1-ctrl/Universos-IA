@@ -9,6 +9,7 @@ import type { Transaction } from "@google-cloud/firestore";
 import type { SaveOptions } from "@google-cloud/storage";
 import { db, privateObject, objectPath, projectObjectPath, googleAuth, readPrivateObject } from "../lib/persistence/google";
 import { imageLimits } from "../lib/models";
+import { CHAPTER_MOTION_NEGATIVE_PROMPT } from "../lib/director/motion";
 import { imageReferenceIds } from "../lib/continuity/rules";
 import { config } from "../lib/config";
 import { AppError, assert, safeError, logFailure } from "../lib/errors";
@@ -380,6 +381,8 @@ export async function execute(jobId: string, direct = false): Promise<"continue"
           prompt,
           refs,
           `gs://${config().bucket}/${projectObjectPath(s.project.universeSnapshot.name || s.project.title, job.projectId, s.project.chapterNumber || 1, versionId, "provider")}/`,
+          8,
+          CHAPTER_MOTION_NEGATIVE_PROMPT,
         );
         await checkpoint("operation", operation);
         await guarded({ state: "waiting" }, true);

@@ -125,6 +125,11 @@ import { textGenerate, imageGenerate, startVideo, pollVideo } from "../lib/provi
 import { execute, startupCheck } from "../worker/main";
 import { jobControl } from "../lib/persistence/projects";
 const jobId = "e".repeat(64);
+const motionBeats = ["Alba comienza a levantar el anillo.", "Alba gira la muñeca hacia la luz.", "Alba acerca el anillo a sus ojos.", "Alba afloja los dedos y ofrece el anillo hacia su interlocutor."];
+function stageClip(j: Job) {
+  const c = j.snapshot.plan!.clips[0], opening = c.shots[0];
+  c.shots = motionBeats.map((action, i) => ({ ...opening, id: i ? `${opening.id}_phase${i}` : opening.id, start: i * 2, end: (i + 1) * 2, action, dialogue: "" }));
+}
 beforeEach(async () => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
@@ -148,7 +153,7 @@ beforeEach(async () => {
           .toBuffer(),
       ),
     });
-  const s = snapshot();
+  const s = structuredClone(snapshot());
   delete s.targets.find((t) => t.id === "character_a")!.approvedVersionId;
   const j: Job = {
     id: jobId,
@@ -203,12 +208,15 @@ it("direct video calls Veo before handing the accepted operation to media proces
   const j = memory.rows.get("jobs/" + jobId) as Job;
   j.type = "video";
   j.targetId = j.snapshot.targets.find(t => t.kind === "video")!.id;
+  stageClip(j);
   for (const a of j.snapshot.assets.filter(a => a.kind === "image")) memory.files.set(a.storageObject, Buffer.from("reference"));
   vi.mocked(startVideo).mockReset().mockResolvedValue("projects/test/operations/accepted");
   vi.mocked(pollVideo).mockReset();
   const next = await execute(jobId, true);
   expect(next, JSON.stringify((memory.rows.get("jobs/" + jobId) as Job).error)).toBe("cloud");
   expect(startVideo).toHaveBeenCalledTimes(1);
+  expect(startVideo).toHaveBeenCalledWith(expect.any(String), expect.stringContaining("6-8s: " + motionBeats[3]), expect.any(Array), expect.any(String), 8, expect.stringContaining("prolonged idle character pose"));
+  expect(textGenerate).not.toHaveBeenCalled();
   expect(pollVideo).not.toHaveBeenCalled();
   expect((memory.rows.get("jobs/" + jobId) as Job).checkpoint.operation).toBe("projects/test/operations/accepted");
 });
@@ -229,6 +237,7 @@ it("uses the clip's own image even when continuing the previous chapter", async 
   vi.stubEnv("GCS_OUTPUT_BUCKET", "test-bucket");
   j.type = "video"; j.targetId = "clip_1";
   j.snapshot.plan = structuredClone(j.snapshot.plan!);
+  stageClip(j);
   j.snapshot.plan.clips[0].startMode = "previousFrame";
   const last = { ...j.snapshot.assets.find(a => a.id === "v8")!, lastFrameObject: "universos-ia/previous/last.png" };
   j.snapshot.project.previousChapter = { projectId: "previous", exportId: "final", finalState: j.snapshot.observed.clip_8, bible: j.snapshot.bible!, lastClip: last };
@@ -242,6 +251,49 @@ it("uses the clip's own image even when continuing the previous chapter", async 
   expect(startVideo, JSON.stringify((memory.rows.get("jobs/" + jobId) as Job).error)).toHaveBeenCalledOnce();
   expect(JSON.stringify(vi.mocked(startVideo).mock.calls[0])).toContain(Buffer.from("reference").toString("base64"));
   expect(JSON.stringify(vi.mocked(startVideo).mock.calls[0])).not.toContain(Buffer.from("previous chapter frame").toString("base64"));
+});
+
+it("expands an old sparse plan once, persists all four actions, then submits the same motion to Veo", async () => {
+  vi.stubEnv("GCP_PROJECT_ID", "test-project");
+  vi.stubEnv("GCS_OUTPUT_BUCKET", "test-bucket");
+  const j = memory.rows.get("jobs/" + jobId) as Job;
+  j.type = "video"; j.targetId = "clip_1";
+  const approvedPlan = JSON.stringify(j.snapshot.plan);
+  memory.files.set(j.snapshot.assets.find(a => a.id === "i1")!.storageObject, Buffer.from("reference"));
+  vi.mocked(textGenerate).mockResolvedValueOnce({ beats: motionBeats });
+  vi.mocked(startVideo).mockReset().mockResolvedValue("projects/test/operations/accepted");
+  vi.mocked(pollVideo).mockReset();
+  expect(await execute(jobId, true)).toBe("continue");
+  expect(textGenerate).toHaveBeenCalledOnce();
+  expect(startVideo).not.toHaveBeenCalled();
+  expect(memory.rows.get(`jobs/${jobId}/checkpoints/motion_clip_1_v2`)).toEqual({ value: { beats: motionBeats } });
+  expect(await execute(jobId, true)).toBe("cloud");
+  const submitted = vi.mocked(startVideo).mock.calls[0][1];
+  for (const [i, beat] of motionBeats.entries()) {
+    expect(submitted).toContain(`${i * 2}-${(i + 1) * 2}s: ${beat}`);
+    expect(submitted.split(beat)).toHaveLength(2);
+  }
+  const canonicalLine = j.snapshot.plan!.clips[0].dialogue[0].text;
+  expect(submitted.split(canonicalLine)).toHaveLength(2);
+  expect(JSON.stringify((memory.rows.get("jobs/" + jobId) as Job).snapshot.plan)).toBe(approvedPlan);
+  // Another Vercel dispatch after acceptance only hands off the saved operation.
+  expect(await execute(jobId, true)).toBe("cloud");
+  expect(textGenerate).toHaveBeenCalledOnce();
+  expect(startVideo).toHaveBeenCalledOnce();
+  expect(pollVideo).not.toHaveBeenCalled();
+});
+
+it("ends a lost motion response without resubmitting a paid text or video request", async () => {
+  const j = memory.rows.get("jobs/" + jobId) as Job;
+  j.type = "video"; j.targetId = "clip_1";
+  j.checkpoint = { pendingCall: "motion_clip_1_v2", submitted: true };
+  vi.mocked(startVideo).mockReset();
+  await execute(jobId, true);
+  const saved = memory.rows.get("jobs/" + jobId) as Job;
+  expect(saved.state).toBe("failed");
+  expect(saved.error?.code).toBe("TEXT_RESPONSE_LOST");
+  expect(textGenerate).not.toHaveBeenCalled();
+  expect(startVideo).not.toHaveBeenCalled();
 });
 
 it("startup check verifies storage and Firestore without calling generators", async () => {

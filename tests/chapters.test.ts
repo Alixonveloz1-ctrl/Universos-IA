@@ -56,5 +56,9 @@ it("includes previous events and observed incoming state in Director and video p
   expect(prompt).toContain("CONTINUACIÓN DE UNA HISTORIA ÚNICA");
   expect(prompt).toContain("La carta");
   const incoming = compileVideoPrompt(s, q.clips[0], "");
-  expect(incoming).toContain(JSON.stringify(observed));
+  expect(incoming).toContain('"location":"hall"');
+  expect(incoming).toContain('"posture":"De pie"');
+  expect(incoming).toContain('"heldObjects":["Anillo"]');
+  expect(incoming).not.toContain('"knowledge"');
+  expect(incoming).not.toContain('"nextAction"');
 });

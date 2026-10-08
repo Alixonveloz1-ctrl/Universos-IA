@@ -7,7 +7,7 @@ import { TELENOVELA_STYLE } from "../lib/director/styles";
 import { endingDirection, visualTreatment } from "../lib/director/styles";
 import { characterStyleReference, imageReferenceIds } from "../lib/continuity/rules";
 
-it("carries the chosen treatment through all narrative stages and both media prompts", () => {
+it("describes the chosen treatment in narrative and images, then anchors video to that image", () => {
   const s = structuredClone(snapshot());
   s.project.universeSnapshot.visualStyle = TELENOVELA_STYLE;
   const before = JSON.stringify(s);
@@ -17,11 +17,15 @@ it("carries the chosen treatment through all narrative stages and both media pro
     expect(prompt).toContain("64 segundos");
     expect(prompt).toContain("cierre seleccionados");
   }
-  for (const prompt of [compileImagePrompt(s, s.targets.find(t => t.role === "character")!, ""), compileVideoPrompt(s, s.plan!.clips[0], "")]) {
+  for (const prompt of [compileImagePrompt(s, s.targets.find(t => t.role === "character")!, "")]) {
     expect(prompt).toContain("TRATAMIENTO VISUAL: TELENOVELA 3D EXPRESIVA");
     expect(prompt).toContain("no les añadas piel de fruta");
     expect(prompt).toContain("fichas aprobadas");
   }
+  const video = compileVideoPrompt(s, s.plan!.clips[0], "");
+  expect(video).toContain(TELENOVELA_STYLE);
+  expect(video).toContain("The image defines their faces");
+  expect(video).not.toContain(visualTreatment(TELENOVELA_STYLE));
   expect(JSON.stringify(s)).toBe(before);
 });
 
@@ -41,7 +45,7 @@ it("exposes only the four intentional visual families", () => {
   }
 });
 
-it("every selectable style has explicit shared direction in characters, locations, shots and video", () => {
+it("every selectable style directs images explicitly and preserves their rendering in video", () => {
   const s = structuredClone(snapshot());
   for (const style of styles) {
     s.project.universeSnapshot.visualStyle = style;
@@ -60,7 +64,10 @@ it("every selectable style has explicit shared direction in characters, location
         expect(prompt).toContain("Render the exact wardrobe from the character specification");
       } else expect(prompt).toContain(direction);
     }
-    expect(compileVideoPrompt(s, s.plan!.clips[0], "")).toContain(direction);
+    const video = compileVideoPrompt(s, s.plan!.clips[0], "");
+    expect(video).toContain(style);
+    expect(video).toContain("Preserve it while animating; do not rebuild or redesign the scene");
+    expect(video).not.toContain(direction);
     expect(narrativePrompt({ type: "bible", snapshot: s, instructions: "" } as Job)).toContain(direction);
     const storyPrompt = narrativePrompt({ type: "story", snapshot: s, instructions: "" } as Job);
     expect(storyPrompt).toContain(`género ${s.project.genre}; subgénero ${s.project.subgenre}; trama ${s.project.plotType}`);
