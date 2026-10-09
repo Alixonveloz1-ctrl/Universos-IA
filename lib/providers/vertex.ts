@@ -39,6 +39,7 @@ export function videoRequest(
   storageUri: string,
   durationSeconds: 4 | 6 | 8 = VIDEO.durationSeconds,
   negativePrompt?: string,
+  aspectRatio: "9:16" | "16:9" = "9:16",
 ) {
   const m = model(id, "video");
   assert(
@@ -66,7 +67,7 @@ export function videoRequest(
             }),
       },
     ],
-    parameters: { ...VIDEO, durationSeconds, personGeneration: "allow_adult", storageUri,
+    parameters: { ...VIDEO, durationSeconds, aspectRatio, personGeneration: "allow_adult", storageUri,
       ...(negativePrompt ? { negativePrompt } : {}) },
   };
 }
@@ -195,10 +196,11 @@ export async function startVideo(
   storageUri: string,
   durationSeconds: 4 | 6 | 8 = VIDEO.durationSeconds,
   negativePrompt?: string,
+  aspectRatio: "9:16" | "16:9" = "9:16",
 ) {
   const r = await googlePost(
     endpoint(id, "predictLongRunning"),
-    videoRequest(id, prompt, refs, "initial", storageUri, durationSeconds, negativePrompt),
+    videoRequest(id, prompt, refs, "initial", storageUri, durationSeconds, negativePrompt, aspectRatio),
     true,
   );
   if (!r.name)
