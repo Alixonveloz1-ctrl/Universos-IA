@@ -435,6 +435,7 @@ export default function Studio() {
     [directImage, setDirectImage] = useState<File | null>(null),
     [directPrompt, setDirectPrompt] = useState(""),
     [directModel, setDirectModel] = useState("veo-3.1-fast-generate-001"),
+    [directAspectRatio, setDirectAspectRatio] = useState<"9:16" | "16:9">("9:16"),
     [directVideo, setDirectVideo] = useState<{ id: string; state: string; url?: string; error?: string } | null>(null);
   const [selection, setSelection] = useState({
     concept: "",
@@ -689,6 +690,13 @@ export default function Studio() {
             </select>
           </label>
           <label>
+            Formato del video
+            <select value={directAspectRatio} onChange={(e) => setDirectAspectRatio(e.target.value as "9:16" | "16:9")}>
+              <option value="9:16">9:16 · Vertical (Reels, TikTok y Shorts)</option>
+              <option value="16:9">16:9 · Horizontal (pantalla panorámica)</option>
+            </select>
+          </label>
+          <label>
             Imagen inicial
             <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => setDirectImage(e.target.files?.[0] || null)} />
           </label>
@@ -706,6 +714,7 @@ export default function Studio() {
             form.set("image", directImage!);
             form.set("prompt", directPrompt);
             form.set("model", directModel);
+            form.set("aspectRatio", directAspectRatio);
             form.set("requestId", id);
             try {
               const res = await fetch("/api/direct-video", { method: "POST", body: form });
