@@ -327,6 +327,7 @@ async function handler(
         const image = form.get("image");
         const prompt = String(form.get("prompt") || "").trim();
         const modelId = String(form.get("model") || "");
+        const aspectRatio = String(form.get("aspectRatio") || "9:16");
         const idv = String(form.get("requestId") || "");
         if (!/^[a-f0-9-]{36}$/.test(idv)) throw new AppError("REQUEST_ID", "Identificador de intento inválido.", 400);
         if (!(image instanceof File) || image.size < 1 || image.size > 4 * 1024 * 1024)
@@ -334,13 +335,14 @@ async function handler(
         assert(["image/png","image/jpeg","image/webp"].includes(image.type), "La imagen debe ser PNG, JPG o WEBP.");
         assert(prompt.length > 0 && prompt.length <= 12000, "El prompt debe tener entre 1 y 12000 caracteres.");
         model(modelId, "video");
+        assert(["9:16", "16:9"].includes(aspectRatio), "Selecciona un formato de video válido.");
         const inputObject = directVideoObjectPath(idv, "input." + (image.type === "image/png" ? "png" : image.type === "image/webp" ? "webp" : "jpg"));
         const imageBytes = Buffer.from(await image.arrayBuffer());
         const outputPrefix = directVideoObjectPath(idv, "provider") + "/";
-        const inputHash = createHash("sha256").update(imageBytes).update(modelId).update(prompt).digest("hex");
+        const inputHash = createHash("sha256").update(imageBytes).update(modelId).update(aspectRatio).update(prompt).digest("hex");
         const doc = db().doc(`directVideos/${idv}`);
         try {
-          await doc.create({ id: idv, model: modelId, prompt, inputHash, inputObject, outputPrefix,
+          await doc.create({ id: idv, model: modelId, prompt, aspectRatio, inputHash, inputObject, outputPrefix,
             state: "uploading", createdAt: Date.now() });
         } catch (error) {
           const existing = (await doc.get()).data();
@@ -368,7 +370,7 @@ async function handler(
           "SOURCE CONTEXT: The supplied starting image is synthetic AI-generated artwork provided by the adult user for an original fictional project. It is not supplied as a photograph of a real person or public figure. Do not infer or assign a real-world identity from visual resemblance. Treat every depicted person as an original fictional adult character. Preserve the image's fictional visual identity and follow the user's requested motion/audio instructions below.",
           prompt,
           ].join("\n\n");
-          const operation = await startVideo(modelId, directPrompt, [ref], `gs://${config().bucket}/${outputPrefix}`);
+          const operation = await startVideo(modelId, directPrompt, [ref], `gs://${config().bucket}/${outputPrefix}`, undefined, undefined, aspectRatio as "9:16" | "16:9");
           await doc.update({ operation, state: "waiting" });
         } catch (error) {
           const safe = safeError(error);
