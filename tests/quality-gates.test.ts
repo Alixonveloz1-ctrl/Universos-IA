@@ -5,6 +5,7 @@ import { snapshot } from "./fixtures";
 import type { Job } from "../lib/types";
 import { dialogueProblems } from "../lib/director/speech";
 import { motionBeatProblems } from "../lib/director/motion";
+import { compileVideoPrompt } from "../lib/director";
 
 it("blocks dialogue that is too dense for natural Spanish delivery", () => {
   const s = structuredClone(snapshot());
@@ -52,6 +53,48 @@ it("rejects staged motion that copies literal dialogue into a visual beat", () =
     "Alba ofrece el anillo.",
   ]);
   expect(problems.join(" ")).toContain("frase literal");
+});
+
+it("rejects a final beat that walks a character off screen in the last second", () => {
+  const s = structuredClone(snapshot());
+  const c = s.plan!.clips[0];
+  const j = { snapshot: s } as Job;
+  const problems = motionBeatProblems(j, c, [
+    "Alba comienza a levantar el anillo.",
+    "Alba gira la muñeca hacia la luz.",
+    "Alba acerca el anillo a sus ojos.",
+    "Alba sale de la habitación caminando hacia la puerta.",
+  ]);
+  expect(problems.join(" ")).toContain("salir");
+});
+
+it("rejects a final beat that leaves the character idle waiting for the cut", () => {
+  const s = structuredClone(snapshot());
+  const c = s.plan!.clips[0];
+  const j = { snapshot: s } as Job;
+  const problems = motionBeatProblems(j, c, [
+    "Alba comienza a levantar el anillo.",
+    "Alba gira la muñeca hacia la luz.",
+    "Alba acerca el anillo a sus ojos.",
+    "Alba se queda quieto esperando el corte.",
+  ]);
+  expect(problems.join(" ")).toContain("quieto");
+});
+
+it("writes an explicit 7-8s final-second instruction into the Veo prompt", () => {
+  const s = structuredClone(snapshot());
+  const c = s.plan!.clips[0];
+  const prompt = compileVideoPrompt(s, c, "", {
+    beats: [
+      "Alba comienza a levantar el anillo.",
+      "Alba gira la muñeca hacia la luz.",
+      "Alba acerca el anillo a sus ojos.",
+      "Alba sigue ofreciendo el anillo, mirando al interlocutor.",
+    ],
+  });
+  expect(prompt).toContain("7–8s FINAL SECOND");
+  expect(prompt).toContain("MID-ACTION");
+  expect(prompt).toContain("No one starts walking toward a door");
 });
 
 it("accepts four distinct beats that stay inside the approved clip", () => {
