@@ -1,5 +1,13 @@
 # Auditoría de implementación en desarrollo
 
+## Corrección de alcance — 24 de octubre de 2026
+
+Corrección del propietario: la aplicación sí genera imagen, sí genera video desde imagen con audio nativo de Veo y sí ensambla el final, y eso ya estaba probado. El problema a corregir no es la generación básica, sino la calidad: errores de continuidad, errores de historia y prompts que piden tomas incorrectas. Esta sección no sustituye la evidencia histórica de abajo; actualiza su conclusión.
+
+Estado verificado el 24 de octubre de 2026, sin generaciones de pago nuevas: lint con 0 errores, typecheck, build de Next.js y 270 pruebas en 25 archivos, todas en verde. Las pruebas siguen siendo simuladas salvo FFmpeg local con medios sintéticos; no acreditan por sí solas la calidad de un video real. En Vercel existe el proyecto `universos-ia` y su último despliegue de producción desde main está en READY, lo que sustituye el bloqueo histórico de "Vercel pendiente". Queda pendiente verificar en vivo, con autorización de gasto, un smoke de imagen y video directo, un capítulo completo de 64 segundos y un cinemático de 30 segundos, con revisión humana de continuidad, diálogo y tomas.
+
+Cambios de calidad incluidos en esta revisión: el diálogo demasiado denso ya no llega a Veo (más de 3 palabras por segundo o menos de 0,2 s entre turnos bloquea el envío antes del pago), la actuación por tramos se valida contra el reparto y el diálogo aprobado (sin personajes inventados ni frases copiadas en los beats), y el prompt del plan exige explícitamente que cada shot sea una fase de una única acción continua, sin escenas, objetos ni hechos nuevos. Node fijado en 22 en todo el código (`package.json`, CI, Docker y tipos), para que no haya dos motores distintos; el proyecto en Vercel debe quedar también en 22 en su próximo despliegue. Datos privados: se quitaron del código el proyecto, el almacén, las cuentas de servicio, el equipo de Vercel, el dominio y el número de proyecto WIF; ahora todos llegan como variables de entorno y los scripts `c`, `d` y `s` se detienen si falta un dato, en lugar de actuar sobre la cuenta vieja. Ver `docs/CAMBIO-CUENTA-GCP.md` para cambiar de cuenta de Google Cloud.
+
 ## Corrección de alcance — 5 de octubre de 2026
 
 La tabla histórica de abajo refleja el estado y las pruebas de septiembre y no certifica el estado actual. El montaje del flujo de 64 segundos usa copia de streams solo cuando los ocho clips comparten códecs, dimensiones y tiempos; normaliza los incompatibles y valida su resultado. El flujo Cinemático siempre normaliza y valida audio, video y continuidad temporal. Las verificaciones locales y simuladas no acreditan generación real con Google, despliegue en Vercel ni reproducción física en móvil.

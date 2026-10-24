@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
-export GCP_PROJECT_ID="${GCP_PROJECT_ID:-alixon-jhan}"
-export GCP_REGION="${GCP_REGION:-us-central1}"
-export VERCEL_TEAM_SLUG="${VERCEL_TEAM_SLUG:-alixonveloz1-3809s-projects}"
+# Shortcut for install.sh. install.sh asks for the project, region, bucket
+# and Vercel team when they are not already set as environment variables.
+# No real project, bucket or team name belongs in this file.
 exec bash install.sh

@@ -6,18 +6,25 @@ cd "$(dirname "${BASH_SOURCE[0]}")"
 git fetch origin main
 git checkout -B main origin/main
 # Update only this application's existing worker; preserve environment and IAM.
-project=alixon-jhan
-region=us-central1
-job=universos-worker
+# All real names come from the environment, never from this file:
+#   GCP_PROJECT_ID, GCS_OUTPUT_BUCKET, GCP_REGION (default: us-central1),
+#   CLOUD_RUN_JOB_NAME (default: universos-worker),
+#   BUILD_ACCOUNT (default: universos-build), GCS_PREFIX (default: universos-ia)
+project="${GCP_PROJECT_ID:?Falta GCP_PROJECT_ID en el entorno.}"
+bucket="${GCS_OUTPUT_BUCKET:?Falta GCS_OUTPUT_BUCKET en el entorno.}"
+region="${GCP_REGION:-us-central1}"
+job="${CLOUD_RUN_JOB_NAME:-universos-worker}"
+build_account="${BUILD_ACCOUNT:-universos-build}"
+prefix="${GCS_PREFIX:-universos-ia}"
 build_dir=$(mktemp -d)
 trap 'rm -rf "$build_dir"' EXIT
 gcloud run jobs describe "$job" --project="$project" --region="$region" --format=json > "$build_dir/job.json"
-node --input-type=module - "$build_dir/job.json" <<'JS'
+node --input-type=module - "$build_dir/job.json" "$project" "$bucket" <<'JS'
 import fs from 'node:fs';
 const job = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 const container = job.spec?.template?.spec?.template?.spec?.containers?.[0];
 const env = Object.fromEntries((container?.env || []).map(e => [e.name, e.value]));
-if (env.GCP_PROJECT_ID !== 'alixon-jhan' || env.GCS_OUTPUT_BUCKET !== 'universos_ia')
+if (env.GCP_PROJECT_ID !== process.argv[3] || env.GCS_OUTPUT_BUCKET !== process.argv[4])
   throw Error('El ejecutor no corresponde al proyecto y bucket de Universos IA. No se modificó.');
 JS
 rm -f "$build_dir/job.json"
@@ -35,7 +42,7 @@ images: ['$image']
 options:
   logging: CLOUD_LOGGING_ONLY
 BUILD
-gcloud builds submit "$build_dir" --project="$project" --region="$region" --config="$build_dir/cloudbuild.yaml" --service-account="projects/$project/serviceAccounts/universos-build@$project.iam.gserviceaccount.com" --gcs-source-staging-dir=gs://universos_ia/universos-ia/build/source
+gcloud builds submit "$build_dir" --project="$project" --region="$region" --config="$build_dir/cloudbuild.yaml" --service-account="projects/$project/serviceAccounts/$build_account@$project.iam.gserviceaccount.com" --gcs-source-staging-dir=gs://$bucket/$prefix/build/source
 gcloud run jobs update "$job" --project="$project" --region="$region" --image="$image" --update-labels=firestore-scope=universos-ia-v1,story-flow=chapters-v1,model-catalog=text-v2,cinematic-flow=v1
 printf '\nComprobando el arranque y el acceso a tus datos, sin generar contenido…\n'
 if ! gcloud run jobs execute "$job" --project="$project" --region="$region" --update-env-vars=WORKER_SELF_TEST=1 --tasks=1 --task-timeout=120s --wait; then

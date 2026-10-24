@@ -5,12 +5,27 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const scope = 'alixonveloz1-3809s-projects';
-const name = 'universos-ia';
-const origin = 'https://universos-ia.vercel.app';
+// No real project, bucket, service account, WIF audience, team or origin
+// belongs in this file. Everything private comes from the environment,
+// which is set in Vercel / Cloud Shell, never committed to Git.
+// Required: VERCEL_TEAM_SLUG, VERCEL_PROJECT_NAME, APP_ORIGIN,
+// GCP_PROJECT_ID, GCS_OUTPUT_BUCKET, CLOUD_RUN_JOB_RESOURCE,
+// GCP_SERVICE_ACCOUNT_EMAIL, GCP_WIF_AUDIENCE.
+// Optional: GCS_PREFIX, FIRESTORE_DATABASE_ID, DIRECTOR_MODEL,
+// IMAGE_MODEL, VIDEO_MODEL, MAX_ACTIVE_JOBS, GITHUB_ORG, GITHUB_REPO.
+function required(name) {
+  const value = process.env[name]?.trim();
+  if (!value) throw Error(`Falta la variable ${name} en el entorno. Configúrala en Vercel o en Cloud Shell y vuelve a ejecutar ./v. No se ha modificado nada.`);
+  return value;
+}
+const getScope = () => required('VERCEL_TEAM_SLUG');
+const getName = () => process.env.VERCEL_PROJECT_NAME?.trim() || 'universos-ia';
+const getOrigin = () => required('APP_ORIGIN');
+const getGithubOrg = () => process.env.GITHUB_ORG?.trim() || 'Alixonveloz1-ctrl';
+const getGithubRepo = () => process.env.GITHUB_REPO?.trim() || 'Universos-IA';
 const root = fileURLToPath(new URL('../', import.meta.url));
 function cli(args, input, visible = false) {
- const r = spawnSync('npx', ['--yes', 'vercel@60.1.3', ...args, '--scope', scope], {
+ const r = spawnSync('npx', ['--yes', 'vercel@60.1.3', ...args, '--scope', getScope()], {
   cwd: root, encoding: 'utf8', input,
   stdio: visible ? 'inherit' : ['pipe', 'pipe', 'pipe'],
   env: { ...process.env, VERCEL_TELEMETRY_DISABLED: '1' },
@@ -27,21 +42,29 @@ function api(path, method = 'GET', data) {
 }
 export function values(credentials) {
  return {
-  GCP_PROJECT_ID: 'alixon-jhan', GCS_OUTPUT_BUCKET: 'universos_ia',
-  GCS_PREFIX: 'universos-ia', FIRESTORE_DATABASE_ID: '(default)',
-  CLOUD_RUN_JOB_RESOURCE: 'projects/alixon-jhan/locations/us-central1/jobs/universos-worker',
-  APP_ORIGIN: origin, APP_PASSWORD_HASH: credentials.hash, SESSION_SECRET: credentials.session,
-  GCP_SERVICE_ACCOUNT_EMAIL: 'universos-web@alixon-jhan.iam.gserviceaccount.com',
-  GCP_WIF_AUDIENCE: '//iam.googleapis.com/projects/455801881891/locations/global/workloadIdentityPools/universos-vercel/providers/vercel',
-  DIRECTOR_MODEL: 'gemini-3-flash-preview', IMAGE_MODEL: 'gemini-2.5-flash-image',
-  VIDEO_MODEL: 'veo-3.1-lite-generate-001', MAX_ACTIVE_JOBS: '1',
+  GCP_PROJECT_ID: required('GCP_PROJECT_ID'),
+  GCS_OUTPUT_BUCKET: required('GCS_OUTPUT_BUCKET'),
+  GCS_PREFIX: process.env.GCS_PREFIX?.trim() || 'universos-ia',
+  FIRESTORE_DATABASE_ID: process.env.FIRESTORE_DATABASE_ID?.trim() || '(default)',
+  CLOUD_RUN_JOB_RESOURCE: required('CLOUD_RUN_JOB_RESOURCE'),
+  APP_ORIGIN: getOrigin(), APP_PASSWORD_HASH: credentials.hash, SESSION_SECRET: credentials.session,
+  GCP_SERVICE_ACCOUNT_EMAIL: required('GCP_SERVICE_ACCOUNT_EMAIL'),
+  GCP_WIF_AUDIENCE: required('GCP_WIF_AUDIENCE'),
+  DIRECTOR_MODEL: process.env.DIRECTOR_MODEL?.trim() || 'gemini-3-flash-preview',
+  IMAGE_MODEL: process.env.IMAGE_MODEL?.trim() || 'gemini-3.1-flash-image',
+  VIDEO_MODEL: process.env.VIDEO_MODEL?.trim() || 'veo-3.1-lite-generate-001',
+  MAX_ACTIVE_JOBS: process.env.MAX_ACTIVE_JOBS?.trim() || '1',
  };
 }
 export async function configure() {
  console.log('Comprobando el proyecto y dominio de Universos IA…');
+ const name = getName();
+ const origin = getOrigin();
+ const githubOrg = getGithubOrg();
+ const githubRepo = getGithubRepo();
  const project = api(`/v9/projects/${name}`);
  if (project.name !== name || !project.id || !project.accountId ||
-     project.link?.org !== 'Alixonveloz1-ctrl' || project.link?.repo !== 'Universos-IA')
+     project.link?.org !== githubOrg || project.link?.repo !== githubRepo)
   throw Error('El proyecto no corresponde al repositorio Universos-IA. No se ha modificado nada.');
  const domains = api(`/v9/projects/${project.id}/domains`);
  if (!domains.domains?.some(d => d.name === new URL(origin).hostname))

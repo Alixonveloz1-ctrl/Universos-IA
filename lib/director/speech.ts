@@ -31,6 +31,16 @@ export function dialogueProblems(s: Snapshot, c: Clip): string[] {
   const turns = [...c.dialogue].sort((a, b) => a.start - b.start);
   for (let i = 0; i < turns.length; i++) {
     const d = turns[i];
+    // A turn that is too dense for natural Spanish delivery is a quality
+    // failure, not just a warning: Veo will rush, drop or misassign words,
+    // and the paid clip is wasted. Block it before any Veo submission so
+    // the plan is repaired instead of generating a rushed clip.
+    const words = d.text.trim().split(/\s+/u).filter(Boolean).length;
+    const seconds = d.end - d.start;
+    if (seconds > 0 && words / seconds > 3)
+      problems.push(`Clip ${c.number}: la intervención ${i + 1} tiene ${words} palabras en ${seconds.toFixed(1)} s; es demasiado densa para una dicción natural. Recorta la frase o reparte el diálogo entre clips.`);
+    if (i > 0 && d.start < turns[i - 1].end + 0.2 - 0.001)
+      problems.push(`Clip ${c.number}: deja al menos 0,2 s entre la intervención ${i} y la ${i + 1} para que Veo no mezcle las voces.`);
     if (!c.characterIds.includes(d.characterId) || !s.bible?.characters.some(x => x.id === d.characterId))
       problems.push(`Clip ${c.number}: el hablante ${d.characterId} no corresponde a un personaje presente.`);
     if (!d.text.trim() || !Number.isFinite(d.start) || !Number.isFinite(d.end) || d.start < 0 || d.end > 8 || d.end <= d.start)
