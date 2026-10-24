@@ -26,6 +26,15 @@ cero en la cuenta nueva, tus proyectos viejos quedarán en la cuenta
 vieja, no se borran solo por cambiar la web, pero la web nueva no los
 verá.
 
+## Antes de instalar: comprueba los créditos
+
+La cuenta vieja no sirve aunque el código esté bien, porque no tiene
+saldo ni créditos. Antes de instalar en la cuenta nueva, entra a su
+consola de Google Cloud y comprueba que la facturación está activa y
+que tiene saldo o créditos positivos. Si la cuenta nueva tampoco tiene
+saldo, Veo no podrá generar, aunque todo lo demás esté bien instalado.
+Este paso no genera ningún gasto: solo es mirar el saldo.
+
 ## Pasos, en orden
 
 1. En la cuenta nueva de Google Cloud, crea un proyecto nuevo y activa
@@ -42,7 +51,11 @@ verá.
    ```
 
    Esto crea la base de datos, el almacén si falta, las cuentas de
-   servicio nuevas, y el ensamblador nuevo. No genera imágenes ni videos.
+   servicio nuevas, y el ensamblador nuevo en Cloud Run. Cloud Run es
+   el programa que une los clips al final; sin él, la web puede generar
+   clips pero no puede entregar el video final. No genera imágenes ni videos.
+   Al final, el instalador comprueba el ensamblador con una prueba
+   interna, sin generar contenido de pago.
 4. Al terminar, el instalador te mostrará los valores nuevos para Vercel.
    Son, solo por nombre, sin valores reales aquí: proyecto, almacén,
    prefijo, base de datos, recurso del ensamblador, correo de la cuenta
@@ -51,7 +64,16 @@ verá.
 5. En Vercel, actualiza esas variables en Production con los valores
    nuevos, y vuelve a publicar la versión de main. No copies variables
    de la cuenta vieja. Si una variable vieja queda, la app mezclará las
-   dos casas y fallará.
+   dos casas y fallará. Las variables de la cuenta vieja que hay que
+   sustituir, solo por nombre, son: proyecto, almacén, prefijo, base
+   de datos, recurso del ensamblador en Cloud Run, correo de la cuenta
+   de servicio de la web y audiencia WIF. La contraseña de la web, el
+   secreto de sesión y los modelos pueden quedar igual, salvo que
+   quieras una clave nueva.
+6. Comprueba que Cloud Run quedó en la cuenta nueva: en la consola de
+   la cuenta nueva debe aparecer el trabajo del ensamblador, y en la
+   cuenta vieja ya no debe ser el que usa la web. Si la web sigue
+   apuntando a la cuenta vieja, el error será de saldo, no de código.
 6. Prueba sin gasto: entra con la clave nueva, crea un proyecto de
    prueba y comprueba que se guarda y se vuelve a abrir. Solo después
    de eso, haz tú la prueba de pago, una imagen y un video, como en
