@@ -109,7 +109,7 @@ export function speechDirection(s: Snapshot, c: Clip) {
     previousEnd = Math.max(previousEnd, d.end);
   }
   if (previousEnd < 8)
-    schedule.push(`${previousEnd}-8s: no speech; carry the approved causal action or an interlocutor's specific visible response through the final frame. Keep the participants visible; do not walk away, leave an empty room, freeze or add an unscheduled spoken line.`);
+    schedule.push(`${previousEnd}-8s: no speech; carry the approved causal action or an interlocutor's specific visible response through the final frame, cut MID-ACTION at 8.0s. Keep the participants visible and anchored inside the frame; do not finish the reaction early, do not walk away, leave an empty room, freeze or add an unscheduled spoken line.`);
   return [
     "ON-CAMERA SPEECH — the only spoken script in this clip.",
     `Language: ${s.project.language}. Accent: ${s.project.accent}. Keep this selected accent throughout, including when an older voice card names a different accent. Preserve every word, accent mark and punctuation in the script; never translate it.`,
