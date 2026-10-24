@@ -307,8 +307,8 @@ it("startup check verifies storage and Firestore without calling generators", as
 });
 it("recovers a bad SDK upload through Google's API and verifies the actual stored bytes", async () => {
   memory.corruptNextUpload = true;
-  vi.stubEnv("GCP_PROJECT_ID", "alixon-jhan");
-  vi.stubEnv("GCS_OUTPUT_BUCKET", "universos_ia");
+  vi.stubEnv("GCP_PROJECT_ID", "example-project");
+  vi.stubEnv("GCS_OUTPUT_BUCKET", "example-bucket");
   const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
     const url = new URL(String(input));
     if (init?.method === "POST") {
@@ -327,8 +327,8 @@ it("recovers a bad SDK upload through Google's API and verifies the actual store
 });
 it("refuses to approve corrupt bytes even when Google's direct API accepts an upload", async () => {
   memory.corruptNextUpload = true;
-  vi.stubEnv("GCP_PROJECT_ID", "alixon-jhan");
-  vi.stubEnv("GCS_OUTPUT_BUCKET", "universos_ia");
+  vi.stubEnv("GCP_PROJECT_ID", "example-project");
+  vi.stubEnv("GCS_OUTPUT_BUCKET", "example-bucket");
   vi.stubGlobal("fetch", vi.fn(async (_: string | URL, init?: RequestInit) =>
     new Response(init?.method === "POST" ? "{}" : "wrong", { status: 200 })));
   await expect(startupCheck()).rejects.toThrow("Google guardó");

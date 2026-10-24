@@ -26,13 +26,19 @@ que esta última comprobación haya pasado.
 
 ## Instalación desde el celular
 
-Abre [Cloud Shell con Universos IA](https://shell.cloud.google.com/?authuser=1&project=alixon-jhan&cloudshell_git_repo=https%3A%2F%2Fgithub.com%2FAlixonveloz1-ctrl%2FUniversos-IA&cloudshell_git_branch=main&cloudshell_workspace=.&show=terminal) y escribe:
+Ningún dato privado va en el código: proyecto, bucket, cuentas de servicio,
+equipo de Vercel y dominio se escriben solo como variables de entorno en
+Vercel o en la terminal de Cloud Shell, nunca en Git. Si cambias de cuenta
+de Google Cloud, ver `docs/CAMBIO-CUENTA-GCP.md` antes de reinstalar.
+
+
+Abre [Cloud Shell con Universos IA](https://shell.cloud.google.com/?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2FAlixonveloz1-ctrl%2FUniversos-IA&cloudshell_git_branch=main&cloudshell_workspace=.&show=terminal) y escribe:
 
 ```bash
 ./c
 ```
 
-Este acceso usa `alixon-jhan` y `us-central1`. Muestra los buckets existentes del proyecto: escribe el número correspondiente a `universos_ia`. Los nombres internos se configuran automáticamente. El equipo de Vercel queda configurado como `alixonveloz1-3809s-projects`. Para el nombre del proyecto de Vercel puedes aceptar `universos-ia` con Enter o escribir el nombre real si es diferente. También definirás tu contraseña personal. No inicia generaciones.
+Este acceso usa tu proyecto de Google Cloud y `us-central1`. El instalador te pedirá el proyecto, el equipo de Vercel y el bucket: escribe tus valores reales en la terminal, nunca en el código ni en el chat. Muestra los buckets existentes de tu proyecto y eliges el número del bucket privado de esta aplicación. Los nombres internos se configuran automáticamente. Para el nombre del proyecto de Vercel puedes aceptar `universos-ia` con Enter o escribir el nombre real si es diferente. También definirás tu contraseña personal. No inicia generaciones.
 
 # Instalar desde el teléfono
 

@@ -93,8 +93,8 @@ import {
 import type { Asset, Job, Project, Target } from "../lib/types";
 import type { Plan } from "../lib/schemas";
 beforeEach(() => {
-  process.env.GCP_PROJECT_ID = "alixon-jhan";
-  process.env.GCS_OUTPUT_BUCKET = "universos_ia";
+  process.env.GCP_PROJECT_ID = "example-project";
+  process.env.GCS_OUTPUT_BUCKET = "example-bucket";
   memory.rows.clear();
   memory.deletedPrefixes.length = 0;
   memory.tail = Promise.resolve();

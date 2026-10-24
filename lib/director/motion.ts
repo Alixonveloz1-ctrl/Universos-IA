@@ -22,6 +22,35 @@ export function motionStates(s: Snapshot, c: Clip) {
   return { incoming: physical(incoming), ending: physical(c.plannedEndState) };
 }
 
+export function motionBeatProblems(j: Job, c: Clip, beats: string[]): string[] {
+  const problems: string[] = [];
+  if (beats.length !== 4) problems.push("La actuación debe tener exactamente cuatro tramos.");
+  const seen = new Set<string>();
+  for (const beat of beats) {
+    const normalized = beat.trim().toLocaleLowerCase();
+    if (!normalized) problems.push("Un tramo de actuación está vacío.");
+    else if (seen.has(normalized)) problems.push("Dos tramos de actuación repiten la misma acción.");
+    seen.add(normalized);
+  }
+  // Staged motion must be a phase of the approved action, never a new shot,
+  // character, object or event. If the staging model invents a participant,
+  // the video will not match the approved plan or the opening image.
+  const castIds = new Set(c.characterIds);
+  const castNames = new Set(
+    c.characterIds.map((id) => j.snapshot.bible?.characters.find((ch) => ch.id === id)?.name).filter((name): name is string => !!name),
+  );
+  for (const character of j.snapshot.bible?.characters || []) {
+    if (!castIds.has(character.id) && beats.some((beat) => new RegExp(`(?<![\\p{L}\\p{N}])${character.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\p{L}\\p{N}])`, "iu").test(beat)))
+      problems.push(`Un tramo menciona a ${character.name}, que no participa en este clip.`);
+  }
+  for (const line of c.dialogue.map((d) => d.text.trim()).filter(Boolean)) {
+    if (beats.some((beat) => beat.includes(line)))
+      problems.push("Un tramo copia una frase literal del diálogo; los beats solo describen actuación visual.");
+  }
+  void castNames;
+  return problems;
+}
+
 export function plannedMotion(c: Clip): Motion | null {
   if (c.shots.length !== 4 || c.shots.some((sh, i) => sh.start !== i * 2 || sh.end !== (i + 1) * 2)) return null;
   const beats = c.shots.map(sh => withoutDialogue(sh.action, c).trim());
@@ -41,7 +70,7 @@ export async function prepareMotion(j: Job, target: Target, c: Clip,
   if (explicit && !(j.instructions || target.instructions).trim()) return explicit;
   const direction = [
     "Eres el Director de actuación de UNA toma continua de 8 segundos a partir de una imagen inicial aprobada. Devuelve solo {beats:[cuatro cadenas]}; los índices significan 0–2, 2–4, 4–6 y 6–8 segundos.",
-    "Da instrucciones positivas, breves y filmables de movimiento: actor, gesto o acción y respuesta del otro. Conserva la acción aprobada y su orden; distribuye preparación, desarrollo y respuesta a velocidad natural durante todo el clip. Cada tramo avanza desde el anterior, no repite el evento. Desarrolla el diálogo o interacción existente hasta el corte; la segunda mitad no es una pose de espera. No inventes otro acontecimiento para llenar tiempo.",
+    "Da instrucciones positivas, breves y filmables de movimiento: actor, gesto o acción y respuesta del otro. Conserva la acción aprobada y su orden; distribuye preparación, desarrollo y respuesta a velocidad natural durante todo el clip. Cada tramo avanza desde el anterior, no repite el evento. Cada beat es una fase de la acción aprobada en shots, NO una escena nueva, un corte, un cambio de lugar ni un hecho nuevo: no introduzcas personajes, objetos, lugares ni acontecimientos que no estén en el guion aprobado. Desarrolla el diálogo o interacción existente hasta el corte; la segunda mitad no es una pose de espera. No inventes otro acontecimiento para llenar tiempo.",
     "Los personajes, sus rostros, ropa, objetos y escenario ya existen en la imagen. No los redescribas ni inventes participantes, objetos, transformaciones, fenómenos ni decoraciones. Todos permanecen visibles con cámara estable o seguimiento corto si la acción requiere desplazarse. No añadas salida de pantalla, habitación vacía, baile o pantomima; el humor se interpreta con diálogo y gestos plausibles. La petición explícita del usuario dirige la actuación.",
     "Los diálogos aprobados solo sirven para entender causa y reacción: NO copies ni reformules las frases en beats, no añadas habla ni narres el guion. Los campos knowledge, secret, nextAction y la intención interna no son diálogo ni autorización para anticipar el clip siguiente. La acción terminal llega cerca del segundo 8, no a los cuatro segundos seguida de una pausa larga.",
     JSON.stringify({
@@ -53,18 +82,26 @@ export async function prepareMotion(j: Job, target: Target, c: Clip,
       instructions: j.instructions || target.instructions,
     }),
   ].join("\n\n");
+  let beatProblems: string[] = [];
   for (let attempt = 0; attempt < 2; attempt++) {
     const callKey = attempt ? `${key}_repair` : key;
     if (!j.checkpoint[callKey]) {
       await beforeCall(callKey);
-      const repair = attempt ? "\n\nCorrige únicamente el formato de la respuesta anterior: devuelve exactamente cuatro cadenas no vacías en beats, cada una de hasta 1200 caracteres. Respuesta anterior: " + JSON.stringify(j.checkpoint[key]) : "";
+      const repair = attempt
+        ? `\n\nCorrige únicamente estos problemas, sin cambiar la acción aprobada: ${beatProblems.join(" ")} Devuelve exactamente cuatro cadenas no vacías en beats, cada una de hasta 1200 caracteres. Respuesta anterior: ${JSON.stringify(j.checkpoint[key])}`
+        : "";
       const result = await textGenerate(j.snapshot.project.models.text, direction + repair, z.toJSONSchema(motion), 4096, 90000);
       await checkpoint(callKey, result);
     }
     const parsed = motion.safeParse(j.checkpoint[callKey]);
-    if (parsed.success) return parsed.data;
+    if (!parsed.success) continue;
+    beatProblems = motionBeatProblems(j, c, parsed.data.beats);
+    if (!beatProblems.length) return parsed.data;
+    // Do not submit staged motion that invents a participant or copies
+    // dialogue to Veo: a bad beat is cheaper to repair here than a bad
+    // paid clip. The second attempt repairs it; after that, fail loudly.
   }
-  throw new AppError("DIRECTOR_JSON", "El Director no devolvió los cuatro tramos de actuación del clip. El video todavía no se ha enviado a Veo.", 502);
+  throw new AppError("DIRECTOR_JSON", `El Director no devolvió cuatro tramos de actuación válidos para el clip. ${beatProblems.join(" ")} El video todavía no se ha enviado a Veo.`, 502);
 }
 
 export const CHAPTER_MOTION_NEGATIVE_PROMPT = "frozen character pose, prolonged idle character pose, repeated action loop, aimless pacing, gratuitous off-frame departure, empty-room ending, outro, fade-out, camera cut, unexpected character replacement";
