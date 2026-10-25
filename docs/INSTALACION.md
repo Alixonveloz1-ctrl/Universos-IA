@@ -13,6 +13,9 @@ la aparición de ese aviso depende del navegador y de sus ajustes.
 
 Abre el enlace de Cloud Shell de abajo con el código actualizado y ejecuta `./v`.
 Si ya tienes la terminal abierta, ejecuta primero `git pull --ff-only` y luego `./v`.
+Si acabas de ejecutar `install.sh` en esa misma terminal, ejecuta `./v` directamente:
+el instalador ya deja listas en esa terminal todas las variables que `./v` necesita,
+sin copiar nada a mano. La clave que vale es la que muestra `./v` al final.
 Autoriza Vercel en el enlace de inicio de sesión que aparezca. El script verifica
 el proyecto `universos-ia`, su repositorio y dominio; configura las 14 variables
 Production, activa OIDC con emisor de equipo y hace el redeploy de producción.
