@@ -3,6 +3,17 @@ set -euo pipefail
 # Cloud Shell opens this repository; this single entry point installs the worker,
 # including FFmpeg and the assembler. No paid generation is started.
 cd "$(dirname "${BASH_SOURCE[0]}")"
+# Si volviste después de cerrar la aplicación del celular, carga los valores
+# guardados la vez anterior, solo los que no estén ya puestos, para no tener
+# que volver a escribirlos ni a clonar.
+if [[ -f "$HOME/universos-ia-env.sh" ]]; then
+  while IFS= read -r line; do
+    key="${line#export }"
+    key="${key%%=*}"
+    value="${line#*=}"
+    if [[ -n "$key" && -z "${!key:-}" ]]; then export "$key=$value"; fi
+  done < "$HOME/universos-ia-env.sh"
+fi
 for installer_command in gcloud node git; do
   command -v "$installer_command" >/dev/null || { echo "Falta $installer_command. Ejecuta este archivo en Cloud Shell." >&2; exit 1; }
 done
@@ -77,6 +88,24 @@ export GCP_SERVICE_ACCOUNT_EMAIL="${WEB_ACCOUNT}@${GCP_PROJECT_ID}.iam.gservicea
 export CLOUD_RUN_JOB_RESOURCE="projects/${GCP_PROJECT_ID}/locations/${GCP_REGION}/jobs/${CLOUD_RUN_JOB_NAME}"
 export GCP_WIF_AUDIENCE="//iam.googleapis.com/projects/$(gcloud projects describe "$GCP_PROJECT_ID" --format='value(projectNumber)')/locations/global/workloadIdentityPools/${WIF_POOL}/providers/${WIF_PROVIDER}"
 ask APP_ORIGIN 'Dirección HTTPS de tu web en Vercel, sin barra final' "https://${VERCEL_PROJECT_NAME}.vercel.app"
+# Guarda los valores en tu casa de Cloud Shell, que sí sobrevive al cerrar
+# la aplicación del celular. Así, si vuelves después, no tienes que volver
+# a escribir los exports ni a clonar: ./v los carga solo desde este archivo.
+{
+  printf 'export GCP_PROJECT_ID=%s\n' "$GCP_PROJECT_ID"
+  printf 'export GCP_REGION=%s\n' "$GCP_REGION"
+  printf 'export GCS_OUTPUT_BUCKET=%s\n' "$GCS_OUTPUT_BUCKET"
+  printf 'export GCS_PREFIX=%s\n' "$GCS_PREFIX"
+  printf 'export FIRESTORE_DATABASE_ID=%s\n' "$FIRESTORE_DATABASE_ID"
+  printf 'export CLOUD_RUN_JOB_RESOURCE=%s\n' "$CLOUD_RUN_JOB_RESOURCE"
+  printf 'export GCP_SERVICE_ACCOUNT_EMAIL=%s\n' "$GCP_SERVICE_ACCOUNT_EMAIL"
+  printf 'export GCP_WIF_AUDIENCE=%s\n' "$GCP_WIF_AUDIENCE"
+  printf 'export VERCEL_TEAM_SLUG=%s\n' "$VERCEL_TEAM_SLUG"
+  printf 'export VERCEL_PROJECT_NAME=%s\n' "$VERCEL_PROJECT_NAME"
+  printf 'export APP_ORIGIN=%s\n' "$APP_ORIGIN"
+} > "$HOME/universos-ia-env.sh"
+chmod 600 "$HOME/universos-ia-env.sh"
+printf 'Valores guardados en tu casa de Cloud Shell para la próxima vez.\n'
 printf '\nEjecutor instalado.\n'
 printf 'Ahora, en ESTA misma terminal, ejecuta ./v para que Cloud Shell ponga de una vez las 14 variables en Vercel, borre las viejas incluidas las de Preview, y haga el redeploy.\n'
 printf 'Tu contraseña personal no cambia: sigues entrando con la misma de siempre, ./v no te va a dar otra clave para entrar.\n'

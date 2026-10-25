@@ -50,7 +50,7 @@ elif cmd.startswith('builds submit'):
  assert 'ffmpeg' in (root/'Dockerfile').read_text()
  assert 'CLOUD_LOGGING_ONLY' in (root/'cloudbuild.yaml').read_text()
 `, { mode: 0o700 });
-  const env = { ...process.env, PATH: dir + path.delimiter + process.env.PATH,
+  const env = { ...process.env, HOME: dir, PATH: dir + path.delimiter + process.env.PATH,
     GCP_PROJECT_ID: "example-project", GCP_REGION: "us-central1", GCS_OUTPUT_BUCKET: "example-private-bucket",
     WORKER_ACCOUNT: "universos-worker", WEB_ACCOUNT: "universos-web", BUILD_ACCOUNT: "universos-build",
     CLOUD_RUN_JOB_NAME: "universos-worker", ARTIFACT_REPOSITORY: "universos-ia",
