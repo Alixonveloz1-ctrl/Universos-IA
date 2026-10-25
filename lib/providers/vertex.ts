@@ -137,6 +137,7 @@ export async function imageGenerate(
     endpoint(id, "generateContent"),
     imageRequest(prompt, refs),
     true,
+    280000,
   );
   const candidate = r.candidates?.[0];
   const part = candidate?.content?.parts?.find(

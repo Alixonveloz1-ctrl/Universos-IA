@@ -431,7 +431,8 @@ export default function CinematicStudio() {
             <h2>Referencias canónicas</h2>
             <div className="cards">
               {plan.characters.map(character => {
-                const candidate = latest(currentAssets, a => a.role === "character" && a.characterId === character.id);
+                const candidate = latest(currentAssets, a => a.role === "character" && a.characterId === character.id && (a.state === "candidate" || a.state === "completed") && !!a.storageObject);
+                const failed = latest(currentAssets, a => a.role === "character" && a.characterId === character.id && a.state === "failed");
                 const approvedId = project.approvedCharacters[character.id];
                 const shown = candidate || assets.find(a => a.id === approvedId);
                 return (
@@ -473,6 +474,7 @@ export default function CinematicStudio() {
                       )}
                     </div>
                     {approvedId && <p className="muted">✓ Referencia aprobada</p>}
+                    {!candidate && failed?.error && <p className="error">La generación falló: {failed.error}. Vuelve a generar, no la apruebes sin verla.</p>}
                   </article>
                 );
               })}
