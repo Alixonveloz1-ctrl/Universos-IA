@@ -112,7 +112,7 @@ role_id=universosJobExecutor
 if ! gcloud iam roles list --project="$GCP_PROJECT_ID" --format='value(name)' | grep -Fxq "projects/$GCP_PROJECT_ID/roles/$role_id"; then
  gcloud iam roles create "$role_id" --project="$GCP_PROJECT_ID" --title='Universos job execution' --permissions=run.jobs.run,run.jobs.runWithOverrides,run.jobs.get
 fi
-iam_binding run jobs add-iam-policy-binding "$CLOUD_RUN_JOB_NAME" --project="$GCP_PROJECT_ID" --region="$GCP_REGION" --member="serviceAccount:$web_email" --role="projects/$GCP_PROJECT_ID/roles/$role_id" --condition=None --quiet >/dev/null
+iam_binding run jobs add-iam-policy-binding "$CLOUD_RUN_JOB_NAME" --project="$GCP_PROJECT_ID" --region="$GCP_REGION" --member="serviceAccount:$web_email" --role="projects/$GCP_PROJECT_ID/roles/$role_id" --quiet >/dev/null
 if ! gcloud iam workload-identity-pools list --project="$GCP_PROJECT_ID" --location=global --format='value(name)' | grep -Fxq "projects/$number/locations/global/workloadIdentityPools/$WIF_POOL"; then
  gcloud iam workload-identity-pools create "$WIF_POOL" --project="$GCP_PROJECT_ID" --location=global
 fi
