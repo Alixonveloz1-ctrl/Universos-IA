@@ -69,15 +69,19 @@ export async function configure() {
  const domains = api(`/v9/projects/${project.id}/domains`);
  if (!domains.domains?.some(d => d.name === new URL(origin).hostname))
   throw Error('El dominio esperado no pertenece al proyecto. No se ha modificado nada.');
- // APP_PASSWORD en texto plano tiene prioridad sobre APP_PASSWORD_HASH, así que
- // si queda en Production la contraseña nueva de ./v nunca abriría la web.
- // Por eso ./v la elimina antes de poner las 14 variables, no a mano.
+ // El usuario quiere que se borre el montón de variables viejas y que su
+ // contraseña personal se quede, no una contraseña aleatoria difícil de
+ // recordar. APP_PASSWORD es esa contraseña personal y tiene prioridad sobre
+ // APP_PASSWORD_HASH, así que NUNCA se borra: si se borrara, nadie podría
+ // recuperarla, ni siquiera leyéndola, porque Vercel no la devuelve.
+ // ./v borra todas las demás variables viejas, de Production y de Preview,
+ // y luego pone las 14 nuevas de Production. Tú no borras nada a mano.
  const existing = api(`/v9/projects/${project.id}/env`);
+ const hasPersonalPassword = (existing.envs || []).some(e => e.key === 'APP_PASSWORD');
  for (const env of existing.envs || []) {
-  if (env.key === 'APP_PASSWORD' && env.target?.includes('production')) {
-   api(`/v9/projects/${project.id}/env/${env.id}`, 'DELETE');
-   console.log('Eliminada: APP_PASSWORD (contraseña antigua en texto plano)');
-  }
+  if (env.key === 'APP_PASSWORD') continue;
+  api(`/v9/projects/${project.id}/env/${env.id}`, 'DELETE');
+  console.log(`Eliminada variable vieja: ${env.key}`);
  }
  // Saved outside the repository so interrupted runs reuse the same new password.
  const privateDir = join(homedir(), '.config', 'universos-ia');
@@ -108,8 +112,19 @@ export async function configure() {
  console.log('Las 14 variables están configuradas. Publicando la nueva versión…');
  cli(['redeploy', origin, '--target', 'production'], undefined, true);
  console.log(`\nWeb: ${origin}`);
- console.log('Tu NUEVA contraseña para entrar (guárdala; no compartas esta pantalla):');
+ if (hasPersonalPassword) {
+  // No se puede comprobar el acceso con la contraseña personal porque Vercel
+  // no devuelve su valor, y no se debe inventar ni imprimir otra contraseña
+  // como si fuera la de entrada. La personal queda intacta y es la que abre.
+  console.log('Tu contraseña personal NO cambió: sigue siendo la que ya tenías en APP_PASSWORD.');
+  console.log('Entra a la web con esa contraseña personal para comprobarlo.');
+  console.log('Si algún día quieres cambiarla tú mismo, cambia en Vercel, en Production, la variable APP_PASSWORD por la contraseña que tú quieras. Esa variable manda sobre la contraseña aleatoria.');
+  return;
+ }
+ console.log('No tenías contraseña personal en APP_PASSWORD, así que se generó una temporal.');
+ console.log('Tu contraseña temporal para entrar (guárdala; no compartas esta pantalla):');
  console.log(credentials.password);
+ console.log('Para poner tu contraseña personal, cambia en Vercel, en Production, la variable APP_PASSWORD por la contraseña que tú quieras, y haz Redeploy. Esa variable manda sobre esta temporal.');
  console.log('Comprobando conexión y acceso, sin generar videos…');
  let ok = false;
  for (let attempt = 0; attempt < 6; attempt++) {

@@ -2,14 +2,14 @@ import { beforeEach, afterEach, expect, test, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-const state = vi.hoisted(() => ({ home: '', calls: [], wrong: false, fail: false }));
+const state = vi.hoisted(() => ({ home: '', calls: [], wrong: false, fail: false, personal: true }));
 vi.mock('node:os', async (original) => ({ ...await original(), homedir: () => state.home }));
 vi.mock('node:child_process', () => ({ spawnSync: (_cmd, args, options) => {
  state.calls.push({ args, input: options.input });
  const path = args[3];
  let data = {};
  if (path === '/v9/projects/universos-ia') data = { name: 'universos-ia', id: 'prj_test', accountId: 'team_test', link: { org: 'Alixonveloz1-ctrl', repo: state.wrong ? 'wrong' : 'Universos-IA' } };
- if (path === '/v9/projects/prj_test/env') data = { envs: [{ id: 'env_test', key: 'APP_PASSWORD', target: ['production'] }] };
+ if (path === '/v9/projects/prj_test/env') data = { envs: state.personal ? [{ id: 'env_old', key: 'GCP_PROJECT_ID', target: ['production'] }, { id: 'env_old_preview', key: 'GCP_PROJECT_ID', target: ['preview'] }, { id: 'env_pass', key: 'APP_PASSWORD', target: ['production'] }] : [] };
  if (path?.endsWith('/domains')) data = { domains: [{ name: 'example.vercel.app' }] };
  if (path?.includes('/env?')) data = state.fail ? { failed: [{ error: 'rejected' }] } : { created: { key: JSON.parse(options.input).key }, failed: [] };
  return { status: 0, stdout: JSON.stringify(data) };
@@ -25,12 +25,12 @@ beforeEach(() => {
  vi.stubEnv('GCP_SERVICE_ACCOUNT_EMAIL', 'universos-web@example-project.iam.gserviceaccount.com');
  vi.stubEnv('GCP_WIF_AUDIENCE', '//iam.googleapis.com/projects/123/locations/global/workloadIdentityPools/universos-vercel/providers/vercel');
  state.home = mkdtempSync(join(tmpdir(), 'universos-vercel-test-'));
- state.calls = []; state.wrong = false; state.fail = false;
+ state.calls = []; state.wrong = false; state.fail = false; state.personal = true;
  vi.spyOn(console, 'log').mockImplementation(() => {});
  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { headers: { 'set-cookie': '__Host-universos=test' } })));
 });
 afterEach(() => { rmSync(state.home, { recursive: true, force: true }); vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
-test('SIMULATED: configures 14 production vars through stdin, redeploys and checks actual session route', async () => {
+test('SIMULATED: personal password is kept, old vars are deleted, 14 production vars are upserted, redeploy runs', async () => {
  await configure();
  const writes = state.calls.filter(c => c.args[3]?.includes('/env?'));
  expect(writes).toHaveLength(14);
@@ -41,18 +41,21 @@ test('SIMULATED: configures 14 production vars through stdin, redeploys and chec
   expect(c.args).toContain('--input');
   expect(c.args).not.toContain(data.value);
  }
+ expect(state.calls.some(c => c.args.includes('DELETE') && c.args[3]?.includes('/env/env_old'))).toBe(true);
+ expect(state.calls.some(c => c.args.includes('DELETE') && c.args[3]?.includes('/env/env_old_preview'))).toBe(true);
+ expect(state.calls.some(c => c.args.includes('DELETE') && c.args[3]?.includes('/env/env_pass'))).toBe(false);
  expect(state.calls.at(-1).args).toContain('redeploy');
- expect(fetch.mock.calls[0][0]).toBe('https://example.vercel.app/api/session');
+ expect(fetch).not.toHaveBeenCalled();
+ expect(console.log.mock.calls.flat().join(' ')).toContain('NO cambió');
  const first = writes.find(c => JSON.parse(c.input).key === 'APP_PASSWORD_HASH').input;
  await configure();
  expect(state.calls.filter(c => c.args[3]?.includes('/env?')).filter(c => JSON.parse(c.input).key === 'APP_PASSWORD_HASH')[1].input).toBe(first);
 });
-test('SIMULATED: old plain APP_PASSWORD in production is deleted before upsert', async () => {
+test('SIMULATED: without personal password, session route is checked with the temporary password', async () => {
+ state.personal = false;
  await configure();
- const del = state.calls.find(c => c.args.includes('DELETE') && c.args[3]?.includes('/env/env_test'));
- expect(del).toBeTruthy();
- const firstWrite = state.calls.findIndex(c => c.args[3]?.includes('/env?'));
- expect(state.calls.indexOf(del)).toBeLessThan(firstWrite);
+ expect(state.calls.at(-1).args).toContain('redeploy');
+ expect(fetch.mock.calls[0][0]).toBe('https://example.vercel.app/api/session');
 });
 test('SIMULATED: wrong repository stops before changes', async () => {
  state.wrong = true;
