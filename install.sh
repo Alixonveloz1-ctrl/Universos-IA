@@ -27,19 +27,30 @@ if [[ -z "${GCS_OUTPUT_BUCKET:-}" ]]; then
   while IFS= read -r bucket; do
     [[ -z "$bucket" ]] || buckets+=("${bucket#gs://}")
   done <<< "$bucket_names"
-  if (( ${#buckets[@]} == 0 )); then
-    echo "No hay buckets disponibles en $GCP_PROJECT_ID. Crea el bucket de esta aplicación y vuelve a ejecutar ./c." >&2
-    exit 1
-  fi
   printf '\nBuckets del proyecto %s:\n' "$GCP_PROJECT_ID"
+  printf '  0) Crear un almacén nuevo\n'
   for i in "${!buckets[@]}"; do printf '  %s) %s\n' "$((i+1))" "${buckets[$i]}"; done
   while true; do
-    read -r -p 'Escribe el número del bucket: ' choice
+    read -r -p 'Escribe el número del bucket, o 0 para crear uno nuevo: ' choice
+    if [[ "$choice" == "0" ]]; then
+      while true; do
+        read -r -p 'Nombre del almacén nuevo (minúsculas, sin espacios, único en todo Google Cloud): ' new_bucket
+        if [[ ! "$new_bucket" =~ ^[a-z0-9][a-z0-9._-]{1,61}[a-z0-9]$ ]]; then
+          echo 'Ese nombre no es válido: usa minúsculas, números, guiones o puntos, y entre 3 y 63 caracteres.'
+          continue
+        fi
+        if gcloud storage buckets create "gs://$new_bucket" --project="$GCP_PROJECT_ID" --location="$GCP_REGION" --uniform-bucket-level-access --public-access-prevention; then
+          export GCS_OUTPUT_BUCKET="$new_bucket"
+          break 2
+        fi
+        echo 'No se pudo crear ese almacén, probablemente porque el nombre ya está usado. Prueba con otro nombre.'
+      done
+    fi
     if [[ "$choice" =~ ^[1-9][0-9]{0,5}$ ]] && (( choice <= ${#buckets[@]} )); then
       export GCS_OUTPUT_BUCKET="${buckets[$((choice-1))]%/}"
       break
     fi
-    echo 'Selecciona uno de los números de la lista.'
+    echo 'Selecciona uno de los números de la lista, o 0 para crear uno nuevo.'
   done
 fi
 ask VERCEL_TEAM_SLUG 'Nombre del equipo o cuenta en Vercel (slug)'

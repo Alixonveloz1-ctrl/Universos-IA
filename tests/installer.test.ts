@@ -52,7 +52,7 @@ elif cmd.startswith('builds submit'):
     CLOUD_RUN_JOB_NAME: "universos-worker", ARTIFACT_REPOSITORY: "universos-ia",
     VERCEL_TEAM_SLUG: "example-team", VERCEL_PROJECT_NAME: "universos-ia", WIF_POOL: "universos-vercel", WIF_PROVIDER: "vercel",
     INSTALLER_TEST_LOG: log, ...overrides };
-  const run = () => spawnSync("bash", [path.resolve("install.sh")], { cwd: dir, env, encoding: "utf8", timeout: 20000 });
+  const run = (input?: string) => spawnSync("bash", [path.resolve("install.sh")], { cwd: dir, env, encoding: "utf8", timeout: 20000, input });
   const calls = () => { try { return readFileSync(log, "utf8").trim().split("\n").map((s) => JSON.parse(s) as string[]); } catch { return []; } };
   return { run, calls };
 }
@@ -68,6 +68,17 @@ test("SIMULATED installer: fresh install includes assembler, isolated builder an
   expect(calls.some((a) => a.slice(0, 3).join(" ") === "run jobs deploy")).toBe(true);
   expect(calls.some((a) => a.includes("execute") || a.includes("roles/owner") || a.includes("roles/editor"))).toBe(false);
   expect(r.stdout).toContain("GCP_PROJECT_ID=example-project");
+});
+test("SIMULATED installer: interactive fresh account creates a new bucket instead of stopping", () => {
+  const s = setup({ INSTALLER_TEST_NEW: "1", GCS_OUTPUT_BUCKET: "" });
+  // setup() builds env with GCS_OUTPUT_BUCKET from overrides, so run() must
+  // be called with the env cleared; the setup helper already passes overrides
+  // into env, and an empty string makes install.sh treat it as unset.
+  const r = (s as unknown as { run: (input?: string) => { status: number | null; stderr: string; stdout: string } }).run("0\nuniversos-ia-nuevo\n");
+  expect(r.status, r.stderr).toBe(0);
+  const calls = s.calls();
+  expect(calls.some((a) => a.slice(0, 3).join(" ") === "storage buckets create" && a[3] === "gs://universos-ia-nuevo")).toBe(true);
+  expect(calls.some((a) => a.slice(0, 3).join(" ") === "run jobs deploy")).toBe(true);
 });
 test("SIMULATED installer: repeat updates one job without recreating persistent resources", () => {
   const s = setup();
