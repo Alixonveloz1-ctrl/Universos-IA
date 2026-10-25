@@ -69,6 +69,16 @@ export async function configure() {
  const domains = api(`/v9/projects/${project.id}/domains`);
  if (!domains.domains?.some(d => d.name === new URL(origin).hostname))
   throw Error('El dominio esperado no pertenece al proyecto. No se ha modificado nada.');
+ // APP_PASSWORD en texto plano tiene prioridad sobre APP_PASSWORD_HASH, así que
+ // si queda en Production la contraseña nueva de ./v nunca abriría la web.
+ // Por eso ./v la elimina antes de poner las 14 variables, no a mano.
+ const existing = api(`/v9/projects/${project.id}/env`);
+ for (const env of existing.envs || []) {
+  if (env.key === 'APP_PASSWORD' && env.target?.includes('production')) {
+   api(`/v9/projects/${project.id}/env/${env.id}`, 'DELETE');
+   console.log('Eliminada: APP_PASSWORD (contraseña antigua en texto plano)');
+  }
+ }
  // Saved outside the repository so interrupted runs reuse the same new password.
  const privateDir = join(homedir(), '.config', 'universos-ia');
  mkdirSync(privateDir, { recursive: true, mode: 0o700 });
