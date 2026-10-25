@@ -80,7 +80,7 @@ iam_binding storage buckets add-iam-policy-binding "gs://$GCS_OUTPUT_BUCKET" --m
 iam_binding storage buckets add-iam-policy-binding "gs://$GCS_OUTPUT_BUCKET" --member="serviceAccount:$web_email" --role=roles/storage.objectUser --condition="expression=resource.name.startsWith('projects/_/buckets/$GCS_OUTPUT_BUCKET/objects/$GCS_PREFIX/'),title=universos-prefix-delete" >/dev/null
 # Signing short-lived private media URLs; no service-account private key is created.
 iam_binding iam service-accounts add-iam-policy-binding "$web_email" --project="$GCP_PROJECT_ID" --member="serviceAccount:$web_email" --role=roles/iam.serviceAccountTokenCreator --condition=None --quiet >/dev/null
-if ! gcloud artifacts repositories list --project="$GCP_PROJECT_ID" --location="$GCP_REGION" --format='value(name)' | grep -Fxq "projects/$GCP_PROJECT_ID/locations/$GCP_REGION/repositories/$ARTIFACT_REPOSITORY"; then
+if ! gcloud artifacts repositories describe "$ARTIFACT_REPOSITORY" --project="$GCP_PROJECT_ID" --location="$GCP_REGION" --format='value(name)' >/dev/null 2>&1; then
  gcloud artifacts repositories create "$ARTIFACT_REPOSITORY" --project="$GCP_PROJECT_ID" --location="$GCP_REGION" --repository-format=docker
 fi
 [[ "$(gcloud artifacts repositories describe "$ARTIFACT_REPOSITORY" --project="$GCP_PROJECT_ID" --location="$GCP_REGION" --format='value(format)')" == DOCKER ]] || { echo 'El repositorio de contenedores debe ser Docker.' >&2; exit 1; }
