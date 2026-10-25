@@ -227,7 +227,7 @@ describe("cinematic production contract", () => {
       depth: "background", faceVisible: false, visibleParts: "distant silhouette" });
     first.shots[0].physicalContacts = [{ actorId: "leo", targetId: "mara",
       atFrameZero: true, contact: "Leo holds Mara's wrist" }];
-    expect(() => validateCinematicPlan(plan, 30, "shot")).toThrow("lejos");
+    expect(validateCinematicPlan(plan, 30, "shot").segments[0].shots[0].physicalContacts).toHaveLength(0);
 
     first.shots[0].openingSubjects![1] = { characterId: "leo", screenSide: "right",
       depth: "adjacent-offscreen", faceVisible: false, visibleParts: "connected arm and hand only" };

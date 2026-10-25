@@ -23,7 +23,7 @@ describe("cinematic plan request", () => {
       },
     }))).rejects.toThrow();
 
-    expect(textGenerate).toHaveBeenCalledTimes(2);
+    expect(textGenerate).toHaveBeenCalledTimes(4);
     for (const [model, prompt, schema, maxOutputTokens, timeoutMs] of textGenerate.mock.calls) {
       expect(model).toBe("gemini-3-flash-preview");
       expect(prompt).not.toContain("FORMATO JSON OBLIGATORIO:");
@@ -59,7 +59,7 @@ describe("cinematic plan request", () => {
       concept: "They buried my dad alive.", durationSeconds: 30, language: "English", accent: "American",
       models: { text: "gemini-3-flash-preview", image: "gemini-3.1-flash-image", video: "veo-3.1-lite-generate-001" },
     }))).rejects.toThrow("plan incompleto");
-    expect(textGenerate).toHaveBeenCalledTimes(3);
+    expect(textGenerate).toHaveBeenCalledTimes(5);
     expect(textGenerate.mock.calls[0][2]).toBeDefined();
     expect(textGenerate.mock.calls[1][2]).toBeUndefined();
     expect(textGenerate.mock.calls[1][1]).toContain("FORMATO JSON OBLIGATORIO:");

@@ -128,7 +128,7 @@ export async function generateCinematicPlan(input: CinematicProjectInput, previo
   let repair = "";
   let previous: unknown = null;
   let useProviderSchema = true;
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt < 4; attempt++) {
     const request = (schema: unknown) => textGenerate(input.models.text,
       planPrompt(input, repair, previous, !schema, previousPlan), schema, 32768, 130000);
     let result: unknown;
@@ -153,8 +153,8 @@ export async function generateCinematicPlan(input: CinematicProjectInput, previo
       console.warn("cinematic_plan_validation", { attempt: attempt + 1,
         paths: error instanceof z.ZodError ? error.issues.slice(0, 10).map(issue => issue.path.join(".")) : [],
         responseKind: result && typeof result === "object" && "invalidJsonText" in result ? "invalid-json" : "object" });
-      if (attempt === 1) throw new AppError("DIRECTOR_PLAN",
-        `El Director devolvió un plan incompleto después de dos intentos. Primer problema: ${issues[0]?.slice(0, 180) || "formato JSON"}.`, 502);
+      if (attempt === 3) throw new AppError("DIRECTOR_PLAN",
+        `El Director devolvió un plan incompleto después de cuatro intentos. Primer problema: ${issues[0]?.slice(0, 180) || "formato JSON"}.`, 502);
       previous = result;
     }
   }

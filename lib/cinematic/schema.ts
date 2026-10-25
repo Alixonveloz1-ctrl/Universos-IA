@@ -297,17 +297,18 @@ export function validateCinematicPlan(value: unknown, total: 30 | 60 | 90,
           throw new Error(`La toma ${segment.number} necesita el rostro reconocible en primer plano o plano medio.`);
         if (!shot.physicalContacts)
           throw new Error(`La toma ${segment.number} debe declarar sus contactos físicos, aunque la lista esté vacía.`);
-        for (const contact of shot.physicalContacts) {
+        // Un contacto imposible no debe tumbar toda la producción: se elimina
+        // ese contacto y se genera el video sin él, en lugar de mostrar un
+        // error al usuario. La lista puede quedar vacía, eso es válido.
+        shot.physicalContacts = shot.physicalContacts.filter(contact => {
           const actor = subjects.find(s => s.characterId === contact.actorId);
           const target = subjects.find(s => s.characterId === contact.targetId);
-          if (!actor || !target || actor === target)
-            throw new Error(`Un contacto de la toma ${segment.number} usa una persona ausente o la misma persona dos veces.`);
+          if (!actor || !target || actor === target) return false;
           const together = actor.depth === target.depth ||
             actor.depth === "adjacent-offscreen" && target.depth === "foreground" ||
             target.depth === "adjacent-offscreen" && actor.depth === "foreground";
-          if (!together)
-            throw new Error(`El contacto de la toma ${segment.number} sitúa a una persona lejos de la otra.`);
-        }
+          return together;
+        });
       }
       if (j === 0 && shot.transition !== "start")
         throw new Error(`La primera toma del bloque ${segment.number} debe comenzar con start.`);
