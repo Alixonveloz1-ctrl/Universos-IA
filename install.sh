@@ -13,7 +13,7 @@ fi
 ask() {
   local key="$1" label="$2" suggested="${3:-}" answer
   if [[ -n "${!key:-}" ]]; then return; fi
-  read -r -p "$label${suggested:+ [$suggested]}: " answer
+  read -r -p "$label${suggested:+ [$suggested]}: " answer || true
   printf -v "$key" '%s' "${answer:-$suggested}"
   export "$key"
 }
@@ -63,9 +63,16 @@ export ARTIFACT_REPOSITORY="${ARTIFACT_REPOSITORY:-universos-ia}"
 export WIF_POOL="${WIF_POOL:-universos-vercel}"
 export WIF_PROVIDER="${WIF_PROVIDER:-vercel}"
 bash scripts/setup-gcp.sh
-printf '\nEjecutor instalado. Para la web, configura las variables indicadas en Vercel.\n'
-if [[ -t 0 ]]; then
-  printf 'Prepara ahora tu clave personal; los valores siguientes son privados.\n'
-  bash scripts/configure-access.sh
-fi
-printf 'APP_ORIGIN debe ser la dirección HTTPS de tu web en Vercel, sin barra final.\n'
+# Deja listas, en ESTA misma terminal, todas las variables que ./v necesita
+# para poner las 14 variables en Vercel de una vez, sin copiar nada a mano.
+# Antes, ./v fallaba porque estas variables no estaban exportadas aquí.
+export GCS_PREFIX="${GCS_PREFIX:-universos-ia}"
+export FIRESTORE_DATABASE_ID="${FIRESTORE_DATABASE_ID:-(default)}"
+export GCP_SERVICE_ACCOUNT_EMAIL="${WEB_ACCOUNT}@${GCP_PROJECT_ID}.iam.gserviceaccount.com"
+export CLOUD_RUN_JOB_RESOURCE="projects/${GCP_PROJECT_ID}/locations/${GCP_REGION}/jobs/${CLOUD_RUN_JOB_NAME}"
+export GCP_WIF_AUDIENCE="//iam.googleapis.com/projects/$(gcloud projects describe "$GCP_PROJECT_ID" --format='value(projectNumber)')/locations/global/workloadIdentityPools/${WIF_POOL}/providers/${WIF_PROVIDER}"
+ask APP_ORIGIN 'Dirección HTTPS de tu web en Vercel, sin barra final' "https://${VERCEL_PROJECT_NAME}.vercel.app"
+printf '\nEjecutor instalado.\n'
+printf 'Ahora, en ESTA misma terminal, ejecuta ./v para que Cloud Shell ponga de una vez las 14 variables en Vercel, haga el redeploy y te muestre tu clave.\n'
+printf 'No prepares otra clave manual antes de ./v: la clave que vale es la que muestra ./v al final.\n'
+printf 'Si prefieres configurar Vercel a mano en vez de ./v, ejecuta bash scripts/configure-access.sh para generar una clave y pon los valores en Vercel tú mismo.\n'
