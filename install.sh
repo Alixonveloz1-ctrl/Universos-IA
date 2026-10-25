@@ -17,14 +17,6 @@ fi
 for installer_command in gcloud node git; do
   command -v "$installer_command" >/dev/null || { echo "Falta $installer_command. Ejecuta este archivo en Cloud Shell." >&2; exit 1; }
 done
-account="$(gcloud auth list --format='value(account)' | head -n 1)"
-if [[ -z "$account" ]]; then
-  printf 'No hay una cuenta de Google activa en esta terminal, así que el instalador no puede seguir todavía.\n'
-  printf 'No escribas ningún enlace ni código de Google aquí: eso solo te hace dar más pasos en inglés.\n'
-  printf 'Para activar una cuenta, ejecuta gcloud auth login, abre el enlace que te da, entra con tu cuenta de Google nueva, pega el código que te da, y luego vuelve a ejecutar bash install.sh.\n'
-  exit 1
-fi
-printf 'Cuenta de Google activa: %s\n' "$account"
 ask() {
   local key="$1" label="$2" suggested="${3:-}" answer
   if [[ -n "${!key:-}" ]]; then return; fi
