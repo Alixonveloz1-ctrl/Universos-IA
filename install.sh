@@ -21,7 +21,7 @@ account="$(gcloud auth list --format='value(account)' | head -n 1)"
 if [[ -z "$account" ]]; then
   printf 'No hay una cuenta de Google activa en esta terminal, así que el instalador no puede seguir todavía.\n'
   printf 'No escribas ningún enlace ni código de Google aquí: eso solo te hace dar más pasos en inglés.\n'
-  printf 'Autoriza Cloud Shell en la parte de arriba, con tu cuenta de Google nueva, y luego vuelve a ejecutar bash install.sh.\n'
+  printf 'Para activar una cuenta, ejecuta gcloud auth login, abre el enlace que te da, entra con tu cuenta de Google nueva, pega el código que te da, y luego vuelve a ejecutar bash install.sh.\n'
   exit 1
 fi
 printf 'Cuenta de Google activa: %s\n' "$account"
