@@ -85,7 +85,7 @@ export default function CinematicStudio() {
   const [genre, setGenre] = useState<CinematicGenre>(DEFAULT_CINEMATIC_GENRE);
   const [subgenre, setSubgenre] = useState(DEFAULT_CINEMATIC_SUBGENRE);
   const [world, setWorld] = useState<string>(DEFAULT_CINEMATIC_WORLD);
-  const [durationSeconds, setDurationSeconds] = useState<30 | 60 | 90>(30);
+  const [durationSeconds, setDurationSeconds] = useState<30 | 60 | 90 | 120 | 150 | 180>(30);
   const [language, setLanguage] = useState("Español");
   const [accent, setAccent] = useState("Latinoamericano");
   const [models, setModels] = useState<{ text: string; image: string; video: string }>({ ...DEFAULT_MODELS });
@@ -231,10 +231,13 @@ export default function CinematicStudio() {
           <div className="grid">
             <label>
               Duración final
-              <select value={durationSeconds} onChange={e => setDurationSeconds(Number(e.target.value) as 30 | 60 | 90)}>
+              <select value={durationSeconds} onChange={e => setDurationSeconds(Number(e.target.value) as 30 | 60 | 90 | 120 | 150 | 180)}>
                 <option value={30}>30 segundos</option>
                 <option value={60}>60 segundos</option>
                 <option value={90}>90 segundos</option>
+                <option value={120}>2 minutos</option>
+                <option value={150}>2 minutos y medio</option>
+                <option value={180}>3 minutos</option>
               </select>
             </label>
             <label>

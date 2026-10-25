@@ -2,7 +2,7 @@ import { z } from "zod";
 import { CINEMATIC_GENRES, CINEMATIC_WORLDS, DEFAULT_CINEMATIC_GENRE, DEFAULT_CINEMATIC_SUBGENRE, DEFAULT_CINEMATIC_WORLD,
   type CinematicGenre, type CinematicWorld } from "./options";
 
-export const cinematicDuration = z.union([z.literal(30), z.literal(60), z.literal(90)]);
+export const cinematicDuration = z.union([z.literal(30), z.literal(60), z.literal(90), z.literal(120), z.literal(150), z.literal(180)]);
 export const cinematicSegmentDuration = z.union([z.literal(4), z.literal(6), z.literal(8)]);
 export const cinematicId = z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/);
 const short = z.string().trim().min(1).max(1400);
@@ -142,24 +142,30 @@ export type CinematicCharacter = z.infer<typeof cinematicCharacter>;
 export type CinematicSegment = z.infer<typeof cinematicSegment>;
 export type CinematicLayout = "legacy" | "shot";
 
-export function cinematicSegmentDurations(total: 30 | 60 | 90): (4 | 6 | 8)[] {
+export function cinematicSegmentDurations(total: 30 | 60 | 90 | 120 | 150 | 180): (4 | 6 | 8)[] {
   if (total === 30) return [8, 8, 8, 6];
   if (total === 60) return [8, 8, 8, 8, 8, 8, 8, 4];
-  return [8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 6, 4];
+  if (total === 90) return [8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 6, 4];
+  if (total === 120) return Array(15).fill(8) as 8[];
+  if (total === 150) return Array(18).fill(8).concat([6]) as (4 | 6 | 8)[];
+  return Array(22).fill(8).concat([4]) as (4 | 6 | 8)[];
 }
 
 // One native Veo generation, and one independently approved opening image,
 // for every shot. Older stored plans retain their original block durations.
-export function cinematicShotDurations(total: 30 | 60 | 90): (4 | 6 | 8)[] {
+export function cinematicShotDurations(total: 30 | 60 | 90 | 120 | 150 | 180): (4 | 6 | 8)[] {
   if (total === 30) return [4, 4, 4, 4, 4, 4, 6];
   if (total === 60) return Array(10).fill(6) as 6[];
-  return Array(15).fill(6) as 6[];
+  if (total === 90) return Array(15).fill(6) as 6[];
+  if (total === 120) return Array(20).fill(6) as 6[];
+  if (total === 150) return Array(25).fill(6) as 6[];
+  return Array(30).fill(6) as 6[];
 }
 
 // The Director chooses the story and shots; the editor owns the exact technical
 // boundaries. Rounding or a slightly different block length must not force a
 // second paid generation of the same story.
-export function alignCinematicPlan(value: unknown, total: 30 | 60 | 90,
+export function alignCinematicPlan(value: unknown, total: 30 | 60 | 90 | 120 | 150 | 180,
   layout: CinematicLayout = "legacy"): unknown {
   if (!value || typeof value !== "object" || !Array.isArray((value as { segments?: unknown }).segments)) return value;
   const expected = layout === "shot" ? cinematicShotDurations(total) : cinematicSegmentDurations(total);
@@ -257,7 +263,7 @@ export function alignCinematicPlan(value: unknown, total: 30 | 60 | 90,
   return plan;
 }
 
-export function validateCinematicPlan(value: unknown, total: 30 | 60 | 90,
+export function validateCinematicPlan(value: unknown, total: 30 | 60 | 90 | 120 | 150 | 180,
   layout: CinematicLayout = "legacy") {
   const plan = cinematicPlan.parse(value);
   const expected = layout === "shot" ? cinematicShotDurations(total) : cinematicSegmentDurations(total);
