@@ -30,7 +30,10 @@ function cli(args, input, visible = false) {
   stdio: visible ? 'inherit' : ['pipe', 'pipe', 'pipe'],
   env: { ...process.env, VERCEL_TELEMETRY_DISABLED: '1' },
  });
- if (r.status !== 0) throw Error(`Falló Vercel (${args[0]}). Comprueba tu autorización y vuelve a ejecutar ./v. No se muestran respuestas privadas.`);
+ if (r.status !== 0) {
+  const detail = String(r.stderr || '').replace(/\s+/g, ' ').slice(0, 300);
+  throw Error(`Falló Vercel (${args[0]} ${args[1] || ''}). Comprueba tu autorización y vuelve a ejecutar ./v. Detalle de Vercel: ${detail || 'sin detalle'}`);
+ }
  return r.stdout || '';
 }
 function api(path, method = 'GET', data) {
