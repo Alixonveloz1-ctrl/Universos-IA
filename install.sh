@@ -6,10 +6,15 @@ cd "$(dirname "${BASH_SOURCE[0]}")"
 for installer_command in gcloud node git; do
   command -v "$installer_command" >/dev/null || { echo "Falta $installer_command. Ejecuta este archivo en Cloud Shell." >&2; exit 1; }
 done
-if [[ -z "${CLOUD_SHELL:-}" && -z "$(gcloud auth list --format='value(account)')" ]]; then
-  printf 'Autoriza tu cuenta de Google para instalar en tu proyecto.\n'
-  gcloud auth login --no-launch-browser
+account="$(gcloud auth list --format='value(account)' | head -n 1)"
+if [[ -z "$account" ]]; then
+  printf 'No hay una cuenta de Google activa en esta terminal, así que el instalador no puede seguir todavía.\n'
+  printf 'Ahora Google te va a pedir que entres con tu cuenta de Google nueva. Elige esa cuenta y autoriza, y el instalador seguirá solo en español.\n'
+  if [[ -n "${CLOUD_SHELL:-}" ]]; then gcloud auth login; else gcloud auth login --no-launch-browser; fi
+  account="$(gcloud auth list --format='value(account)' | head -n 1)"
+  if [[ -z "$account" ]]; then echo 'No se pudo conectar una cuenta de Google. Vuelve a ejecutar bash install.sh.' >&2; exit 1; fi
 fi
+printf 'Cuenta de Google activa: %s\n' "$account"
 ask() {
   local key="$1" label="$2" suggested="${3:-}" answer
   if [[ -n "${!key:-}" ]]; then return; fi
