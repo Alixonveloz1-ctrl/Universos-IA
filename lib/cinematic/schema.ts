@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { CINEMATIC_GENRES, DEFAULT_CINEMATIC_GENRE, DEFAULT_CINEMATIC_SUBGENRE,
-  type CinematicGenre } from "./options";
+import { CINEMATIC_GENRES, CINEMATIC_WORLDS, DEFAULT_CINEMATIC_GENRE, DEFAULT_CINEMATIC_SUBGENRE, DEFAULT_CINEMATIC_WORLD,
+  type CinematicGenre, type CinematicWorld } from "./options";
 
 export const cinematicDuration = z.union([z.literal(30), z.literal(60), z.literal(90)]);
 export const cinematicSegmentDuration = z.union([z.literal(4), z.literal(6), z.literal(8)]);
@@ -14,6 +14,7 @@ export const cinematicProjectInput = z.object({
   genre: z.enum(CINEMATIC_GENRES.map(genre => genre.id) as [CinematicGenre, ...CinematicGenre[]])
     .default(DEFAULT_CINEMATIC_GENRE),
   subgenre: z.string().trim().min(1).max(80).default(DEFAULT_CINEMATIC_SUBGENRE),
+  world: z.enum(CINEMATIC_WORLDS.map(world => world.id) as [CinematicWorld, ...CinematicWorld[]]).default(DEFAULT_CINEMATIC_WORLD),
   durationSeconds: cinematicDuration,
   language: z.string().trim().min(1).max(100),
   accent: z.string().trim().min(1).max(100),

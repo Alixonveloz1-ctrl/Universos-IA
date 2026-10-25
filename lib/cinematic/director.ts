@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { AppError } from "../errors";
 import { textGenerate } from "../providers/vertex";
-import { cinematicGenre, cinematicStyle, cinematicSubgenre, type CinematicVisualStyle } from "./options";
+import { cinematicGenre, cinematicStyle, cinematicSubgenre, cinematicWorld, type CinematicVisualStyle } from "./options";
 import {
   alignCinematicPlan,
   cinematicPlan,
@@ -85,6 +85,9 @@ function planPrompt(input: CinematicProjectInput, repair = "", previous: unknown
     `ESTILO VISUAL ELEGIDO: ${style === "anime2d" ? "Anime 2D dibujado" : "Cinemático realista"}. Mantén este estilo en la biblia visual, personajes, encuadres y todos los bloques; no mezcles técnicas. El montaje, la continuidad, las voces y el audio nativo son los mismos en ambos estilos.`,
     masterStyle(style),
     `GÉNERO ELEGIDO: ${genre.label}. SUBGÉNERO ELEGIDO: ${subgenre.label}.`,
+    `MUNDO ELEGIDO: ${cinematicWorld(input.world).label}. REGLA DEL MUNDO: ${cinematicWorld(input.world).rule} Si el mundo no es libre, esta regla MANDA sobre cualquier invención: el mundo, su geografía, sus peligros y sus objetos deben verse en las primeras tomas, no solo describirse en la sinopsis.`,
+    "HISTORIA SIN DIÁLOGO OBLIGATORIO: el Director decide si lleva diálogo o no. Una historia puede tener cero palabras de diálogo y entenderse por completo de principio a fin, solo con imagen, acción y sonido. Si no hay diálogo, el diálogo puede quedar vacío y la biblia sonora debe ser ambiente, efectos y música, no voces. NUNCA fuerces diálogo para explicar lo que ya se ve: si un traje grueso protege de mordidas, eso debe VERSE: una criatura muerde el traje, el traje aguanta y la persona no resulta herida. Si un lugar es un apocalipsis, eso debe VERSE: ruinas, escasez, refugios, peligros, no decirse en una frase. Cada toma debe aportar un hecho nuevo que se pueda entender con el sonido apagado, y el público debe poder contar la historia viendo solo las imágenes de salida.",
+    "CONTINUIDAD DEL MUNDO Y DE LA CALIDAD: el mundo, el vestuario y su función, el diseño de las criaturas, la geografía del lugar y el estado de los objetos deben ser idénticos en todas las tomas. Un traje que protege no se rompe sin causa visible y no vuelve a estar intacto en la toma siguiente. Una criatura no cambia de forma, tamaño o color entre tomas. Un lugar no cambia de geografía entre cortes. Registra esos estados en continuityOut y respétalos en la toma siguiente, como si fuera una producción hecha 100% con IA pero con continuidad perfecta.",
     hasConcept
       ? "JERARQUÍA NARRATIVA: el concepto escrito por el usuario MANDA sobre el género y subgénero. Respeta sus personajes, conflicto, hechos y revelación; usa las categorías solo cuando sean compatibles y nunca cambies la historia para encajarla en ellas. La representación adulta es un requisito de producción."
       : "TRAMA LIBRE: el usuario dejó el concepto vacío. Inventa una premisa original completa en el género y subgénero elegidos, con personajes adultos, conflicto claro desde el primer segundo, giro causal y final satisfactorio o gancho. Decide tú la trama, locaciones y personajes; no exijas que el usuario escriba un concepto.",

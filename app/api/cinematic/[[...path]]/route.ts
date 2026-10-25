@@ -255,7 +255,7 @@ async function handler(req: Request, context: { params: Promise<{ path?: string[
           const p = d.data() as CinematicProject;
           return {
             id: p.id, title: p.title, concept: p.concept,
-            visualStyle: cinematicStyle(p.visualStyle), genre: p.genre, subgenre: p.subgenre,
+            visualStyle: cinematicStyle(p.visualStyle), genre: p.genre, subgenre: p.subgenre, world: (p as { world?: string }).world,
             durationSeconds: p.durationSeconds, createdAt: p.createdAt,
             updatedAt: p.updatedAt, hasPlan: !!p.plan, hasFinal: !!p.final,
           };

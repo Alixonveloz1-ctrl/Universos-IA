@@ -6,8 +6,8 @@ import { DEFAULT_MODELS, MODELS } from "@/lib/models";
 import type { CinematicAsset, CinematicFinalizeJob, CinematicProject } from "@/lib/cinematic/types";
 import { cinematicImageCharacterIds, cinematicMissingApprovedVideos, currentCinematicVideo } from "@/lib/cinematic/types";
 import {
-  CINEMATIC_GENRES, CINEMATIC_STYLES, DEFAULT_CINEMATIC_GENRE,
-  DEFAULT_CINEMATIC_SUBGENRE, cinematicGenre, cinematicStyle, cinematicSubgenre,
+  CINEMATIC_GENRES, CINEMATIC_STYLES, CINEMATIC_WORLDS, DEFAULT_CINEMATIC_GENRE,
+  DEFAULT_CINEMATIC_SUBGENRE, DEFAULT_CINEMATIC_WORLD, cinematicGenre, cinematicStyle, cinematicSubgenre, cinematicWorld,
   type CinematicGenre, type CinematicVisualStyle,
 } from "@/lib/cinematic/options";
 
@@ -27,6 +27,7 @@ type CinematicListItem = {
   visualStyle?: CinematicVisualStyle;
   genre?: CinematicGenre;
   subgenre?: string;
+  world?: string;
   durationSeconds: number;
   createdAt: number;
   updatedAt: number;
@@ -83,6 +84,7 @@ export default function CinematicStudio() {
   const [visualStyle, setVisualStyle] = useState<CinematicVisualStyle>("realistic");
   const [genre, setGenre] = useState<CinematicGenre>(DEFAULT_CINEMATIC_GENRE);
   const [subgenre, setSubgenre] = useState(DEFAULT_CINEMATIC_SUBGENRE);
+  const [world, setWorld] = useState<string>(DEFAULT_CINEMATIC_WORLD);
   const [durationSeconds, setDurationSeconds] = useState<30 | 60 | 90>(30);
   const [language, setLanguage] = useState("Español");
   const [accent, setAccent] = useState("Latinoamericano");
@@ -208,6 +210,14 @@ export default function CinematicStudio() {
             </label>
           </div>
           <label>
+            Mundo / Universo
+            <select value={world} onChange={e => setWorld(e.target.value)}>
+              {CINEMATIC_WORLDS.map(option =>
+                <option value={option.id} key={option.id}>{option.label}</option>)}
+            </select>
+          </label>
+          <p className="muted">Si no escribes concepto, el mundo ayuda al Director a decidir la historia: no es solo un género, es dónde pasa, qué peligros hay y qué objetos protegen. Por ejemplo, en un apocalipsis un traje grueso debe verse resistiendo mordidas, no solo decirse.</p>
+          <label>
             Concepto (opcional)
             <textarea
               rows={6}
@@ -252,6 +262,7 @@ export default function CinematicStudio() {
                 visualStyle,
                 genre,
                 subgenre,
+                world,
                 durationSeconds,
                 language,
                 accent: accent.trim() || "Neutral",
@@ -278,7 +289,7 @@ export default function CinematicStudio() {
                 <article className="card" key={item.id}>
                   <span className="badge">{item.durationSeconds} s</span>
                   <h3>{item.title}</h3>
-                  <p className="muted">{item.concept || `${cinematicGenre(item.genre).label} · ${cinematicSubgenre(item.genre, item.subgenre).label}`}</p>
+                  <p className="muted">{item.concept || `${cinematicGenre(item.genre).label} · ${cinematicSubgenre(item.genre, item.subgenre).label}${item.world && item.world !== "free" ? ` · ${cinematicWorld(item.world).label}` : ""}`}</p>
                   <div className="actions">
                     <button onClick={() => void perform(async () => {
                       visibleProject.current = item.id;
@@ -328,7 +339,7 @@ export default function CinematicStudio() {
           <span className="badge">Cinemático · {project.durationSeconds} s</span>
         </div>
         <h1>{project.title}</h1>
-        <p className="muted">{CINEMATIC_STYLES.find(style => style.id === cinematicStyle(project.visualStyle))?.label} · {cinematicGenre(project.genre).label} · {cinematicSubgenre(project.genre, project.subgenre).label}</p>
+        <p className="muted">{CINEMATIC_STYLES.find(style => style.id === cinematicStyle(project.visualStyle))?.label} · {cinematicGenre(project.genre).label} · {cinematicSubgenre(project.genre, project.subgenre).label}{project.world && project.world !== "free" ? ` · ${cinematicWorld(project.world).label}` : ""}</p>
         {project.concept && <p>{project.concept}</p>}
         <details>
           <summary>Generadores de esta producción</summary>
