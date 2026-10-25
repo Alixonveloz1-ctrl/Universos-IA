@@ -9,6 +9,7 @@ vi.mock('node:child_process', () => ({ spawnSync: (_cmd, args, options) => {
  const path = args[3];
  let data = {};
  if (path === '/v9/projects/universos-ia') data = { name: 'universos-ia', id: 'prj_test', accountId: 'team_test', link: { org: 'Alixonveloz1-ctrl', repo: state.wrong ? 'wrong' : 'Universos-IA' } };
+ if (path === '/v9/projects/prj_test/env') data = { envs: [{ id: 'env_test', key: 'APP_PASSWORD', target: ['production'] }] };
  if (path?.endsWith('/domains')) data = { domains: [{ name: 'example.vercel.app' }] };
  if (path?.includes('/env?')) data = state.fail ? { failed: [{ error: 'rejected' }] } : { created: { key: JSON.parse(options.input).key }, failed: [] };
  return { status: 0, stdout: JSON.stringify(data) };
@@ -45,6 +46,13 @@ test('SIMULATED: configures 14 production vars through stdin, redeploys and chec
  const first = writes.find(c => JSON.parse(c.input).key === 'APP_PASSWORD_HASH').input;
  await configure();
  expect(state.calls.filter(c => c.args[3]?.includes('/env?')).filter(c => JSON.parse(c.input).key === 'APP_PASSWORD_HASH')[1].input).toBe(first);
+});
+test('SIMULATED: old plain APP_PASSWORD in production is deleted before upsert', async () => {
+ await configure();
+ const del = state.calls.find(c => c.args.includes('DELETE') && c.args[3]?.includes('/env/env_test'));
+ expect(del).toBeTruthy();
+ const firstWrite = state.calls.findIndex(c => c.args[3]?.includes('/env?'));
+ expect(state.calls.indexOf(del)).toBeLessThan(firstWrite);
 });
 test('SIMULATED: wrong repository stops before changes', async () => {
  state.wrong = true;
