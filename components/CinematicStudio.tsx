@@ -90,6 +90,8 @@ export default function CinematicStudio() {
   const [accent, setAccent] = useState("Latinoamericano");
   const [models, setModels] = useState<{ text: string; image: string; video: string }>({ ...DEFAULT_MODELS });
   const [motionNotes, setMotionNotes] = useState<Record<string, string>>({});
+  const [queueRunning, setQueueRunning] = useState(false);
+  const [queueStatus, setQueueStatus] = useState("");
   const polling = useRef(false);
   const checkedFailedVideos = useRef(new Set<string>());
   const visibleProject = useRef<string | null>(null);
@@ -497,6 +499,53 @@ export default function CinematicStudio() {
 
           <section>
             <h2>{project.shotLayout === "one-shot-per-video" ? "Tomas independientes" : "Bloques cinematográficos"}</h2>
+            <p className="muted">Genera todas las imágenes en orden, una por una. Si Google dice que no hay capacidad, espera 60 segundos y reintenta esa misma toma, sin generar varias a la vez.</p>
+            <div className="actions">
+              <button
+                disabled={busy || queueRunning || !!data.generation}
+                onClick={() => void (async () => {
+                  setQueueRunning(true); setError(""); setQueueStatus("Empezando cola de imágenes…");
+                  try {
+                    for (const segment of [...plan.segments].sort((a, b) => a.number - b.number)) {
+                      const fresh = await cinematicApi(project.id);
+                      const freshProject = fresh.project as typeof project;
+                      const freshAssets = fresh.assets as typeof assets;
+                      const cast = cinematicImageCharacterIds(segment, project.shotLayout);
+                      if (!cast.every(id => !!freshProject.approvedCharacters[id])) {
+                        setQueueStatus(`Toma ${segment.number}: faltan referencias aprobadas. Deteniendo cola.`);
+                        break;
+                      }
+                      const hasImage = freshAssets.some(a => a.role === "segment-image" && a.segmentNumber === segment.number && a.inputRefs.length === cast.length && cast.every((id, i) => a.inputRefs[i] === freshProject.approvedCharacters[id]) && (a.state === "candidate" || a.state === "completed") && !!a.storageObject);
+                      if (hasImage) { setQueueStatus(`Toma ${segment.number}: ya tiene imagen, saltando.`); continue; }
+                      let done = false;
+                      for (let attempt = 1; attempt <= 4 && !done; attempt++) {
+                        setQueueStatus(`Toma ${segment.number}: generando imagen, intento ${attempt} de 4…`);
+                        try {
+                          await cinematicApi(`${project.id}/segments/${segment.number}/image`, "POST", {});
+                          done = true;
+                        } catch (e) {
+                          const msg = e instanceof Error ? e.message : "";
+                          const isQuota = /capacidad|Resource|exhausted|429/i.test(msg);
+                          if (isQuota && attempt < 4) {
+                            setQueueStatus(`Toma ${segment.number}: sin capacidad, esperando 60 segundos y reintentando…`);
+                            await new Promise(r => setTimeout(r, 60000));
+                          } else { throw e; }
+                        }
+                      }
+                      if (done) setQueueStatus(`Toma ${segment.number}: imagen lista.`);
+                      await loadProject(project.id);
+                    }
+                    setQueueStatus("Cola terminada. Revisa cada imagen y aprueba las que te gusten.");
+                  } catch (e) {
+                    setError(e instanceof Error ? e.message : "Error en la cola de imágenes.");
+                    setQueueStatus("Cola detenida por un error. Las imágenes ya generadas quedan guardadas.");
+                  } finally { setQueueRunning(false); await loadProject(project.id); }
+                })()}
+              >
+                {queueRunning ? "Generando en cola…" : "Generar todas las imágenes en orden"}
+              </button>
+            </div>
+            {queueStatus && <p className="muted">{queueStatus}</p>}
             {plan.segments.map(segment => {
               const isShot = project.shotLayout === "one-shot-per-video";
               const imageCast = cinematicImageCharacterIds(segment, project.shotLayout);
@@ -518,41 +567,6 @@ export default function CinematicStudio() {
                   <p><b>Objetivo:</b> {segment.goal}</p>
                   <p><b>Imagen inicial:</b> {segment.openingFrameDirection}</p>
                   <p className="muted">{segment.location}</p>
-                  <details>
-                    <summary>{isShot ? "Encuadre y acción" : `Mapa de planos · ${segment.shots.length}`}</summary>
-                    {segment.shots.map(shot => (
-                      <p key={shot.id}>
-                        <b>{shot.start}–{shot.end}s · {shot.shotType} · {shot.lensMm} mm · {shot.transition}</b><br />
-                        {shot.action}
-                        {shot.openingSubjects?.map(subject => (
-                          <span key={subject.characterId}>
-                            <br />
-                            {plan.characters.find(c => c.id === subject.characterId)?.name || subject.characterId}: {
-                              { left: "izquierda", center: "centro", right: "derecha" }[subject.screenSide]
-                            }, {{ foreground: "primer plano", midground: "plano medio",
-                              background: "fondo", "adjacent-offscreen": "junto al borde, fuera de cuadro" }[subject.depth]}; {
-                              subject.faceVisible ? "rostro visible" : "rostro oculto"
-                            }. {subject.visibleParts}
-                          </span>
-                        ))}
-                        {shot.physicalContacts?.map((contact, i) => (
-                          <span key={`${contact.actorId}-${contact.targetId}-${i}`}>
-                            <br />
-                            Contacto: {plan.characters.find(c => c.id === contact.actorId)?.name || contact.actorId} → {
-                              plan.characters.find(c => c.id === contact.targetId)?.name || contact.targetId
-                            }. {contact.contact} ({contact.atFrameZero ? "desde la imagen inicial" : "durante la toma"})
-                          </span>
-                        ))}
-                      </p>
-                    ))}
-                  </details>
-                  <details>
-                    <summary>Continuidad audiovisual</summary>
-                    <p><b>Entrada visual:</b> {segment.continuityIn}</p>
-                    <p><b>Salida visual:</b> {segment.continuityOut}</p>
-                    <p><b>Entrada sonora:</b> {segment.audioContinuityIn}</p>
-                    <p><b>Salida sonora:</b> {segment.audioContinuityOut}</p>
-                  </details>
 
                   {shownImage?.storageObject && (
                     <Image

@@ -170,7 +170,7 @@ export function alignCinematicPlan(value: unknown, total: 30 | 60 | 90 | 120 | 1
   if (!value || typeof value !== "object" || !Array.isArray((value as { segments?: unknown }).segments)) return value;
   const expected = layout === "shot" ? cinematicShotDurations(total) : cinematicSegmentDurations(total);
   const source = (value as { segments: unknown[] }).segments;
-  if (source.length !== expected.length) return value;
+  if (layout !== "shot" && source.length !== expected.length) return value;
   const plan = structuredClone(value) as { characters?: { id?: unknown; name?: unknown }[]; segments: Record<string, unknown>[] };
   const knownCharacters = new Set(Array.isArray(plan.characters) ? plan.characters.map(c => c?.id) : []);
   for (let i = 0; i < plan.segments.length; i++) {
@@ -178,7 +178,8 @@ export function alignCinematicPlan(value: unknown, total: 30 | 60 | 90 | 120 | 1
     if (!segment || typeof segment !== "object") continue;
     const originalDuration = Number(segment.durationSeconds);
     segment.number = i + 1;
-    segment.durationSeconds = expected[i];
+    segment.durationSeconds = layout === "shot" ? originalDuration : expected[i];
+    const segDur = Number(segment.durationSeconds);
     if (i > 0) {
       const previous = plan.segments[i - 1];
       if (typeof previous?.continuityOut === "string" && previous.continuityOut.trim())
@@ -197,16 +198,16 @@ export function alignCinematicPlan(value: unknown, total: 30 | 60 | 90 | 120 | 1
       Math.max(...shots.map(shot => Number(shot?.end) || 0), expected[i]);
     if (Array.isArray(segment.dialogue)) for (const turn of segment.dialogue as Record<string, unknown>[]) {
       if (!turn || typeof turn !== "object" || !Number.isFinite(turn.start) || !Number.isFinite(turn.end)) continue;
-      turn.start = Math.round(Number(turn.start) / timeline * expected[i] * 1000) / 1000;
-      turn.end = Math.round(Number(turn.end) / timeline * expected[i] * 1000) / 1000;
+      turn.start = Math.round(Number(turn.start) / timeline * segDur * 1000) / 1000;
+      turn.end = Math.round(Number(turn.end) / timeline * segDur * 1000) / 1000;
     }
     let cursor = 0;
     shots.forEach((shot, index) => {
       if (!shot || typeof shot !== "object") return;
       shot.id = `cinematic_${i + 1}_${index + 1}`;
       shot.start = cursor;
-      cursor = index === shots.length - 1 ? expected[i]
-        : Math.round(weights.slice(0, index + 1).reduce((a, b) => a + b, 0) / sum * expected[i] * 1000) / 1000;
+      cursor = index === shots.length - 1 ? segDur
+        : Math.round(weights.slice(0, index + 1).reduce((a, b) => a + b, 0) / sum * segDur * 1000) / 1000;
       shot.end = cursor;
       shot.transition = index === 0 ? "start"
         : shot.transition === "match-cut" ? "match-cut" : "hard-cut";
@@ -267,8 +268,19 @@ export function validateCinematicPlan(value: unknown, total: 30 | 60 | 90 | 120 
   layout: CinematicLayout = "legacy") {
   const plan = cinematicPlan.parse(value);
   const expected = layout === "shot" ? cinematicShotDurations(total) : cinematicSegmentDurations(total);
-  if (plan.segments.length !== expected.length)
-    throw new Error(`Se requieren ${expected.length} ${layout === "shot" ? "tomas independientes" : "bloques técnicos"} para ${total} segundos.`);
+  if (layout === "shot") {
+    // El Director decide la duracion de cada toma: 4 s para un golpe rapido,
+    // 6 s normal, 8 s para un momento lento. Solo se exige que cada toma sea
+    // 4, 6 u 8 s y que la suma sea exactamente el total elegido. Veo no genera
+    // menos de 4 s, asi que un golpe de 2 s en el montaje final se genera como
+    // 4 s y se usa su mejor parte; no se puede pagar solo 2 s de generacion.
+    const sum = plan.segments.reduce((a, s) => a + s.durationSeconds, 0);
+    if (sum !== total)
+      throw new Error(`Las tomas deben sumar ${total} segundos, no ${sum}.`);
+    if (plan.segments.some(s => ![4, 6, 8].includes(s.durationSeconds)))
+      throw new Error("Cada toma debe durar 4, 6 u 8 segundos.");
+  } else if (plan.segments.length !== expected.length)
+    throw new Error(`Se requieren ${expected.length} bloques técnicos para ${total} segundos.`);
   const characterIds = new Set(plan.characters.map(c => c.id));
   if (characterIds.size !== plan.characters.length)
     throw new Error("Hay IDs de personaje duplicados.");
@@ -276,7 +288,7 @@ export function validateCinematicPlan(value: unknown, total: 30 | 60 | 90 | 120 
   const shotIds = new Set<string>();
   for (let i = 0; i < plan.segments.length; i++) {
     const segment = plan.segments[i];
-    if (segment.number !== i + 1 || segment.durationSeconds !== expected[i])
+    if (segment.number !== i + 1 || (layout !== "shot" && segment.durationSeconds !== expected[i]))
       throw new Error(`El bloque ${i + 1} debe durar ${expected[i]} segundos.`);
     if (layout === "shot" && segment.shots.length !== 1)
       throw new Error(`La toma ${i + 1} necesita exactamente un plano y una imagen inicial; los cortes van entre videos.`);

@@ -28,7 +28,8 @@ describe("cinematic plan request", () => {
       expect(model).toBe("gemini-3-flash-preview");
       expect(prompt).not.toContain("FORMATO JSON OBLIGATORIO:");
       expect(prompt).toContain("They buried my dad alive.");
-      expect(prompt).toContain("7:6s");
+      expect(prompt).toContain("4 s para un golpe rápido");
+      expect(prompt).toContain("sumar exactamente 30");
       expect(prompt).toContain("exactamente UN elemento en shots");
       expect(prompt).toContain("El único shot empieza en 0");
       expect(prompt).toContain("openingSubjects contiene exactamente una entrada");
