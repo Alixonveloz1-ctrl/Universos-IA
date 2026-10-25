@@ -123,35 +123,16 @@ export async function imageGenerate(
   prompt: string,
   refs: ImageRef[],
 ) {
-  // Si el modelo elegido se queda sin capacidad (429), no dejar la produccion
-  // atorada: probar con los otros modelos de imagen antes de devolver el error.
-  // Solo se cambia de modelo por falta de capacidad, nunca por un bloqueo.
-  const fallbacks = ["gemini-2.5-flash-image", "gemini-3-pro-image"].filter((m) => m !== id);
-  let lastQuotaError: unknown = null;
-  for (const modelId of [id, ...fallbacks]) {
-    const limits = imageLimits(modelId);
-    if (refs.length > limits.maxReferenceImages ||
-      refs.some((r) => Buffer.byteLength(r.bytesBase64Encoded, "base64") > limits.maxInlineBytes)) {
-      if (modelId === id)
-        throw new AppError("PROVIDER_REJECTED", "Referencias incompatibles con el modelo de imagen.", 502);
-      continue;
-    }
-    try {
-      return await imageGenerateOnce(modelId, prompt, refs);
-    } catch (error) {
-      if (!(error instanceof AppError) || error.code !== "QUOTA") throw error;
-      lastQuotaError = error;
-      console.warn("image_fallback_quota", { from: id, tried: modelId });
-    }
-  }
-  throw lastQuotaError;
-}
-
-async function imageGenerateOnce(
-  id: string,
-  prompt: string,
-  refs: ImageRef[],
-) {
+  const limits = imageLimits(id);
+  assert(
+    refs.length <= limits.maxReferenceImages &&
+      refs.every(
+        (r) =>
+          Buffer.byteLength(r.bytesBase64Encoded, "base64") <=
+          limits.maxInlineBytes,
+      ),
+    "Referencias incompatibles con el modelo de imagen.",
+  );
   const r = await googlePost(
     endpoint(id, "generateContent"),
     imageRequest(prompt, refs),
