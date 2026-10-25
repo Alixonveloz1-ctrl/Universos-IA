@@ -6,7 +6,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")"
 for installer_command in gcloud node git; do
   command -v "$installer_command" >/dev/null || { echo "Falta $installer_command. Ejecuta este archivo en Cloud Shell." >&2; exit 1; }
 done
-if [[ -z "$(gcloud auth list --filter=status:ACTIVE --format='value(account)')" ]]; then
+if [[ -z "$(gcloud auth list --format='value(account)')" ]]; then
   printf 'Autoriza tu cuenta de Google para instalar en tu proyecto.\n'
   gcloud auth login --no-launch-browser
 fi
