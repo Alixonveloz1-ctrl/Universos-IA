@@ -16,7 +16,11 @@ import os, sys, json, pathlib
 a=sys.argv[1:]; cmd=' '.join(a); e=os.environ
 with open(e['INSTALLER_TEST_LOG'],'a') as f: f.write(json.dumps(a)+'\\n')
 p=e['GCP_PROJECT_ID']; n='123456789'; region=e['GCP_REGION']
-if cmd.startswith('auth list'): print('simulated@example.invalid')
+if cmd.startswith('auth list'):
+ # Como en Cloud Shell real: el filtro status:ACTIVE no existe y devuelve vacío,
+ # así que el instalador nunca debe usar ese filtro ni pedir login en Cloud Shell.
+ print('' if 'status:ACTIVE' in cmd else 'simulated@example.invalid')
+elif cmd.startswith('auth login'): sys.exit(1)
 elif cmd.startswith('projects describe'): print(n if 'projectNumber' in cmd else p)
 elif cmd.startswith('firestore databases list'):
  if not e.get('INSTALLER_TEST_NEW'): print('projects/'+p+'/databases/(default)')

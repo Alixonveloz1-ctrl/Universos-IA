@@ -6,7 +6,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")"
 for installer_command in gcloud node git; do
   command -v "$installer_command" >/dev/null || { echo "Falta $installer_command. Ejecuta este archivo en Cloud Shell." >&2; exit 1; }
 done
-if [[ -z "$(gcloud auth list --format='value(account)')" ]]; then
+if [[ -z "${CLOUD_SHELL:-}" && -z "$(gcloud auth list --format='value(account)')" ]]; then
   printf 'Autoriza tu cuenta de Google para instalar en tu proyecto.\n'
   gcloud auth login --no-launch-browser
 fi
@@ -73,6 +73,5 @@ export CLOUD_RUN_JOB_RESOURCE="projects/${GCP_PROJECT_ID}/locations/${GCP_REGION
 export GCP_WIF_AUDIENCE="//iam.googleapis.com/projects/$(gcloud projects describe "$GCP_PROJECT_ID" --format='value(projectNumber)')/locations/global/workloadIdentityPools/${WIF_POOL}/providers/${WIF_PROVIDER}"
 ask APP_ORIGIN 'Dirección HTTPS de tu web en Vercel, sin barra final' "https://${VERCEL_PROJECT_NAME}.vercel.app"
 printf '\nEjecutor instalado.\n'
-printf 'Ahora, en ESTA misma terminal, ejecuta ./v para que Cloud Shell ponga de una vez las 14 variables en Vercel, haga el redeploy y te muestre tu clave.\n'
-printf 'No prepares otra clave manual antes de ./v: la clave que vale es la que muestra ./v al final.\n'
-printf 'Si prefieres configurar Vercel a mano en vez de ./v, ejecuta bash scripts/configure-access.sh para generar una clave y pon los valores en Vercel tú mismo.\n'
+printf 'Ahora, en ESTA misma terminal, ejecuta ./v para que Cloud Shell ponga de una vez las 14 variables en Vercel, borre las viejas incluidas las de Preview, y haga el redeploy.\n'
+printf 'Tu contraseña personal no cambia: sigues entrando con la misma de siempre, ./v no te va a dar otra clave para entrar.\n'
